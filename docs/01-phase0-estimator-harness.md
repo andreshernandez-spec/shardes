@@ -233,6 +233,17 @@ Sweep axes: `N` × `rank ∈ {full, 4, 1}` × `scheme` × `shaping ∈ {none, ce
 | full | `iid`, `mirrored`, `mirrored+orthogonal_hd` |
 | 4, 1 | `iid`, `mirrored`, `mirrored+orthogonal_hd`, `mirrored+sobol` |
 
+**`shaping = none` is a dead arm on the transformer block and should be replaced by
+`centered`.** Measured at `d_model=64`, `N=128`, `σ=0.01`, `R=200`: raw fitness gives
+relative bias 255 and `cos(E[ĝ], ∇f) = 0.008`; mean-subtracted-and-corrected gives bias
+0.994 and cosine 0.708. The estimator is unbiased either way, but `f(θ) = 2.65` against
+`‖∇f‖ = 1.02` and raw fitness divides that constant by `σ`, so the variance is ~250×
+larger and R would have to be around `10⁵` to see anything. The sweep budgets 30.
+
+`centered` also separates variance reduction from the rank transform, which `none →
+centered_ranks` confounds. Recommended axis: `shaping ∈ {centered, centered_ranks}`, with
+`none` kept only on the quadratic where it is cheap and exactly unbiased.
+
 `mirrored+sobol` is absent from the full-rank row because it cannot be built. Full-rank
 sampling is in `ℝ^{mn}`, and every published direction-number table stops around 20k
 dimensions (cited: cuRAND documents 20,000; `scipy.stats.qmc.Sobol.MAXDIM` is 21,201).

@@ -11,6 +11,7 @@ import json
 import pathlib
 import sys
 
+import jax
 import pytest
 
 from shardes.strategies.registry import FULL, Entry, check_entry
@@ -212,6 +213,37 @@ def test_run_one_aggregates_over_replicates():
     assert not rec["truncated"]
     assert rec["cosine_q1"] <= rec["cosine_median"] <= rec["cosine_q3"]
     assert rec["relative_mse_median"] >= 0.0
+
+
+def test_replicate_keys_are_shared_across_configs():
+    """Common random numbers. Two configs that differ only in strategy must see the same
+    replicate seeds, or a scheme comparison is confounded with the draw.
+
+    Also pins reproducibility: an earlier version folded `hash(config.slug())` into the
+    seed, and CPython salts str hashes per process, so a resumed sweep would have used
+    different seeds from the run it resumed.
+    """
+    seen: dict = {}
+
+    def recorder(config, key):
+        seen.setdefault(config.strategy, []).append(jax.random.key_data(key).tolist())
+        return run.synthetic_estimate(config, key)
+
+    configs = run.expand(CFG, GRID)
+    a = next(c for c in configs if c.strategy == "a_full")
+    b = next(c for c in configs if c.strategy == "b_lr1" and c.population == a.population
+             and c.sigma == a.sigma and c.shaping == a.shaping)
+
+    run.run_one(a, recorder, cap_s=60)
+    run.run_one(b, recorder, cap_s=60)
+    assert seen["a_full"] == seen["b_lr1"]
+
+
+def test_run_one_is_reproducible():
+    config = run.expand(CFG, GRID)[0]
+    first = run.run_one(config, run.synthetic_estimate, cap_s=60)
+    second = run.run_one(config, run.synthetic_estimate, cap_s=60)
+    assert first["cosine_median"] == second["cosine_median"]
 
 
 def test_run_one_truncates_on_the_wall_clock_cap():

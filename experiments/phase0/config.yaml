@@ -26,7 +26,11 @@ wall_clock_cap_s: 900
 model:
   kind: transformer_block
   m: 512
-  n: 512                    # d_eff = m + n = 1024, so N/d_eff spans [0.06, 256]
+  n: 512                    # square, so every matrix has the same d_eff. Six matrices
+                            # give d_eff = 1,572,864 full rank and 6,144 at rank 1.
+  batch: 8
+  seq: 32                   # the objective is a fixed input and target; the parameter
+                            # dimension is what this experiment is about, not the data
 
 axes:
   # 2^6 .. 2^18. Do not raise m/n before checking memory: full-rank at 2^18 and m=n=512

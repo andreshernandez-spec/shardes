@@ -232,17 +232,16 @@ def params_spec(cfg: dict):
 
 
 def build_problem(cfg: dict, key):
-    """(model, params, true_gradient) for the configured objective.
+    """(model, params, batch, true_gradient) for the configured objective.
 
-    Only the quadratic exists. It is docs/01 C0.4's model 1 and the analytic-gradient
-    oracle, so it is enough to validate the pipeline end to end with real numbers.
+    `model(params, batch) -> scalar` and the gradient is exact: analytic for the
+    quadratic, backprop for the block. No proxy metric and no reference estimator with a
+    huge N, which is the point of using a differentiable model (docs/01 C0.4).
 
-    The MLP and the transformer block are what Phase 0's headline result is actually
-    about, and they are not written: the transformer block's authoring is coupled to the
-    deferred question of how LowRank reaches a model's matmuls (docs/01 C0.1), so writing
-    it now would prejudge that.
+    The MLP is not written. It sits between the two in realism and adds nothing the block
+    does not already cover for G0.
     """
-    from shardes.problems import quadratic  # noqa: PLC0415
+    from shardes.problems import quadratic, transformer_block  # noqa: PLC0415
 
     model_cfg = cfg["model"]
     kind = model_cfg["kind"]
@@ -251,13 +250,27 @@ def build_problem(cfg: dict, key):
         d = int(model_cfg["d"])
         q = quadratic.make(key, d, condition_number=float(model_cfg.get("condition_number", 10.0)))
         theta = jax.random.normal(jax.random.fold_in(key, 1), (d,), dtype=jnp.float32)
-        return (lambda p, _x: quadratic.value(q, p)), theta, quadratic.grad(q, theta)
+        return (lambda p, _b: quadratic.value(q, p)), theta, None, quadratic.grad(q, theta)
+
+    if kind == "transformer_block":
+        d = int(model_cfg["m"])
+        params = transformer_block.init(key, d_model=d)
+        batch = transformer_block.make_batch(
+            jax.random.fold_in(key, 1),
+            d_model=d,
+            batch=int(model_cfg.get("batch", 8)),
+            seq=int(model_cfg.get("seq", 32)),
+        )
+        return (
+            transformer_block.loss,
+            params,
+            batch,
+            transformer_block.grad(params, batch),
+        )
 
     raise NotImplementedError(
-        f"model.kind={kind!r} is not implemented. Only 'quadratic' is. "
-        "src/shardes/problems/{mlp,transformer_block}.py are docstring-only; the "
-        "transformer block is deliberately unwritten until the LowRank model-interception "
-        "question in docs/01 C0.1 is settled. Use --dry-run to exercise the pipeline."
+        f"model.kind={kind!r} is not implemented. 'quadratic' and 'transformer_block' are. "
+        "src/shardes/problems/mlp.py is still docstring-only."
     )
 
 
@@ -271,13 +284,13 @@ def make_estimator(cfg: dict):
     from shardes.estimator import estimate as library_estimate  # noqa: PLC0415
 
     key = jax.random.key(int(cfg["seed"]))
-    model, params, truth = build_problem(cfg, key)
+    model, params, batch, truth = build_problem(cfg, key)
     chunk = cfg.get("chunk")
 
     def estimate(config: Config, replicate_key):
         strategy = STRATEGIES[config.strategy].build()
         g_hat = library_estimate(
-            strategy, model, params, jnp.float32(0.0), replicate_key,
+            strategy, model, params, batch, replicate_key,
             member_ids=jnp.arange(config.population),
             sigma=config.sigma,
             shaping=shaping.BY_NAME[config.shaping],
@@ -311,7 +324,15 @@ def synthetic_estimate(config: Config, key):
 def run_one(config: Config, estimate, cap_s: float) -> dict:
     """R replicates, aggregated. Median and IQR, never a single number."""
     started = time.time()
-    base = jax.random.fold_in(jax.random.key(config.seed), hash(config.slug()) % (2**31))
+
+    # Common random numbers: every config uses the same replicate seeds, so a difference
+    # between two curves is the method rather than the draw. This is a paired comparison
+    # and it is worth a lot when R is only 30.
+    #
+    # The previous version folded in `hash(config.slug())`. Two bugs in one line: it
+    # broke the pairing, and CPython salts str hashes per process, so a resumed sweep
+    # would silently have used different seeds from the run it was resuming.
+    base = jax.random.key(config.seed)
 
     cosines, mses = [], []
     g_sum = None
