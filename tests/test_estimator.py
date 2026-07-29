@@ -155,17 +155,36 @@ def test_naive_mean_subtraction_would_be_biased(strategy, problem):
     Without it the estimator targets (1 - 1/n) grad f, because f_bar contains f_i and
     correlates with eps_i. At n = 30 that is a 3.3% systematic underestimate that reads
     as a slightly wrong learning rate.
+
+    **Under Mirrored both halves invert, and this is a trap rather than a curiosity.**
+    The pair contributes `((f_2k - f_bar) - (f_2k+1 - f_bar)) e_k`, so `f_bar` cancels
+    outright: naive mean subtraction is already unbiased, and `centered`'s n/(n-1) factor
+    then *over*-corrects, targeting `n/(n-1) grad f`. At n = 16 that is 6.7% the wrong
+    way, and it grows as n shrinks.
+
+    So the correction is a property of the estimator-and-shaping *pair*, not of shaping
+    alone, and `centered` must not be composed with `Mirrored`. Asserted here in both
+    directions so it cannot quietly become folklore.
     """
+    from shardes.strategies.mirrored import Mirrored  # noqa: PLC0415
+
     _q, _theta, truth, _model = problem
     n = 16
+    mirrored = isinstance(strategy, Mirrored)
     naive = lambda f: f - jnp.mean(f)
-    got = jnp.mean(run(strategy, problem, naive, n=n, replicates=40_000), axis=0)
 
+    got = jnp.mean(run(strategy, problem, naive, n=n, replicates=40_000), axis=0)
+    want = 1.0 if mirrored else 1 - 1 / n
     ratio = float(jnp.median(got / truth))
-    assert abs(ratio - (1 - 1 / n)) < 0.02, f"expected ~{1 - 1 / n}, got {ratio}"
+    assert abs(ratio - want) < 0.02, f"naive: expected ~{want}, got {ratio}"
 
     corrected = jnp.mean(run(strategy, problem, shp.centered, n=n, replicates=40_000), axis=0)
-    assert float(metrics.relative_bias(corrected, truth)) < BIAS_GATE
+    bias = float(metrics.relative_bias(corrected, truth))
+    if mirrored:
+        # The correction is the bias here, not the cure.
+        assert abs(bias - (n / (n - 1) - 1)) < 0.02, f"expected ~{n / (n - 1) - 1}, got {bias}"
+    else:
+        assert bias < BIAS_GATE
 
 
 @strategies

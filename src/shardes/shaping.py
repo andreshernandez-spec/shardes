@@ -39,6 +39,15 @@ def centered(fitness: Array) -> Array:
     Measured on the quadratic at n = 16 over 40k replicates: naive mean subtraction gives
     E[g]/truth = 0.9375, exactly 1 - 1/16, while cutting the standard deviation from 4.25
     to 2.37. Take the variance and correct the scale.
+
+    **Do not compose this with Mirrored.** The pair contributes
+    `((f_2k - f_bar) - (f_2k+1 - f_bar)) eps_k`, so `f_bar` cancels outright and the
+    antithetic estimator is already unbiased. The n/(n-1) factor then over-corrects,
+    targeting `n/(n-1) grad f`: 6.7% the wrong way at n = 16, worse as n shrinks. The
+    correction belongs to the estimator-and-shaping pair, not to shaping alone.
+
+    With Mirrored use `none`, which is already centred by construction, or
+    `centered_ranks`, which is not estimating grad f in the first place.
     """
     n = fitness.shape[0]
     if n < 2:

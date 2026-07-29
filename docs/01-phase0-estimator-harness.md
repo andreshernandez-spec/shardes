@@ -244,6 +244,21 @@ larger and R would have to be around `10⁵` to see anything. The sweep budgets 
 centered_ranks` confounds. Recommended axis: `shaping ∈ {centered, centered_ranks}`, with
 `none` kept only on the quadratic where it is cheap and exactly unbiased.
 
+**But `centered` must not be paired with a mirrored scheme.** The antithetic pair already
+cancels `f̄`, so the `n/(n-1)` factor over-corrects and the estimator targets
+`n/(n-1)·∇f`: measured 6.7% the wrong way at `n = 16`, worse as `n` shrinks. The
+correction belongs to the estimator-and-shaping *pair*, not to shaping alone. So the
+shaping axis is itself conditional on the scheme:
+
+| scheme | shaping |
+|---|---|
+| `iid` | `centered`, `centered_ranks` |
+| `mirrored`, `mirrored+*` | `none`, `centered_ranks` |
+
+`none` under mirroring is already centred by construction, so it is the right unshaped
+baseline there rather than the noisy one it is on `iid`. Asserted in both directions in
+`test_naive_mean_subtraction_would_be_biased`.
+
 `mirrored+sobol` is absent from the full-rank row because it cannot be built. Full-rank
 sampling is in `ℝ^{mn}`, and every published direction-number table stops around 20k
 dimensions (cited: cuRAND documents 20,000; `scipy.stats.qmc.Sobol.MAXDIM` is 21,201).
