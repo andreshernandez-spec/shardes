@@ -52,12 +52,15 @@ def estimate(
     is `test_chunked_matches_unchunked`, which is `test_strategy_A_equals_strategy_B` from
     Phase 1, available now on one device.
 
-    **Cost note.** The chunk loop is Python, so it unrolls at trace time into `n/chunk`
-    copies of sample/apply/contract. Jaxpr size and compile time therefore grow linearly
-    as `chunk` shrinks: measured, `chunk=1` at `n=128` under a scanning strategy took 87s
-    against under a second for `chunk=None`. Pick `chunk` to fit memory, not smaller. If
-    a sweep ever needs a small chunk at large n, the fix is a `lax.scan` over chunks,
-    which is constant in jaxpr size; the ragged final chunk is the only fiddly part.
+    The chunk loop is a `lax.scan`, so jaxpr size and compile time are constant in
+    `n/chunk`. An earlier Python loop unrolled one traced sample/apply/contract per chunk
+    and `chunk=1` at `n=128` under a scanning strategy took 87s to compile against under a
+    second for `chunk=None`. Pick `chunk` to fit memory now, not to keep the trace small.
+
+    A ragged final chunk is handled by padding `member_ids` up to a whole number of chunks
+    and zeroing the padded weights. The padded members' *fitnesses* are computed and
+    discarded, which is the one wasted slice; their contributions to the update are
+    exactly zero because a weight of zero is exact in floating point.
     """
     n = int(member_ids.shape[0])
 
@@ -66,26 +69,48 @@ def estimate(
         fitness = strategy.apply(model, params, pert, sigma)(x)
         update = strategy.contract(pert, shaping(fitness))
     else:
-        splits = [member_ids[i : i + chunk] for i in range(0, n, chunk)]
+        n_chunks = -(-n // chunk)  # ceil
+        pad = n_chunks * chunk - n
+
+        # Pad with a repeat of member 0. Any valid id works: padded slots carry weight
+        # zero in pass two, and reusing a real id keeps `sample` on shapes it already sees.
+        ids = member_ids
+        if pad:
+            ids = jnp.concatenate([ids, jnp.full((pad,), ids[0], ids.dtype)])
+        ids = ids.reshape(n_chunks, chunk)
 
         # Pass one: fitnesses only. n scalars, cheap at any n.
-        fitness = jnp.concatenate(
-            [
-                strategy.apply(model, params, strategy.sample(key, params, s), sigma)(x)
-                for s in splits
-            ]
-        )
+        def fitness_step(carry, chunk_ids):
+            pert = strategy.sample(key, params, chunk_ids)
+            return carry, strategy.apply(model, params, pert, sigma)(x)
+
+        _, stacked = jax.lax.scan(fitness_step, None, ids)
+        fitness = stacked.reshape((n_chunks * chunk,) + stacked.shape[2:])[:n]
+
         weights = shaping(fitness)
+        if pad:
+            weights = jnp.concatenate([weights, jnp.zeros((pad,), weights.dtype)])
 
         # Pass two: re-derive each chunk and contract it. Partial contractions summing to
         # the whole is what makes this legal; there is a property test for it.
-        update, offset = None, 0
-        for s in splits:
-            size = int(s.shape[0])
-            part = strategy.contract(
-                strategy.sample(key, params, s), weights[offset : offset + size]
-            )
-            update = part if update is None else jax.tree.map(jnp.add, update, part)
-            offset += size
+        #
+        # The carry's shape and dtype come from tracing one chunk rather than being
+        # assumed params-shaped f32, so a strategy contracting to something else still
+        # scans. lax.scan is strict about carry structure and would fail late otherwise.
+        spec = jax.eval_shape(
+            lambda i, w: strategy.contract(strategy.sample(key, params, i), w),
+            ids[0],
+            weights[:chunk],
+        )
+        init = jax.tree.map(lambda s: jnp.zeros(s.shape, s.dtype), spec)
+
+        def contract_step(acc, ids_and_weights):
+            chunk_ids, chunk_weights = ids_and_weights
+            part = strategy.contract(strategy.sample(key, params, chunk_ids), chunk_weights)
+            return jax.tree.map(jnp.add, acc, part), None
+
+        update, _ = jax.lax.scan(
+            contract_step, init, (ids, weights.reshape(n_chunks, chunk))
+        )
 
     return jax.tree.map(lambda u: u / (n * sigma), update)

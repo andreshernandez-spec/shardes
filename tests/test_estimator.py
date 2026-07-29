@@ -90,10 +90,16 @@ def test_chunked_matches_unchunked(strategy, problem):
     from (key, member_ids) in a second pass. They must agree, which is Phase 1's
     test_strategy_A_equals_strategy_B available now.
     """
-    n = 16  # not N: `estimate` unrolls one traced sample/contract per chunk, so chunk=1
-            # at n=128 measures compile time rather than the property. See estimate().
+    n, chunks = 16, (1, 3, 8, 16)
+
+    # chunk=3 leaves a ragged final chunk, which is the only place the padding can hide a
+    # wrong answer. Asserted rather than assumed, so nobody tidies the list into divisors
+    # and silently drops the coverage. Padded slots carry weight zero, and a multiply by
+    # 0.0 is exact, so their contribution is zero rather than merely small.
+    assert any(n % c for c in chunks), "no ragged chunk: the padding path is untested"
+
     whole = run(strategy, problem, shp.centered_ranks, n=n, replicates=32, chunk=None)
-    for chunk in (1, 3, 8, n):
+    for chunk in chunks:
         part = run(strategy, problem, shp.centered_ranks, n=n, replicates=32, chunk=chunk)
         assert float(metrics.relative_mse(part, whole)) < 1e-8, f"chunk={chunk}"
 

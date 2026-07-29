@@ -90,9 +90,15 @@ and say so.
   The original rule said two minutes total. That number was written before any code
   existed and it started driving design: the alternative to this split was cutting `R` in
   the unbiasedness tests from 10 000 to 5 000, which trades a 4× margin on the 2% gate for
-  2.8× in order to satisfy a figure nobody had measured. Measured breakdown at 205 tests:
-  42 s in the estimator's Monte Carlo, ~60 s structural across everything else, and no
-  meaningful fat (vectorising the FWHT basis-vector test recovers 1.6 s of 15 s).
+  2.8× to satisfy a figure nobody had measured.
+
+  Worth recording, because it is the lesson rather than the rule: when the suite was
+  first profiled the estimator file cost 42 s and that was assumed to be its Monte Carlo.
+  It was not. It was the *structural* Strategy-A-vs-B chunking tests, whose cost came
+  from `estimate` unrolling one traced sample/contract per chunk. Converting that to a
+  `lax.scan` took the file to 29 s and fixed a real limitation for large sweeps. The tier
+  split, by itself, bought 8 s. **Profile before deciding what to cut**; the expensive
+  tests and the statistically expensive tests were not the same set.
 - Multi-device tests use `XLA_FLAGS=--xla_force_host_platform_device_count=8`. Set it in
   `conftest.py` so it can't be forgotten.
 - Anything needing a real GPU lives in `tests/gpu/`, is marked `@pytest.mark.gpu`, is
