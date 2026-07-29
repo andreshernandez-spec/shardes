@@ -79,3 +79,15 @@ STRATEGIES: dict[str, Entry] = {
     "mirrored_lr1": Entry(build=lambda: Mirrored(LowRank(r=1)), rank=1,
                           scheme="mirrored"),
 }
+
+
+# The fast test tier runs the shared property suite over these only; the rest are marked
+# slow and run in the full suite. Each representative covers a distinct implementation
+# path: iid_gaussian materializes, seed_regenerated scans, mirrored_lr1 is a wrapper over
+# the factored path and so exercises LowRank transitively. lowrank_r1/r4 and mirrored_full
+# are recombinations of paths already covered, and test_lowrank.py covers LowRank directly
+# regardless.
+#
+# This is a test-speed policy, but it is knowledge about which strategies are redundant
+# with which, so it lives with the strategies rather than in a test file.
+REPRESENTATIVES = frozenset({"iid_gaussian", "seed_regenerated", "mirrored_lr1"})

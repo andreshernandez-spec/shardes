@@ -24,7 +24,7 @@ import pytest
 
 from shardes.nn import dense
 from shardes.strategies.protocol import Perturbation, PerturbationStrategy
-from shardes.strategies.registry import STRATEGIES
+from shardes.strategies.registry import REPRESENTATIVES, STRATEGIES
 
 RTOL = 1e-6
 
@@ -95,7 +95,9 @@ _reason = "no strategy registered yet; see src/shardes/strategies/registry.py"
 # than "waiting on an implementation". Delete it once the registry is populated.
 parametrize = pytest.mark.parametrize(
     "strategy",
-    [pytest.param(entry.build(), id=name) for name, entry in STRATEGIES.items()]
+    [pytest.param(entry.build(), id=name,
+                  marks=() if name in REPRESENTATIVES else pytest.mark.slow)
+     for name, entry in STRATEGIES.items()]
     or [pytest.param(None, id="none", marks=pytest.mark.skip(reason=_reason))],
 )
 

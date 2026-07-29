@@ -73,6 +73,7 @@ def test_half_as_many_distinct_directions(params):
     assert pert.member_ids.shape[0] == 10
 
 
+@pytest.mark.slow
 def test_cancels_the_constant_term(params):
     """docs/01: on an odd f, mirrored variance is far below i.i.d.
 

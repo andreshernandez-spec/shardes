@@ -19,14 +19,16 @@ from shardes import metrics
 from shardes import shaping as shp
 from shardes.estimator import estimate
 from shardes.problems import quadratic
-from shardes.strategies.registry import STRATEGIES
+from shardes.strategies.registry import REPRESENTATIVES, STRATEGIES
 
 D, N, SIGMA, R = 8, 128, 1.0, 10_000
 BIAS_GATE = 0.02  # docs/01 C0.5
 
 strategies = pytest.mark.parametrize(
     "strategy",
-    [pytest.param(e.build(), id=name) for name, e in STRATEGIES.items()]
+    [pytest.param(e.build(), id=name,
+                  marks=() if name in REPRESENTATIVES else pytest.mark.slow)
+     for name, e in STRATEGIES.items()]
     or [pytest.param(None, id="none", marks=pytest.mark.skip(reason="no strategy registered"))],
 )
 

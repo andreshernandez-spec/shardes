@@ -145,6 +145,7 @@ def test_a_model_that_bypasses_dense_fails_loudly(params):
         s.apply(bypassing, params, pert, 0.1)(None)
 
 
+@pytest.mark.slow
 def test_estimator_converges_to_full_rank_as_r_grows():
     """docs/01: LowRank(r) estimator -> IIDGaussian estimator as r grows.
 
