@@ -94,7 +94,7 @@ _reason = "no strategy registered yet; see src/shardes/strategies/registry.py"
 # than "waiting on an implementation". Delete it once the registry is populated.
 parametrize = pytest.mark.parametrize(
     "strategy",
-    [pytest.param(build(), id=name) for name, build in STRATEGIES.items()]
+    [pytest.param(entry.build(), id=name) for name, entry in STRATEGIES.items()]
     or [pytest.param(None, id="none", marks=pytest.mark.skip(reason=_reason))],
 )
 

@@ -22,8 +22,14 @@ Where no exact oracle exists, compare two *independent* implementations with dif
 failure modes rather than one implementation against itself at higher precision.
 
 **Accumulation dtype.** Perturbations may be bf16. Reductions over `N` members must
-accumulate in **f32** — summing `2¹⁸` bf16 terms loses several digits. There is a test for
-this; keep it.
+accumulate in **f32**. Measured on random normals at `N = 2¹⁸`, against an exact f64
+reference: bf16 accumulation gives `1.2e-3` relative error, f32 gives `5.4e-8`. Four orders
+of magnitude. Regenerate with `tests/test_metrics.py::test_bf16_accumulates_in_f32`.
+
+Note *how* it fails, because the obvious demonstration doesn't work: XLA reduces pairwise,
+not sequentially, so summing `N` identical values in bf16 is **exact** (every partial is a
+power of two). The loss shows up only on varied data. A test built on identical inputs
+would pass against a bf16 accumulator and prove nothing.
 
 **Tolerances.** State them, don't discover them. f32 exact-oracle comparisons: `rtol=1e-6`.
 Device-invariance in f32: `rtol=1e-12` (it should be near-bitwise). bf16 paths: `rtol=1e-2`
