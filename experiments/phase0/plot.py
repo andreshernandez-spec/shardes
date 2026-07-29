@@ -64,7 +64,6 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sigma", type=float, default=0.01)
     ap.add_argument("--shaping", default="none")
-    ap.add_argument("--d-eff", type=float, default=1024.0, help="m + n for the rank-1 panel")
     ap.add_argument("--out", type=Path, default=FIGURES / "f5-estimator-quality.png")
     args = ap.parse_args(argv)
 
@@ -76,28 +75,37 @@ def main(argv=None) -> int:
     synthetic = any(r.get("SYNTHETIC") for r in records)
     truncated = sum(bool(r.get("truncated")) for r in records)
 
-    # (rank, scheme) -> list of (N, median, q1, q3)
+    # (rank, scheme) -> list of (N/d_eff, median, q1, q3)
+    #
+    # d_eff is read from the record, not recomputed. The driver knows the model's actual
+    # shape; reconstructing it here is how the x-axis drifts the first time the block
+    # changes. Note the two panels' d_eff measure different things on purpose: see
+    # src/shardes/dimensions.py, and say so in the caption.
     series: dict = defaultdict(list)
     for rec in records:
         cfg = rec["config"]
+        if "d_eff" not in rec:
+            print(f"skipping a result with no d_eff (pre-{__file__} format): {cfg}")
+            continue
         series[(cfg["rank"], cfg["scheme"])].append(
-            (cfg["population"], rec["cosine_median"], rec["cosine_q1"], rec["cosine_q3"])
+            (cfg["population"] / rec["d_eff"], rec["cosine_median"],
+             rec["cosine_q1"], rec["cosine_q3"])
         )
+    if not any(series.values()):
+        print("no results carried a d_eff field; re-run the sweep")
+        return 1
 
     ranks = sorted({r for r, _ in series}, key=rank_key)
     fig, axes = plt.subplots(1, len(ranks), figsize=(6 * len(ranks), 5), sharey=True)
     axes = [axes] if len(ranks) == 1 else list(axes)
 
     for ax, rank in zip(axes, ranks):
-        # d_eff is mn for full rank and m + n for rank r, which is the whole point of the
-        # x axis: the same N sits in completely different regimes.
-        d_eff = args.d_eff if rank != FULL_RANK else (args.d_eff / 2) ** 2
         for (r, scheme), points in sorted(series.items(), key=lambda kv: (rank_key(kv[0][0]), kv[0][1])):
             if r != rank:
                 continue
             colour, marker, label = SCHEME_STYLE.get(scheme, ("#000000", "x", scheme))
             points.sort()
-            x = [n / d_eff for n, *_ in points]
+            x = [ratio for ratio, *_ in points]
             ax.plot(x, [1 - m for _, m, _, _ in points], marker=marker, color=colour,
                     label=label, lw=1.6, ms=5)
             # Bands are IQR over replicates, not a standard error: R = 30 gives wide

@@ -13,6 +13,7 @@ from typing import Callable, NamedTuple
 import jax
 import jax.numpy as jnp
 
+from shardes.strategies._noise import member_noise
 from shardes.types import Array, Key, PyTree
 
 
@@ -43,19 +44,12 @@ class IIDGaussian:
         also what lets a shard derive its own members without knowing N at all, which
         `jax.random.split(base_key, N)` cannot do without building all N keys first.
 
-        Splitting across *leaves* within a member is fine. The leaf count is a property
-        of params, not of the batch.
+        The derivation lives in `_noise.member_noise`, shared with SeedRegenerated so the
+        two cannot drift: they must produce identical noise or Qiu's seed trick has
+        stopped reproducing full-rank noise.
         """
-        leaves, treedef = jax.tree.flatten(params)
-
-        def one(i: Array) -> PyTree:
-            keys = jax.random.split(jax.random.fold_in(base_key, i), len(leaves))
-            return jax.tree.unflatten(
-                treedef,
-                [jax.random.normal(k, x.shape, x.dtype) for k, x in zip(keys, leaves)],
-            )
-
-        return IIDPerturbation(base_key, member_ids, jax.vmap(one)(member_ids))
+        eps = jax.vmap(lambda i: member_noise(base_key, params, i))(member_ids)
+        return IIDPerturbation(base_key, member_ids, eps)
 
     def apply(
         self,

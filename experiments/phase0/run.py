@@ -34,7 +34,8 @@ import numpy as np
 import yaml
 
 from shardes import metrics
-from shardes.strategies.registry import FULL, STRATEGIES, Entry, check_entry
+from shardes.dimensions import FULL, sampling_dimension
+from shardes.strategies.registry import STRATEGIES, Entry, check_entry
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
@@ -102,9 +103,11 @@ def load_config(path: Path) -> dict:
     """
     cfg = yaml.safe_load(path.read_text())
 
-    for key in ("seed", "replicates", "wall_clock_cap_s", "axes"):
+    for key in ("seed", "replicates", "wall_clock_cap_s", "axes", "model"):
         if key not in cfg:
             raise ValueError(f"{path}: missing required key {key!r}")
+    if "kind" not in cfg["model"]:
+        raise ValueError(f"{path}: model.kind is required")
 
     axes = cfg["axes"]
     for name in ("population", "sigma", "shaping"):
@@ -205,6 +208,27 @@ def capture_env() -> dict:
 # ---------------------------------------------------------------------------------------
 # Measurement
 # ---------------------------------------------------------------------------------------
+
+
+def params_spec(cfg: dict):
+    """Shape-and-dtype tree for the configured model, without building it.
+
+    d_eff is computed from this rather than from live params, so --dry-run records the
+    same number a real run would and the rehearsal figure has the right x-axis.
+    """
+    m = cfg["model"]
+    kind = m["kind"]
+    if kind == "quadratic":
+        return jax.ShapeDtypeStruct((int(m["d"]),), jnp.float32)
+    if kind == "transformer_block":
+        d = int(m["m"])
+        if int(m["n"]) != d:
+            raise ValueError("the Phase 0 block is square; model.m must equal model.n")
+        return {
+            name: jax.ShapeDtypeStruct((d, d), jnp.float32)
+            for name in ("wq", "wk", "wv", "wo", "w_up", "w_down")
+        }
+    raise NotImplementedError(f"no params spec for model.kind={kind!r}")
 
 
 def build_problem(cfg: dict, key):
@@ -356,9 +380,14 @@ def main(argv=None) -> int:
 
     cfg = load_config(args.config)
     registry = STRATEGIES
-    if args.dry_run and not STRATEGIES:
+    if args.dry_run:
+        # Always the full expected grid, not just what is implemented today. The point of
+        # the rehearsal is to exercise the figure, and F5 needs both rank panels and every
+        # scheme; rehearsing on whatever happens to be registered would leave the
+        # low-rank panel untested until the last strategy lands.
         registry = DRY_RUN_GRID
-        print("registry is empty; --dry-run is using the expected grid from docs/01 C0.5")
+        print(f"--dry-run: using the full expected grid from docs/01 C0.5 "
+              f"({len(DRY_RUN_GRID)} strategies), not the {len(STRATEGIES)} implemented")
     configs = expand(cfg, registry)
 
     if args.list:
@@ -373,6 +402,7 @@ def main(argv=None) -> int:
         return 1
 
     estimate = synthetic_estimate if args.dry_run else make_estimator(cfg)
+    spec = params_spec(cfg)
     env = capture_env()
     env["dry_run"] = args.dry_run
     if env["dirty_worktree"]:
@@ -404,6 +434,9 @@ def main(argv=None) -> int:
             continue
 
         record["env"] = env
+        # Recorded, not reconstructed. plot.py used to rebuild d_eff from a CLI flag,
+        # which silently went wrong the moment the model had more than one matrix.
+        record["d_eff"] = sampling_dimension(spec, config.rank)
         # Loud, so a synthetic file can never be mistaken for a measurement.
         record["SYNTHETIC"] = args.dry_run
         write_atomic(config.path(), record)

@@ -88,9 +88,11 @@ def test_chunked_matches_unchunked(strategy, problem):
     from (key, member_ids) in a second pass. They must agree, which is Phase 1's
     test_strategy_A_equals_strategy_B available now.
     """
-    whole = run(strategy, problem, shp.centered_ranks, replicates=64, chunk=None)
-    for chunk in (1, 7, 16, N):
-        part = run(strategy, problem, shp.centered_ranks, replicates=64, chunk=chunk)
+    n = 16  # not N: `estimate` unrolls one traced sample/contract per chunk, so chunk=1
+            # at n=128 measures compile time rather than the property. See estimate().
+    whole = run(strategy, problem, shp.centered_ranks, n=n, replicates=32, chunk=None)
+    for chunk in (1, 3, 8, n):
+        part = run(strategy, problem, shp.centered_ranks, n=n, replicates=32, chunk=chunk)
         assert float(metrics.relative_mse(part, whole)) < 1e-8, f"chunk={chunk}"
 
 
@@ -101,8 +103,9 @@ def test_chunking_does_not_change_the_shaping(strategy, problem):
     A chunked run that shaped each chunk independently would rank within chunks, which is
     a different and wrong update. With chunk=1 every weight would be identical.
     """
-    whole = run(strategy, problem, shp.centered_ranks, replicates=16, chunk=None)
-    per_one = run(strategy, problem, shp.centered_ranks, replicates=16, chunk=1)
+    n = 16
+    whole = run(strategy, problem, shp.centered_ranks, n=n, replicates=8, chunk=None)
+    per_one = run(strategy, problem, shp.centered_ranks, n=n, replicates=8, chunk=1)
     assert float(metrics.relative_mse(per_one, whole)) < 1e-8
 
 

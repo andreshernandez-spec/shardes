@@ -169,10 +169,31 @@ Three, in increasing realism:
    configuration the result is actually about.
 
 For (3), pick shapes so you can sweep `N/d_eff` across three orders of magnitude on one
-GPU. Suggested: `m = n = 512` → `d_eff = 1024`, sweep `N ∈ {2⁶ … 2¹⁸}` → `N/d_eff ∈
-[0.06, 256]`. At `N = 2¹⁸` that's `262144 × 512 × 4 B ≈ 0.5 GB` each for `A` and `B` in
-f32 — comfortable. Do **not** jump straight to `m = n = 4096`; you'll be memory-bound
-before you're in the interesting regime.
+GPU. `m = n = 512` with six square matrices (q, k, v, o, up, down) and no learnable norms:
+
+| panel | `d_eff` | `N/d_eff` over `N ∈ {2⁶ … 2¹⁸}` |
+|---|---|---|
+| full rank | `6·512·512` = 1,572,864 | 4e-5 → **0.167** |
+| rank 1 | `6·(512+512)` = 6,144 | 0.010 → **42.7** |
+
+`d_eff` **sums over the whole params tree**, because one member's `ε` covers every matrix
+at once. Full rank stays well under `N/d_eff = 1` and rank 1 crosses it by ~40× either
+way, which is what G0 needs. Regenerate with `tests/test_dimensions.py`.
+
+The two panels' `d_eff` measure different quantities, deliberately: see
+`src/shardes/dimensions.py`. Under full rank the space you sample in *is* the space `∇f`
+lives in; under rank 1 you draw 6,144 numbers whose products still live in `ℝ^1,572,864`.
+`d_eff` is the dimension **sample design operates in**, which is the quantity coupling's
+leverage scales with. Put that in the F5 caption, or a reader will think the panels aren't
+comparable.
+
+`d_ff = d_model` is not a realistic transformer ratio (usually 4×). It's chosen so every
+matrix has the same `d_eff` and the x-axis is one number rather than a mixture. Say so in
+the limitations.
+
+At `N = 2¹⁸` storing `A` and `B` is `262144 × 512 × 4 B ≈ 0.5 GB` each in f32, which is
+comfortable. Do **not** jump straight to `m = n = 4096`; you'll be memory-bound before
+you're in the interesting regime.
 
 ### C0.5 — Metrics and the sweep driver
 

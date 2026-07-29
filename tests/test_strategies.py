@@ -237,6 +237,25 @@ def test_apply_scales_with_sigma(strategy, params):
     assert jnp.allclose(two, 2 * one, rtol=1e-4)
 
 
+def test_seed_regenerated_matches_iid_gaussian(params):
+    """Qiu's seed trick has to reproduce full-rank noise exactly, or it is a different
+    algorithm rather than a different schedule.
+
+    The two share `_noise.member_noise`, so this is really a guard that they stay shared:
+    if someone reimplements the derivation in one of them, this fires.
+    """
+    from shardes.strategies.iid_gaussian import IIDGaussian
+    from shardes.strategies.seed_regenerated import SeedRegenerated
+
+    key, ids = jax.random.key(21), jnp.arange(12)
+    w = jax.random.normal(jax.random.key(22), (12,), dtype=jnp.float32)
+
+    a, b = IIDGaussian(), SeedRegenerated()
+    got = a.contract(a.sample(key, params, ids), w)
+    want = b.contract(b.sample(key, params, ids), w)
+    assert rel_err(got, want) < RTOL
+
+
 @parametrize
 def test_strategy_conforms_to_the_protocol(strategy):
     """Structural check. runtime_checkable only verifies the methods exist, which is

@@ -51,6 +51,13 @@ def estimate(
     cheap to hold at any n; pass two re-samples and contracts. That both paths must agree
     is `test_chunked_matches_unchunked`, which is `test_strategy_A_equals_strategy_B` from
     Phase 1, available now on one device.
+
+    **Cost note.** The chunk loop is Python, so it unrolls at trace time into `n/chunk`
+    copies of sample/apply/contract. Jaxpr size and compile time therefore grow linearly
+    as `chunk` shrinks: measured, `chunk=1` at `n=128` under a scanning strategy took 87s
+    against under a second for `chunk=None`. Pick `chunk` to fit memory, not smaller. If
+    a sweep ever needs a small chunk at large n, the fix is a `lax.scan` over chunks,
+    which is constant in jaxpr size; the ragged final chunk is the only fiddly part.
     """
     n = int(member_ids.shape[0])
 

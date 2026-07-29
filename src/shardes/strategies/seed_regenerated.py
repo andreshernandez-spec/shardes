@@ -1,12 +1,92 @@
 """SeedRegenerated: Qiu et al. Full-rank noise stored as seeds, regenerated on the fly.
 
-Store only the per-member seed; regenerate the noise for both perturbation and update, and
-apply perturb/restore layer by layer in place. Storage drops to a few bytes per member.
+Mathematically identical to IIDGaussian. The difference is entirely one of schedule:
+IIDGaussian materializes all n perturbations and keeps them; this stores a key and the
+member ids and re-derives each member when it is needed, twice per generation (once to
+evaluate, once to contract).
 
-Members are genuinely different weight matrices, so they cannot share a base GEMM. That is
-the price of keeping full-rank noise, and it caps the population where EGGROLL's does not
-(N = 30 in the paper).
+That is Qiu's bet made concrete. Storage drops from `n * |params|` to `|params|`, and the
+price is that members cannot share a base GEMM, because each genuinely is a different
+weight matrix. `docs/00-context.md` states the tradeoff; this file is the half of it that
+gives up throughput to keep full-rank noise.
 
-Member i derives from fold_in(base_key, i) with i the global member index. This strategy is
-also what makes contraction Strategy A possible at all.
+**The scan is the point.** vmapping the regeneration would materialize all n perturbations
+again and buy nothing. `lax.scan` accumulates into one params-shaped buffer, so peak memory
+is O(|params|) whatever n is. If a profile shows an (n, ...) array here, the implementation
+has quietly become IIDGaussian with extra steps.
 """
+
+from typing import Callable, NamedTuple
+
+import jax
+import jax.numpy as jnp
+
+from shardes.strategies._noise import member_noise
+from shardes.types import Array, Key, PyTree
+
+
+class SeedPerturbation(NamedTuple):
+    """base_key and member_ids are the regeneration state. There is no eps field.
+
+    `like` is the params tree, held by reference for its shapes and dtypes. `contract`
+    does not receive `params`, so the shapes have to travel with the perturbation, and a
+    reference costs nothing: it is the same arrays that are already resident, so storage
+    stays O(1) in n, which is the property this strategy exists for.
+
+    The tidier alternative is a custom pytree with ShapeDtypeStruct in aux_data. It is
+    more machinery for the same result; revisit if `like` ever gets mistaken for state.
+    """
+
+    base_key: Key
+    member_ids: Array
+    like: PyTree
+
+
+class SeedRegenerated:
+    """Full-rank noise regenerated from per-member seeds. Qiu et al."""
+
+    def sample(self, base_key: Key, params: PyTree, member_ids: Array) -> SeedPerturbation:
+        """Does no work. That is the whole idea: the noise is a function of (key, id)."""
+        return SeedPerturbation(base_key, member_ids, params)
+
+    def apply(
+        self,
+        model: Callable[[PyTree, Array], Array],
+        params: PyTree,
+        pert: SeedPerturbation,
+        sigma: float,
+    ) -> Callable[[Array], Array]:
+        """One member at a time, perturb / evaluate / discard.
+
+        A scan rather than a vmap, for the same reason as `contract`: members are
+        different weight matrices, so there is no shared GEMM to win and nothing to gain
+        from holding them all at once.
+        """
+
+        def g(x: Array) -> Array:
+            def step(carry, i):
+                eps = member_noise(pert.base_key, pert.like, i)
+                perturbed = jax.tree.map(lambda p, e: p + sigma * e, params, eps)
+                return carry, model(perturbed, x)
+
+            _, out = jax.lax.scan(step, None, pert.member_ids)
+            return out
+
+        return g
+
+    def contract(self, pert: SeedPerturbation, weights: Array) -> PyTree:
+        """sum_i weights[i] * eps_i, regenerated one member at a time.
+
+        Accumulates in f32 and never holds more than one member's noise plus the running
+        sum. No division by n_local: partial contractions must sum to the whole.
+        """
+        w = weights.astype(jnp.float32)
+
+        def step(acc, iw):
+            i, wi = iw
+            eps = member_noise(pert.base_key, pert.like, i)
+            return jax.tree.map(lambda a, e: a + wi * e.astype(jnp.float32), acc, eps), None
+
+        init = jax.tree.map(lambda x: jnp.zeros(x.shape, jnp.float32), pert.like)
+        acc, _ = jax.lax.scan(step, init, (pert.member_ids, w))
+        return acc

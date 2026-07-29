@@ -124,7 +124,8 @@ def _write(tmp_path, body: str):
     return p
 
 
-BASE = "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
+BASE = ("seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
+        "model:\n  kind: quadratic\n  d: 8\n")
 AXES = "axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: ['none']\n"
 
 
@@ -182,12 +183,15 @@ def test_rejects_nonsense_populations(tmp_path, bad):
         run.load_config(path)
 
 
-@pytest.mark.parametrize("key", ["seed", "replicates", "wall_clock_cap_s", "axes"])
+@pytest.mark.parametrize("key", ["seed", "replicates", "wall_clock_cap_s", "axes", "model"])
 def test_rejects_missing_required_keys(tmp_path, key):
     body = BASE + AXES
-    body = "\n".join(l for l in body.splitlines() if not l.startswith(key)) + "\n"
     if key == "axes":
         body = BASE
+    elif key == "model":
+        body = "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n" + AXES
+    else:
+        body = "\n".join(l for l in body.splitlines() if not l.startswith(key)) + "\n"
     with pytest.raises(ValueError, match="missing required key"):
         run.load_config(_write(tmp_path, body))
 
@@ -233,6 +237,9 @@ def test_a_failing_config_does_not_kill_the_sweep(tmp_path, monkeypatch, capsys)
     monkeypatch.setattr(run, "RESULTS", tmp_path)
     monkeypatch.setattr(run, "HERE", tmp_path)
     monkeypatch.setattr(run, "STRATEGIES", GRID)
+    # --dry-run deliberately uses the full expected grid rather than what is registered,
+    # so pin that too or this test runs against seven strategies instead of two.
+    monkeypatch.setattr(run, "DRY_RUN_GRID", GRID)
 
     real_estimate = run.synthetic_estimate  # capture before patching, or flaky recurses
 
@@ -245,6 +252,7 @@ def test_a_failing_config_does_not_kill_the_sweep(tmp_path, monkeypatch, capsys)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
+        "model:\n  kind: quadratic\n  d: 8\n"
         "axes:\n  population: [64, 256]\n  sigma: [0.01]\n  shaping: ['none']\n"
     )
 
