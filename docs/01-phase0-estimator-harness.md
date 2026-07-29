@@ -181,8 +181,25 @@ Per configuration, over `R ≥ 30` independent replicates:
 - **Cosine similarity** `cos(ĝ, ∇f)` — mean and IQR. The headline metric; it's what
   actually determines whether the update direction is useful.
 - **Relative MSE** `E‖ĝ − ∇f‖² / ‖∇f‖²`.
-- **Bias check** `‖E[ĝ] − ∇f‖ / ‖∇f‖` over replicates. Must go to zero for every scheme.
-  If it doesn't for scrambled Sobol, the scrambling is wrong.
+- **Bias check** `‖E[ĝ] − ∇f‖ / ‖∇f‖` over replicates. Must go to zero for every
+  *sampling* scheme. If it doesn't for scrambled Sobol, the scrambling is wrong.
+
+  **It is a correctness gate only on the `shaping ∈ {none, centered}` slice.** Centered
+  ranks are not estimating `∇f` at all; they're a deliberately different update direction,
+  so their bias stays large by design and reading it as a failure would be a mistake.
+  `test_centered_ranks_is_not_an_unbiased_estimator` asserts it stays large, so the
+  distinction can't quietly erode into a bug hunt.
+
+  Related trap, measured: subtracting the mean fitness without the `n/(n-1)` correction
+  estimates `(1 − 1/n)·∇f`, because `f̄` contains `fᵢ` and correlates with `εᵢ`. At
+  `n = 30` that's a 3.3% systematic underestimate that reads as a slightly wrong learning
+  rate. `shardes.shaping.centered` carries the correction; the naive version is pinned as
+  biased in `test_naive_mean_subtraction_would_be_biased`.
+
+  `centered` (mean-subtracted, corrected, unbiased) is implemented but **not** in the sweep
+  axis below. Adding it would separate "variance reduction" from "rank transform", which
+  are currently confounded in the `none → centered_ranks` jump. Worth the extra 1.5× of
+  configs, but that's a compute-budget call.
 - Wall-clock per estimate, for context. Not the point of this phase.
 
 Sweep axes: `N` × `rank ∈ {full, 4, 1}` × `scheme` × `shaping ∈ {none, centered_ranks}` ×

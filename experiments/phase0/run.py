@@ -207,12 +207,59 @@ def capture_env() -> dict:
 # ---------------------------------------------------------------------------------------
 
 
-def load_estimator():
-    """The estimator is the library's, not the driver's (CLAUDE.md ground rules).
+def build_problem(cfg: dict, key):
+    """(model, params, true_gradient) for the configured objective.
 
-    Imported lazily so --dry-run works before it exists.
+    Only the quadratic exists. It is docs/01 C0.4's model 1 and the analytic-gradient
+    oracle, so it is enough to validate the pipeline end to end with real numbers.
+
+    The MLP and the transformer block are what Phase 0's headline result is actually
+    about, and they are not written: the transformer block's authoring is coupled to the
+    deferred question of how LowRank reaches a model's matmuls (docs/01 C0.1), so writing
+    it now would prejudge that.
     """
-    from shardes.estimator import estimate  # noqa: PLC0415
+    from shardes.problems import quadratic  # noqa: PLC0415
+
+    model_cfg = cfg["model"]
+    kind = model_cfg["kind"]
+
+    if kind == "quadratic":
+        d = int(model_cfg["d"])
+        q = quadratic.make(key, d, condition_number=float(model_cfg.get("condition_number", 10.0)))
+        theta = jax.random.normal(jax.random.fold_in(key, 1), (d,), dtype=jnp.float32)
+        return (lambda p, _x: quadratic.value(q, p)), theta, quadratic.grad(q, theta)
+
+    raise NotImplementedError(
+        f"model.kind={kind!r} is not implemented. Only 'quadratic' is. "
+        "src/shardes/problems/{mlp,transformer_block}.py are docstring-only; the "
+        "transformer block is deliberately unwritten until the LowRank model-interception "
+        "question in docs/01 C0.1 is settled. Use --dry-run to exercise the pipeline."
+    )
+
+
+def make_estimator(cfg: dict):
+    """Adapt the library estimator to the driver's Config.
+
+    The library takes (strategy, model, params, x, key, ...) and must not import this
+    driver's dataclass, so the adaptation lives here rather than there.
+    """
+    from shardes import shaping  # noqa: PLC0415
+    from shardes.estimator import estimate as library_estimate  # noqa: PLC0415
+
+    key = jax.random.key(int(cfg["seed"]))
+    model, params, truth = build_problem(cfg, key)
+    chunk = cfg.get("chunk")
+
+    def estimate(config: Config, replicate_key):
+        strategy = STRATEGIES[config.strategy].build()
+        g_hat = library_estimate(
+            strategy, model, params, jnp.float32(0.0), replicate_key,
+            member_ids=jnp.arange(config.population),
+            sigma=config.sigma,
+            shaping=shaping.BY_NAME[config.shaping],
+            chunk=chunk,
+        )
+        return g_hat, truth
 
     return estimate
 
@@ -325,7 +372,7 @@ def main(argv=None) -> int:
               "src/shardes/strategies/registry.py", file=sys.stderr)
         return 1
 
-    estimate = synthetic_estimate if args.dry_run else load_estimator()
+    estimate = synthetic_estimate if args.dry_run else make_estimator(cfg)
     env = capture_env()
     env["dry_run"] = args.dry_run
     if env["dirty_worktree"]:
