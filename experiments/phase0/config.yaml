@@ -37,4 +37,22 @@ axes:
   # would be 275 TB of materialized perturbation, which is what the chunking path is for.
   population: [64, 256, 1024, 4096, 16384, 65536, 262144]
   sigma: [0.001, 0.01, 0.1]
-  shaping: [none, centered_ranks]
+
+  # The shaping axis is conditional on the scheme, and neither list is a subset of the
+  # other. docs/01 C0.5 has the measurements; the short version:
+  #
+  #   - `none` is the right unshaped baseline under mirroring, because a mirrored pair is
+  #     centred by construction. On the iid side it is a dead arm: raw fitness on this block
+  #     gives relative bias 255 and cos(E[g], grad f) = 0.008, because f(theta) = 2.65
+  #     against ||grad f|| = 1.02 and sigma divides that constant into the variance. R would
+  #     have to be ~1e5 and this sweep budgets 30.
+  #   - `centered` is the unbiased low-variance baseline on the iid side, and must NOT be
+  #     paired with mirroring: the pair already cancels f_bar, so the n/(n-1) correction
+  #     over-corrects and the estimator targets n/(n-1) grad f, 6.7% the wrong way at n=16.
+  #
+  # This used to be a flat [none, centered_ranks], which got the mirrored side right and
+  # spent 84 configs on the dead iid arm while never measuring an unbiased iid baseline.
+  # Corrected before any results existed.
+  shaping:
+    iid: [centered, centered_ranks]
+    mirrored: [none, centered_ranks]

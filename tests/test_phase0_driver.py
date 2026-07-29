@@ -36,7 +36,14 @@ CFG = {
     "seed": 0,
     "replicates": 5,
     "wall_clock_cap_s": 60,
-    "axes": {"population": [64, 256], "sigma": [0.001, 0.01], "shaping": ["none"]},
+    "axes": {
+        "population": [64, 256],
+        "sigma": [0.001, 0.01],
+        # One mode per side, so a test that accidentally crossed the axis instead of
+        # selecting from it would still produce the right *count*. The membership
+        # assertions below are what catch that.
+        "shaping": {"iid": ["centered"], "mirrored": ["none"]},
+    },
 }
 
 GRID = {
@@ -48,6 +55,59 @@ GRID = {
 def test_expand_crosses_every_axis():
     configs = run.expand(CFG, GRID)
     assert len(configs) == 2 * 2 * 2 * 1  # strategies x population x sigma x shaping
+
+
+def test_shaping_axis_is_conditional_on_the_scheme():
+    """docs/01 C0.5: the axis is selected by scheme, not crossed with it.
+
+    `centered` under a mirrored scheme is a measured bug, not a wasted config: the pair
+    already cancels `f_bar`, so the n/(n-1) correction over-corrects and the estimator
+    targets n/(n-1) grad f. Crossing the axis would put that arm in the sweep and its curve
+    would sit 6.7% off at n=16 with nothing saying why.
+    """
+    by_strategy = {}
+    for c in run.expand(CFG, GRID):
+        by_strategy.setdefault(c.strategy, set()).add(c.shaping)
+
+    assert by_strategy["a_full"] == {"centered"}
+    assert by_strategy["b_lr1"] == {"none"}
+
+
+@pytest.mark.parametrize(
+    "scheme,want",
+    [("iid", "i"), ("mirrored", "m"), ("mirrored+orthogonal_hd", "m"), ("mirrored+sobol", "m")],
+)
+def test_every_scheme_in_the_grid_picks_a_side(scheme, want):
+    """Every coupled scheme composes Mirrored, so `"mirrored" in scheme` is the whole test.
+    Pinned per scheme string so adding an uncoupled coupled scheme later cannot land on the
+    iid side by accident."""
+    assert run.shaping_for(scheme, {"iid": "i", "mirrored": "m"}) == want
+
+
+def test_shaping_axis_must_be_a_mapping(tmp_path):
+    """The flat list this replaced was valid YAML and silently wrong: it gave the mirrored
+    side the right baseline and spent 84 configs on the dead iid arm."""
+    p = tmp_path / "c.yaml"
+    p.write_text(
+        "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
+        "model:\n  kind: quadratic\n  d: 8\n"
+        "axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: ['none', 'centered_ranks']\n"
+    )
+    with pytest.raises(ValueError, match="must be a mapping"):
+        run.load_config(p)
+
+
+def test_shaping_axis_rejects_an_unknown_mode(tmp_path):
+    """Otherwise this is a KeyError partway through a 20-hour sweep."""
+    p = tmp_path / "c.yaml"
+    p.write_text(
+        "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
+        "model:\n  kind: quadratic\n  d: 8\n"
+        "axes:\n  population: [64]\n  sigma: [0.01]\n"
+        "  shaping:\n    iid: ['centred']\n    mirrored: ['none']\n"
+    )
+    with pytest.raises(ValueError, match="not a shaping mode"):
+        run.load_config(p)
 
 
 def test_expand_is_deterministic():
@@ -121,7 +181,12 @@ def _write(tmp_path, body: str):
 
 BASE = ("seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
         "model:\n  kind: quadratic\n  d: 8\n")
-AXES = "axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: ['none']\n"
+SHAPING = "  shaping:\n    iid: ['centered']\n    mirrored: ['none']\n"
+AXES = "axes:\n  population: [64]\n  sigma: [0.01]\n" + SHAPING
+
+
+def axes(population="[64]", sigma="[0.01]", shaping=SHAPING) -> str:
+    return f"axes:\n  population: {population}\n  sigma: {sigma}\n{shaping}"
 
 
 def test_the_shipped_config_loads():
@@ -129,51 +194,69 @@ def test_the_shipped_config_loads():
     cfg = run.load_config(DRIVER.parent / "config.yaml")
     assert cfg["replicates"] >= 30  # docs/01 C0.5
     assert cfg["axes"]["population"] == sorted(cfg["axes"]["population"])
-    assert all(isinstance(s, str) for s in cfg["axes"]["shaping"])
+
+    shaping = cfg["axes"]["shaping"]
+    assert set(shaping) == set(run.SHAPING_SIDES)
+    assert all(isinstance(s, str) for side in shaping.values() for s in side)
+    # docs/01 C0.5, both directions. Neither is a taste call: `centered` under mirroring
+    # over-corrects by n/(n-1), and `none` without it is the dead arm.
+    assert "centered" not in shaping["mirrored"]
+    assert "none" not in shaping["iid"]
 
 
 @pytest.mark.parametrize("bad", ["no", "No", "NO", "off", "on", "yes", "~", "null"])
 def test_rejects_the_norway_problem(tmp_path, bad):
     """A shaping mode written bare as `no` becomes False, and every result file is then
-    labelled shaping=False.
-
-    The exact token set is PyYAML's, checked rather than taken from the YAML 1.1 spec:
-    the spec lists bare `y`/`n` as booleans and PyYAML does not implement that, so a test
-    asserting `y` is coerced fails against the library actually in use.
-    """
-    path = _write(tmp_path, BASE + f"axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: [{bad}]\n")
+    labelled shaping=False."""
+    path = _write(tmp_path, BASE + axes(shaping=f"  shaping:\n    iid: [{bad}]\n    mirrored: ['none']\n"))
     with pytest.raises(ValueError, match="quote the value"):
         run.load_config(path)
 
 
 @pytest.mark.parametrize("safe", ["y", "n", "Y", "N"])
-def test_single_letters_are_not_coerced_by_pyyaml(tmp_path, safe):
-    """Documents the boundary. If a PyYAML upgrade starts coercing these, this test
-    fails and the config comment needs revisiting."""
-    path = _write(tmp_path, BASE + f"axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: [{safe}]\n")
-    assert run.load_config(path)["axes"]["shaping"] == [safe]
+def test_single_letters_are_not_coerced_by_pyyaml(safe):
+    """Documents the boundary, asserted against PyYAML rather than through the driver.
+
+    The YAML 1.1 spec lists bare `y`/`n` as booleans and PyYAML does not implement that, so
+    a test asserting `y` is coerced fails against the library actually in use. `config.yaml`
+    relies on this for its `m:`/`n:` keys, so an upgrade that starts coercing them has to
+    fail here.
+
+    Going through `load_config` would no longer reach the coercion check: these are not
+    shaping modes, so the name guard fires first.
+    """
+    import yaml  # noqa: PLC0415
+
+    assert yaml.safe_load(f"v: [{safe}]")["v"] == [safe]
 
 
-def test_accepts_quoted_shaping_names(tmp_path):
-    path = _write(tmp_path, BASE + "axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: ['no', 'none']\n")
-    assert run.load_config(path)["axes"]["shaping"] == ["no", "none"]
+def test_quoting_fixes_the_coercion_but_not_a_wrong_name(tmp_path):
+    """Two guards, and the second is new.
+
+    Quoted, `'no'` is a genuine string and survives the Norway check. It is still not a
+    shaping mode, and that used to sail through here and land as a KeyError partway into a
+    20-hour sweep.
+    """
+    path = _write(tmp_path, BASE + axes(shaping="  shaping:\n    iid: ['no']\n    mirrored: ['none']\n"))
+    with pytest.raises(ValueError, match="not a shaping mode"):
+        run.load_config(path)
 
 
 def test_rejects_unquoted_scientific_notation(tmp_path):
     """`1e-3` is a string in YAML 1.1, not a float. It needs a decimal point."""
-    path = _write(tmp_path, BASE + "axes:\n  population: [64]\n  sigma: [not_a_number]\n  shaping: ['none']\n")
+    path = _write(tmp_path, BASE + axes(sigma="[not_a_number]"))
     with pytest.raises(ValueError, match="decimal point"):
         run.load_config(path)
 
 
 def test_accepts_proper_scientific_notation(tmp_path):
-    path = _write(tmp_path, BASE + "axes:\n  population: [64]\n  sigma: [1.0e-3]\n  shaping: ['none']\n")
+    path = _write(tmp_path, BASE + axes(sigma="[1.0e-3]"))
     assert run.load_config(path)["axes"]["sigma"] == [0.001]
 
 
 @pytest.mark.parametrize("bad", ["[0]", "[-5]", "[true]", "[3.5]"])
 def test_rejects_nonsense_populations(tmp_path, bad):
-    path = _write(tmp_path, BASE + f"axes:\n  population: {bad}\n  sigma: [0.01]\n  shaping: ['none']\n")
+    path = _write(tmp_path, BASE + axes(population=bad))
     with pytest.raises(ValueError, match="positive int"):
         run.load_config(path)
 
@@ -216,6 +299,12 @@ def test_replicate_keys_are_shared_across_configs():
     Also pins reproducibility: an earlier version folded `hash(config.slug())` into the
     seed, and CPython salts str hashes per process, so a resumed sweep would have used
     different seeds from the run it resumed.
+
+    **Paired within one side of the shaping axis.** The axis is conditional on the scheme
+    (docs/01 C0.5), so an iid arm and a mirrored arm never share a shaping value and there is
+    no cross-side pair to ask for. That costs the figure nothing: F5's scheme comparison is
+    `mirrored` against `mirrored+orthogonal_hd` against `mirrored+sobol`, all on the same
+    side, and `iid` is a separate baseline curve rather than a paired arm.
     """
     seen: dict = {}
 
@@ -223,14 +312,18 @@ def test_replicate_keys_are_shared_across_configs():
         seen.setdefault(config.strategy, []).append(jax.random.key_data(key).tolist())
         return run.synthetic_estimate(config, key)
 
-    configs = run.expand(CFG, GRID)
-    a = next(c for c in configs if c.strategy == "a_full")
-    b = next(c for c in configs if c.strategy == "b_lr1" and c.population == a.population
+    same_side = {
+        "b_lr1": Entry(lambda: None, 1, "mirrored+sobol"),
+        "c_lr1": Entry(lambda: None, 1, "mirrored+orthogonal_hd"),
+    }
+    configs = run.expand(CFG, same_side)
+    a = next(c for c in configs if c.strategy == "b_lr1")
+    b = next(c for c in configs if c.strategy == "c_lr1" and c.population == a.population
              and c.sigma == a.sigma and c.shaping == a.shaping)
 
     run.run_one(a, recorder, cap_s=60)
     run.run_one(b, recorder, cap_s=60)
-    assert seen["a_full"] == seen["b_lr1"]
+    assert seen["b_lr1"] == seen["c_lr1"]
 
 
 def test_run_one_is_reproducible():
@@ -276,7 +369,7 @@ def test_a_failing_config_does_not_kill_the_sweep(tmp_path, monkeypatch, capsys)
     cfg_path.write_text(
         "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
         "model:\n  kind: quadratic\n  d: 8\n"
-        "axes:\n  population: [64, 256]\n  sigma: [0.01]\n  shaping: ['none']\n"
+        + axes(population="[64, 256]")
     )
 
     rc = run.main(["--dry-run", "--config", str(cfg_path)])

@@ -33,12 +33,29 @@ import jax.numpy as jnp
 import numpy as np
 import yaml
 
-from shardes import metrics
+from shardes import metrics, shaping
 from shardes.dimensions import sampling_dimension
 from shardes.strategies.registry import STRATEGIES, check_entry
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
+
+# The two sides of the conditional shaping axis (docs/01 C0.5). A scheme is "mirrored" if it
+# composes Mirrored, which every coupled scheme does.
+SHAPING_SIDES = ("iid", "mirrored")
+SHAPING_NAMES = frozenset(shaping.BY_NAME)
+
+
+def shaping_for(scheme: str, axis: dict) -> list[str]:
+    """The shaping modes that apply to `scheme`.
+
+    Conditional, not crossed, and neither list is a subset of the other. `none` is the right
+    unshaped baseline under mirroring because a mirrored pair is centred by construction, and
+    a dead arm without it. `centered` is the unbiased low-variance baseline on the iid side
+    and over-corrects under mirroring, because the pair already cancels `f_bar` so the
+    n/(n-1) factor is applied twice. docs/01 C0.5 carries both measurements.
+    """
+    return axis["mirrored" if "mirrored" in scheme else "iid"]
 
 
 # ---------------------------------------------------------------------------------------
@@ -96,17 +113,35 @@ def load_config(path: Path) -> dict:
         raise ValueError(f"{path}: model.kind is required")
 
     axes = cfg["axes"]
-    for name in ("population", "sigma", "shaping"):
+    for name in ("population", "sigma"):
         if not isinstance(axes.get(name), list) or not axes[name]:
             raise ValueError(f"{path}: axes.{name} must be a non-empty list")
 
-    for value in axes["shaping"]:
-        if not isinstance(value, str):
-            raise ValueError(
-                f"{path}: axes.shaping contains {value!r} ({type(value).__name__}). "
-                "PyYAML reads no/No/NO/off/on/yes as booleans and ~/null as None; "
-                "quote the value."
-            )
+    shaping = axes.get("shaping")
+    if not isinstance(shaping, dict) or set(shaping) != set(SHAPING_SIDES):
+        raise ValueError(
+            f"{path}: axes.shaping must be a mapping with keys {sorted(SHAPING_SIDES)}, got "
+            f"{shaping!r}. The shaping axis is conditional on the scheme, not crossed with "
+            "it: `centered` over-corrects under mirroring and `none` is a dead arm without "
+            "it. docs/01-phase0-estimator-harness.md C0.5."
+        )
+    for side, values in shaping.items():
+        if not isinstance(values, list) or not values:
+            raise ValueError(f"{path}: axes.shaping.{side} must be a non-empty list")
+        for value in values:
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"{path}: axes.shaping.{side} contains {value!r} "
+                    f"({type(value).__name__}). PyYAML reads no/No/NO/off/on/yes as booleans "
+                    "and ~/null as None; quote the value."
+                )
+            if value not in SHAPING_NAMES:
+                raise ValueError(
+                    f"{path}: axes.shaping.{side} contains {value!r}, which is not a shaping "
+                    f"mode. Known: {sorted(SHAPING_NAMES)}. Caught here rather than as a "
+                    "KeyError partway through a 20-hour sweep."
+                )
+
     for value in axes["population"]:
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
             raise ValueError(f"{path}: axes.population contains {value!r}, want a positive int")
@@ -137,7 +172,7 @@ def expand(cfg: dict, registry: dict | None = None) -> list[Config]:
         check_entry(name, entry)
         for population in sorted(axes["population"]):
             for sigma in axes["sigma"]:
-                for shaping in axes["shaping"]:
+                for mode in shaping_for(entry.scheme, axes["shaping"]):
                     out.append(
                         Config(
                             strategy=name,
@@ -145,7 +180,7 @@ def expand(cfg: dict, registry: dict | None = None) -> list[Config]:
                             scheme=entry.scheme,
                             population=population,
                             sigma=float(sigma),
-                            shaping=shaping,
+                            shaping=mode,
                             replicates=int(cfg["replicates"]),
                             seed=int(cfg["seed"]),
                         )
@@ -269,7 +304,6 @@ def make_estimator(cfg: dict):
     The library takes (strategy, model, params, x, key, ...) and must not import this
     driver's dataclass, so the adaptation lives here rather than there.
     """
-    from shardes import shaping  # noqa: PLC0415
     from shardes.estimator import estimate as library_estimate  # noqa: PLC0415
 
     key = jax.random.key(int(cfg["seed"]))
