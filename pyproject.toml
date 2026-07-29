@@ -16,6 +16,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+# Figures only. Kept out of the core deps so the library floor stays jax + numpy.
+experiments = ["matplotlib"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/shardes"]

@@ -5,19 +5,47 @@ Produces figure F5: log-log, x-axis `N/d_eff`, y-axis `1 - cos(ĝ, ∇f)`, two p
 
 Answers Gate G0. Spec: [`docs/01-phase0-estimator-harness.md`](../../docs/01-phase0-estimator-harness.md).
 
-**Nothing has been run.** This directory is a placeholder. No number goes into any markdown
-file in this repo without a committed script that regenerates it.
+**No measurement has been run.** The harness works end to end on synthetic numbers; the
+estimator it calls does not exist yet. No number goes into any markdown file in this repo
+without a committed script that regenerates it.
 
-## Contents, once it exists
+## Running it
+
+```bash
+python run.py --list          # the grid, and what is already done
+python run.py --dry-run       # synthetic numbers, exercises the whole pipeline
+python run.py                 # the real sweep, once shardes.estimator exists
+python run.py --limit 5       # first 5 outstanding configs, for a rehearsal
+python plot.py                # figures/f5-estimator-quality.png from results/
+```
+
+`--dry-run` is the dress rehearsal doc 06 asks for: it produces publication-shaped figures
+from fake numbers, so a pipeline bug surfaces before the real sweep rather than during it.
+Synthetic results carry `"SYNTHETIC": true` and the figure is watermarked, because a fake
+figure that looks real is worse than no figure.
+
+## Contents
 
 | File | |
 |---|---|
-| `config.yaml` | the sweep grid. **Committed before the run**, cited by SHA in the results |
-| `run.py` | resumable and idempotent; writes one file per config as it completes |
-| `plot.py` | regenerates every figure from `results/`, no manual steps |
-| `results/` | raw outputs, one file per config |
-| `figures/` | F5 and the supporting shaping table |
-| `env.json` | written by the driver, never by hand: platform, GPU model, driver, CUDA, JAX version, commit SHA, wall-clock, spend |
+| `config.toml` | the non-strategy axes. **Committed before the run**, cited by SHA in the results |
+| `run.py` | resumable and idempotent; one file per config, written atomically as it completes |
+| `plot.py` | regenerates F5 from `results/`, no manual steps |
+| `results/` | raw outputs, one JSON per config |
+| `figures/` | F5 |
+| `env.json` | written by the driver, never by hand: platform, device, JAX version, commit SHA, dirty-worktree flag, wall-clock, failures |
+
+The strategy axis is **not** in `config.toml`. It comes from
+`src/shardes/strategies/registry.py`, because the rank × scheme grid is non-rectangular and
+lives in one place ([docs/01 C0.5](../../docs/01-phase0-estimator-harness.md)). The commit
+SHA pins it just as tightly.
+
+## What is missing
+
+`shardes.estimator.estimate(config, key) -> (g_hat, grad)`. The driver owns config
+expansion, resume, timing, environment capture, results IO and aggregation over
+replicates. The gradient-estimator math is not the driver's (CLAUDE.md ground rules), so
+`run.py` imports it lazily and `--dry-run` works without it.
 
 ## Sweep
 
