@@ -36,56 +36,89 @@ By the end of Phase 0, the repo can do all of the following from a clean checkou
 
 ### C0.1 — The strategy protocol exists and has three implementations
 
-The interface that everything else hangs off. Sketch — refine it, don't copy it:
+The interface that everything else hangs off. **Settled**; the reasoning is below.
 
 ```python
 class PerturbationStrategy(Protocol):
-    def sample(self, key: Array, params: PyTree, n: int) -> Perturbation:
-        """Opaque per-member perturbation state for `n` members.
-        Shape-aware: leaves keep their (m, n) structure. No ravel_pytree."""
+    def sample(self, base_key: Key, params: PyTree, member_ids: Array) -> Perturbation:
+        """Unit-scale perturbation for exactly the members in `member_ids`.
 
-    def apply(self, params: PyTree, pert: Perturbation, sigma: float) -> Callable:
-        """Return a callable evaluating the model for all n members.
+        member_ids: (n_local,) int32 of GLOBAL member indices. Member i depends only on
+        (base_key, i, params shapes). Never on n_local, on where i sits in the array,
+        on the device, or on any counter. Leaves keep their (m, n) structure."""
+
+    def apply(self, model: Callable, params: PyTree, pert: Perturbation,
+              sigma: float) -> Callable:
+        """Given the user's model(params, x) -> y, return g(x) -> (n_local, ...)
+        evaluating every member in `pert`.
+
         Full-rank: materialize per member, or regenerate from seed.
-        Low-rank:  rewrite x @ W.T  ->  x @ W.T + (x @ B) @ A.T. Never materialize."""
+        Low-rank:  rewrite x @ W.T -> x @ W.T + (x @ B) @ A.T. Never materialize."""
 
     def contract(self, pert: Perturbation, weights: Array) -> PyTree:
-        """Contract shaped fitness weights (n,) into a params-shaped update.
-        The only place a full (m, n) tensor is instantiated."""
+        """sum_i weights[i] * eps_i, params-shaped, unit scale.
+
+        weights: (n_local,) shaped fitness. Accumulate in f32 even when the perturbation
+        is bf16. The only place a full (m, n) tensor is instantiated."""
+
+
+class Perturbation(Protocol):
+    """Whatever `sample` returns, plus enough state to regenerate itself."""
+    base_key: Key
+    member_ids: Array
 ```
 
-**Four things the sketch doesn't answer.** Each has to be settled before the protocol is
-written, and each has more than one defensible answer, so they're flagged rather than
-picked. Listed worst-first.
+**How this was settled.** One decision does most of the work: `sample` takes an explicit
+array of global member indices rather than a count.
 
-1. **`sample(key, params, n)` cannot express the seed contract under sharding.** Member `i`
-   derives from `fold_in(base_key, i)` with `i` the *global* index. Called inside
-   `shard_map`, each device sees only its local `n`, so every device would generate members
-   `0…n/D-1` and produce identical perturbations. Device-count invariance is invariant 2 in
-   `CLAUDE.md` and this signature can't satisfy it. Either `sample` takes the member
-   indices (or a global offset) explicitly, or it is only ever called outside the shard and
-   the result is sharded afterwards, which costs the low-rank path its whole point. This is
-   the one to decide first.
+1. **The global member index is passed in, not derived.** Declare `member_ids` as
+   `P("pop")` and the sharding hands each device its own slice. No `axis_index`, no offset
+   arithmetic, no code path that behaves differently inside a `shard_map` than outside.
+   The seed contract stops being a rule to remember and becomes one there is nowhere to
+   break, because `sample` never sees a device index. The test is a line:
+   `sample(k, p, [7])` against `sample(k, p, arange(100))[7]`.
 
-2. **`apply` never receives the model.** It returns "a callable evaluating the model for
-   all `n` members" given only `params`, `pert` and `sigma`. For `LowRank` the entire trick
-   is rewriting `x @ W.T` into `x @ W.T + (x @ B) @ A.T` *inside* the forward pass, so the
-   strategy has to reach the model's matmuls. Three routes: the model is written against a
-   strategy-supplied linear op; a jaxpr interpreter rewrites `dot_general`; or the strategy
-   walks a known module structure. The choice decides how invasive the library is on user
-   code, which is most of what adoption turns on.
+   Three other things fall out of the same mechanism, which is the real argument for it.
+   **Chunking** is splitting `member_ids` and summing partial `contract`s, which is what
+   makes full rank at large `N` possible at all: materializing `2^18` members at
+   `m = n = 512` would be 275 TB. **Contraction Strategy A** becomes
+   `sample(base_key, params, arange(N))` then `contract`. **Strategy B** becomes `contract`
+   on the local shard then `psum`. Same two methods, three lines each.
 
-3. **Where does `sigma` live?** It's an argument to `apply` but not `sample`, so
-   perturbations are presumably unit-scale and scaled at application. Then `contract` needs
-   it too, because the estimator is `(1/(Nσ)) Σ wₙ εₙ`. Either `sigma` is threaded through
-   all three or it belongs to the perturbation. Getting this inconsistent is a silent
-   scale error in the gradient, not a crash.
+2. **`sigma` lives in the ES state.** Strategies emit and contract unit-scale
+   perturbations. `sigma` enters in exactly two core-owned places: `apply`, where the
+   forward pass needs it, and `tell`'s `1/(N sigma)` scaling. `sigma` is a property of the
+   distribution, not of the perturbation scheme. It is what the CMA family and every
+   adaptive-sigma method updates, so filing it under the strategy would be wrong, and it
+   would have to be threaded through each `Mirrored` and `Coupled` wrapper.
 
-4. **What does `Perturbation` have to carry?** Contraction Strategy A regenerates all `N`
-   perturbations from seeds on every device, so `contract` needs enough to rebuild them
-   (seeds plus the params shapes), while Strategy B only needs the local shard's factors.
-   If one type serves both, it carries the union. If not, `contract` is per-strategy-pair
-   and the matrix of implementations doubles.
+   It also keeps the sigma sweep honest. Unit-scale perturbations mean the same directions
+   are reused across sigma values, so a gap between sigma arms is the sigma and not a
+   different draw. There is a test: `contract` output does not depend on sigma.
+
+   The cost, stated rather than buried: `(pert, sigma)` have to travel together, so no
+   single object fully specifies a perturbation. Accepted, because the alternative puts
+   sigma in two places and a mismatch there is a silent scale error in the gradient rather
+   than a crash.
+
+3. **`apply` takes the model.** The old signature asked it to return a callable evaluating
+   a model it had never been given.
+
+4. **One `Perturbation` type serves both contraction strategies**, because it carries
+   `(base_key, member_ids)` and can regenerate itself. Strategy A re-derives, Strategy B
+   keeps what it has. Regenerability is a requirement of the type, not an accident of the
+   implementations.
+
+**Deferred on purpose: how `LowRank.apply` reaches the model's matmuls.** Two routes. A
+jaxpr interpreter rewriting `dot_general` works on any model but is fragile under `scan`
+and `remat` and has to map primitives back to param leaves. A `shardes.nn.dense` that the
+model is written against is easy and correct but means users cannot bring an arbitrary
+Flax module.
+
+**Arbitrary-model support is deferred.** Implement `LowRank.apply` against the Phase 0
+transformer block, which is ours, and revisit in Phase 1. If the jaxpr route proves
+tractable there it generalizes later; if it does not, that was learned on a model we
+control rather than on someone's checkpoint. G0 needs statistics, not generality.
 
 Implementations:
 
