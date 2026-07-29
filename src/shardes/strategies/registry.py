@@ -18,6 +18,7 @@ strategy under test and there is no class to hang a decorator on.
 from dataclasses import dataclass
 from typing import Callable
 
+from shardes.strategies.iid_gaussian import IIDGaussian
 from shardes.strategies.protocol import PerturbationStrategy
 
 StrategyFactory = Callable[[], PerturbationStrategy]
@@ -61,8 +62,9 @@ def check_entry(name: str, entry: Entry) -> None:
 #
 # Expected shape once the strategies exist, from docs/01 C0.1 and C0.5:
 #
-#     "iid_gaussian":       Entry(lambda: IIDGaussian(), FULL, "iid"),
-#     "seed_regenerated":   Entry(lambda: SeedRegenerated(), FULL, "iid"),
+# Still to come, from docs/01 C0.1 and C0.5:
+#
+#     "seed_regenerated":   Entry(SeedRegenerated, FULL, "iid"),
 #     "mirrored_full":      Entry(lambda: Mirrored(IIDGaussian()), FULL, "mirrored"),
 #     "lowrank_r1":         Entry(lambda: LowRank(r=1), 1, "iid"),
 #     "mirrored_lr1":       Entry(lambda: Mirrored(LowRank(r=1)), 1, "mirrored"),
@@ -70,4 +72,7 @@ def check_entry(name: str, entry: Entry) -> None:
 #                                 1, "mirrored+orthogonal_hd"),
 #     "mirrored_sobol_lr1": Entry(lambda: Coupled(Mirrored(LowRank(r=1)), "sobol_scrambled"),
 #                                 1, "mirrored+sobol"),
-STRATEGIES: dict[str, Entry] = {}
+STRATEGIES: dict[str, Entry] = {
+    # The class itself is the zero-argument factory.
+    "iid_gaussian": Entry(build=IIDGaussian, rank=FULL, scheme="iid"),
+}

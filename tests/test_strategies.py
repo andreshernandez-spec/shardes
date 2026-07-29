@@ -195,6 +195,49 @@ def test_perturbation_is_unit_scale(strategy, params):
 
 
 @parametrize
+def test_apply_evaluates_each_member_at_its_own_epsilon(strategy, params):
+    """g(x) returns one output per member, perturbed by sigma times *that* member's eps.
+
+    The model sums its params, so the expected value per member is computable from
+    `contract` alone and the test never has to look inside the perturbation.
+
+    Note for when LowRank arrives: this model has no matmul to rewrite, so a strategy
+    that works by intercepting `dot_general` cannot satisfy it. If that happens, it is a
+    finding about `apply`'s contract being model-dependent, not a bad test. See the
+    deferred question in docs/01 C0.1.
+    """
+    sigma, ids = 0.1, jnp.arange(5)
+
+    def model(p, x):
+        return x * sum(jnp.sum(leaf) for leaf in jax.tree.leaves(p))
+
+    pert = strategy.sample(jax.random.key(11), params, ids)
+    got = strategy.apply(model, params, pert, sigma)(jnp.float32(1.0))
+    assert got.shape == (5,)
+
+    base = sum(float(jnp.sum(leaf)) for leaf in jax.tree.leaves(params))
+    for i in range(5):
+        eps_i = strategy.contract(pert, (ids == i).astype(jnp.float32))
+        want = base + sigma * sum(float(jnp.sum(leaf)) for leaf in jax.tree.leaves(eps_i))
+        assert jnp.isclose(got[i], want, rtol=1e-4), f"member {i}"
+
+
+@parametrize
+def test_apply_scales_with_sigma(strategy, params):
+    """Doubling sigma doubles the deviation from the unperturbed model."""
+    ids = jnp.arange(4)
+
+    def model(p, x):
+        return x * sum(jnp.sum(leaf) for leaf in jax.tree.leaves(p))
+
+    pert = strategy.sample(jax.random.key(12), params, ids)
+    base = model(params, jnp.float32(1.0))
+    one = strategy.apply(model, params, pert, 0.1)(jnp.float32(1.0)) - base
+    two = strategy.apply(model, params, pert, 0.2)(jnp.float32(1.0)) - base
+    assert jnp.allclose(two, 2 * one, rtol=1e-4)
+
+
+@parametrize
 def test_strategy_conforms_to_the_protocol(strategy):
     """Structural check. runtime_checkable only verifies the methods exist, which is
     exactly the failure the signature guards above cannot see: a strategy that forgot
