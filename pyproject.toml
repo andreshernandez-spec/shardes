@@ -16,8 +16,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
-# Figures only. Kept out of the core deps so the library floor stays jax + numpy.
-experiments = ["matplotlib"]
+# Experiment drivers only: matplotlib for figures, pyyaml for sweep configs. Kept out of
+# the core deps so the library floor stays jax + numpy.
+experiments = ["matplotlib", "pyyaml"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/shardes"]

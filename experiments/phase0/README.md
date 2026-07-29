@@ -28,14 +28,14 @@ figure that looks real is worse than no figure.
 
 | File | |
 |---|---|
-| `config.toml` | the non-strategy axes. **Committed before the run**, cited by SHA in the results |
+| `config.yaml` | the non-strategy axes. **Committed before the run**, cited by SHA in the results |
 | `run.py` | resumable and idempotent; one file per config, written atomically as it completes |
 | `plot.py` | regenerates F5 from `results/`, no manual steps |
 | `results/` | raw outputs, one JSON per config |
 | `figures/` | F5 |
 | `env.json` | written by the driver, never by hand: platform, device, JAX version, commit SHA, dirty-worktree flag, wall-clock, failures |
 
-The strategy axis is **not** in `config.toml`. It comes from
+The strategy axis is **not** in `config.yaml`. It comes from
 `src/shardes/strategies/registry.py`, because the rank × scheme grid is non-rectangular and
 lives in one place ([docs/01 C0.5](../../docs/01-phase0-estimator-harness.md)). The commit
 SHA pins it just as tightly.

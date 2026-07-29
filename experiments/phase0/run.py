@@ -25,13 +25,13 @@ import socket
 import subprocess
 import sys
 import time
-import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import yaml
 
 from shardes import metrics
 from shardes.strategies.registry import FULL, STRATEGIES, Entry, check_entry
@@ -82,6 +82,57 @@ class Config:
 
     def path(self) -> Path:
         return RESULTS / f"{self.slug()}.json"
+
+
+def load_config(path: Path) -> dict:
+    """Load and validate. YAML 1.1 coerces more than it looks, and always silently.
+
+    Two traps this guards, both of which produce a running sweep with wrong values rather
+    than an error:
+
+    `no`, `No`, `NO`, `off`, `on`, `yes` are **booleans**, and `~`/`null` are None. A
+    shaping mode written bare as `no` arrives as `False`, and every result file is then
+    labelled `shaping=False`. Bare `y`/`n` happen to be safe in PyYAML, which omits them
+    from the YAML 1.1 bool set, but do not rely on that.
+
+    `1e-3` is a **string**, not a float: YAML 1.1 wants a decimal point (`1.0e-3`). Here
+    it happens to survive because sigma is passed through `float()`, but it would not
+    survive being compared or formatted, and the failure would surface as a sweep that
+    reruns everything because the slugs changed.
+    """
+    cfg = yaml.safe_load(path.read_text())
+
+    for key in ("seed", "replicates", "wall_clock_cap_s", "axes"):
+        if key not in cfg:
+            raise ValueError(f"{path}: missing required key {key!r}")
+
+    axes = cfg["axes"]
+    for name in ("population", "sigma", "shaping"):
+        if not isinstance(axes.get(name), list) or not axes[name]:
+            raise ValueError(f"{path}: axes.{name} must be a non-empty list")
+
+    for value in axes["shaping"]:
+        if not isinstance(value, str):
+            raise ValueError(
+                f"{path}: axes.shaping contains {value!r} ({type(value).__name__}). "
+                "PyYAML reads no/No/NO/off/on/yes as booleans and ~/null as None; "
+                "quote the value."
+            )
+    for value in axes["population"]:
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ValueError(f"{path}: axes.population contains {value!r}, want a positive int")
+    for value in axes["sigma"]:
+        try:
+            sigma = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"{path}: axes.sigma contains {value!r}. YAML 1.1 needs a decimal point "
+                "in scientific notation: write 1.0e-3, not 1e-3."
+            ) from None
+        if not sigma > 0:
+            raise ValueError(f"{path}: axes.sigma contains {value!r}, want a positive number")
+
+    return cfg
 
 
 def expand(cfg: dict, registry: dict | None = None) -> list[Config]:
@@ -250,13 +301,13 @@ def write_atomic(path: Path, payload: dict) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--config", type=Path, default=HERE / "config.toml")
+    ap.add_argument("--config", type=Path, default=HERE / "config.yaml")
     ap.add_argument("--dry-run", action="store_true", help="synthetic numbers")
     ap.add_argument("--limit", type=int, default=None, help="stop after N configs")
     ap.add_argument("--list", action="store_true", help="print the grid and exit")
     args = ap.parse_args(argv)
 
-    cfg = tomllib.loads(args.config.read_text())
+    cfg = load_config(args.config)
     registry = STRATEGIES
     if args.dry_run and not STRATEGIES:
         registry = DRY_RUN_GRID

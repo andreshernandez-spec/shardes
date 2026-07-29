@@ -1,0 +1,36 @@
+# E1 — estimator quality. Answers Gate G0, produces figure F5.
+#
+# COMMITTED BEFORE THE RUN. Results cite the commit SHA, so editing this file after a run
+# invalidates the results that reference it. Add configs by committing a new file, never
+# by editing this one mid-sweep (docs/conventions.md, "Benchmarking").
+#
+# The strategy axis is NOT here. It comes from src/shardes/strategies/registry.py, because
+# the rank x scheme grid is non-rectangular and lives in one place (docs/01 C0.5). The
+# commit SHA pins it just as tightly as it pins this file.
+#
+# Two YAML traps this file is written to avoid, both silent. `run.py` validates for them:
+#   - `no`, `No`, `NO`, `off`, `on`, `yes` are booleans, and `~`/`null` are None. Never
+#     write a shaping or scheme name bare if it could be read as one; quote it.
+#     (`m:` and `n:` below are safe: PyYAML does not coerce single letters, unlike the
+#     YAML 1.1 spec. Verified, not assumed.)
+#   - `1e-3` is a STRING, not a float. YAML 1.1 needs a decimal point: `1.0e-3`. Plain
+#     decimals like 0.001 are unambiguous, so use those.
+
+seed: 0
+replicates: 30              # R >= 30 per config (docs/01 C0.5)
+
+# Per-config wall-clock budget. Checked after each replicate, so a config that blows it
+# records what it has with truncated=true and the sweep moves on rather than stalling.
+wall_clock_cap_s: 900
+
+model:
+  kind: transformer_block
+  m: 512
+  n: 512                    # d_eff = m + n = 1024, so N/d_eff spans [0.06, 256]
+
+axes:
+  # 2^6 .. 2^18. Do not raise m/n before checking memory: full-rank at 2^18 and m=n=512
+  # would be 275 TB of materialized perturbation, which is what the chunking path is for.
+  population: [64, 256, 1024, 4096, 16384, 65536, 262144]
+  sigma: [0.001, 0.01, 0.1]
+  shaping: [none, centered_ranks]

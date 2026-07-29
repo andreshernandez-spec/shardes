@@ -217,7 +217,7 @@ Every experiment directory carries:
 
 ```
 experiments/EN-name/
-├── config.toml      committed BEFORE the run
+├── config.yaml      committed BEFORE the run
 ├── run.py           resumable, idempotent, incremental writes
 ├── plot.py          regenerates every figure from results/
 ├── results/         raw outputs, one file per config

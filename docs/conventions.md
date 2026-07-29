@@ -59,10 +59,13 @@ and say so.
 - Docstrings state shapes. `A: (n_members, m, r)` is worth more than a paragraph of prose.
 - No dependency added without a one-line justification. `jax`, `numpy`, `pytest` are the
   floor. `optax`, `flax`, `chex` acceptable if genuinely used.
-- Experiment configs are **TOML**, read with the stdlib `tomllib` (Python ≥ 3.11). YAML
-  would mean PyYAML for one file, and the repo already speaks TOML via `pyproject.toml`.
-- `matplotlib` is an optional `experiments` extra, not a core dependency. The library must
-  install without it.
+- `matplotlib` and `pyyaml` are optional `experiments` extras, not core dependencies. The
+  library must install with only `jax` and `numpy`. The test suite covers the experiment
+  drivers, so development needs `pip install -e ".[dev,experiments]"`.
+- Experiment configs are YAML, and **`yaml.safe_load` is not safe from coercion**. PyYAML
+  reads `no`/`No`/`NO`/`off`/`on`/`yes` as booleans and `~`/`null` as None, and `1e-3`
+  without a decimal point is a *string*, not a float. Every driver validates its config
+  rather than trusting it; see `load_config` in `experiments/phase0/run.py`.
 
 ---
 
@@ -92,7 +95,7 @@ experiment directory contains:
 
 ```
 experiments/phaseN-name/
-├── config.toml        committed BEFORE the run
+├── config.yaml        committed BEFORE the run
 ├── run.py             resumable; writes one file per config as it completes
 ├── plot.py            regenerates every figure from the results files
 ├── results/           raw outputs

@@ -118,6 +118,80 @@ def test_resume_skips_existing_results(tmp_path, monkeypatch):
     assert configs[0] not in outstanding
 
 
+def _write(tmp_path, body: str):
+    p = tmp_path / "config.yaml"
+    p.write_text(body)
+    return p
+
+
+BASE = "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
+AXES = "axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: ['none']\n"
+
+
+def test_the_shipped_config_loads():
+    """The one that actually runs. A typo here is a sweep that dies on line one."""
+    cfg = run.load_config(DRIVER.parent / "config.yaml")
+    assert cfg["replicates"] >= 30  # docs/01 C0.5
+    assert cfg["axes"]["population"] == sorted(cfg["axes"]["population"])
+    assert all(isinstance(s, str) for s in cfg["axes"]["shaping"])
+
+
+@pytest.mark.parametrize("bad", ["no", "No", "NO", "off", "on", "yes", "~", "null"])
+def test_rejects_the_norway_problem(tmp_path, bad):
+    """A shaping mode written bare as `no` becomes False, and every result file is then
+    labelled shaping=False.
+
+    The exact token set is PyYAML's, checked rather than taken from the YAML 1.1 spec:
+    the spec lists bare `y`/`n` as booleans and PyYAML does not implement that, so a test
+    asserting `y` is coerced fails against the library actually in use.
+    """
+    path = _write(tmp_path, BASE + f"axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: [{bad}]\n")
+    with pytest.raises(ValueError, match="quote the value"):
+        run.load_config(path)
+
+
+@pytest.mark.parametrize("safe", ["y", "n", "Y", "N"])
+def test_single_letters_are_not_coerced_by_pyyaml(tmp_path, safe):
+    """Documents the boundary. If a PyYAML upgrade starts coercing these, this test
+    fails and the config comment needs revisiting."""
+    path = _write(tmp_path, BASE + f"axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: [{safe}]\n")
+    assert run.load_config(path)["axes"]["shaping"] == [safe]
+
+
+def test_accepts_quoted_shaping_names(tmp_path):
+    path = _write(tmp_path, BASE + "axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: ['no', 'none']\n")
+    assert run.load_config(path)["axes"]["shaping"] == ["no", "none"]
+
+
+def test_rejects_unquoted_scientific_notation(tmp_path):
+    """`1e-3` is a string in YAML 1.1, not a float. It needs a decimal point."""
+    path = _write(tmp_path, BASE + "axes:\n  population: [64]\n  sigma: [not_a_number]\n  shaping: ['none']\n")
+    with pytest.raises(ValueError, match="decimal point"):
+        run.load_config(path)
+
+
+def test_accepts_proper_scientific_notation(tmp_path):
+    path = _write(tmp_path, BASE + "axes:\n  population: [64]\n  sigma: [1.0e-3]\n  shaping: ['none']\n")
+    assert run.load_config(path)["axes"]["sigma"] == [0.001]
+
+
+@pytest.mark.parametrize("bad", ["[0]", "[-5]", "[true]", "[3.5]"])
+def test_rejects_nonsense_populations(tmp_path, bad):
+    path = _write(tmp_path, BASE + f"axes:\n  population: {bad}\n  sigma: [0.01]\n  shaping: ['none']\n")
+    with pytest.raises(ValueError, match="positive int"):
+        run.load_config(path)
+
+
+@pytest.mark.parametrize("key", ["seed", "replicates", "wall_clock_cap_s", "axes"])
+def test_rejects_missing_required_keys(tmp_path, key):
+    body = BASE + AXES
+    body = "\n".join(l for l in body.splitlines() if not l.startswith(key)) + "\n"
+    if key == "axes":
+        body = BASE
+    with pytest.raises(ValueError, match="missing required key"):
+        run.load_config(_write(tmp_path, body))
+
+
 def test_capture_env_records_what_a_paper_needs():
     env = run.capture_env()
     for key in ("commit", "dirty_worktree", "jax", "device_kind", "device_platform",
@@ -168,10 +242,10 @@ def test_a_failing_config_does_not_kill_the_sweep(tmp_path, monkeypatch, capsys)
         return real_estimate(config, key)
 
     monkeypatch.setattr(run, "synthetic_estimate", flaky)
-    cfg_path = tmp_path / "config.toml"
+    cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
-        "seed = 0\nreplicates = 2\nwall_clock_cap_s = 60\n"
-        '[axes]\npopulation = [64, 256]\nsigma = [0.01]\nshaping = ["none"]\n'
+        "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
+        "axes:\n  population: [64, 256]\n  sigma: [0.01]\n  shaping: ['none']\n"
     )
 
     rc = run.main(["--dry-run", "--config", str(cfg_path)])

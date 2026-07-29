@@ -50,12 +50,16 @@ two-line diff apart.
 ## Quick start for development
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -U "jax[cuda12]" pytest      # drop [cuda12] for CPU-only
+pip install -U "jax[cuda12]"             # drop [cuda12] for CPU-only
+pip install -e ".[dev,experiments]"      # the suite covers the experiment drivers too
 
-# Multi-device logic is developed on CPU with simulated devices.
-XLA_FLAGS=--xla_force_host_platform_device_count=8 pytest tests/
+# conftest pins JAX_PLATFORMS=cpu and 8 simulated devices, so this is just:
+pytest tests/
 ```
+
+The header line reports the device count. If it says anything other than
+`8 device(s), platform cpu`, stop: with a CUDA jaxlib installed jax defaults to the GPU and
+reports one device, and every sharding test then passes without testing sharding.
 
 Roughly 90% of the work needs no GPU. See `docs/compute.md` before renting anything.
 
