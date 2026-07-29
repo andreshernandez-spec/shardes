@@ -108,6 +108,16 @@ and say so.
   split, by itself, bought 8 s. **Profile before deciding what to cut**; the expensive
   tests and the statistically expensive tests were not the same set.
 
+  The same lesson again, larger, when coupling landed: `tests/test_coupling.py` cost 38 s,
+  and `test_hd_block_is_exactly_orthogonal[8]` alone cost 1.2 s on 8×8 arrays. None of it
+  was arithmetic. **A test helper that calls a strategy or a coupling outside `jax.jit`
+  dispatches every primitive separately, and each dispatch compiles its own tiny HLO
+  module.** A coupling is a few hundred primitives (an FWHT chain, a 30-step XOR loop, a
+  scan), so per-primitive compilation dominates completely. Wrapping the helpers in `jit`
+  took that file to 8 s and the fast tier from 98 s to 86 s, with no test weakened. Do it in
+  new test helpers by default: `jit` is not part of any contract under test, so it costs
+  nothing to add.
+
   `coupling._direction_numbers` is the case to remember for library code rather than tests:
   it was memoized and returned a `jnp` array, so the first call cached a value built inside
   whatever trace reached it first, and every later trace got a leaked tracer. **Anything

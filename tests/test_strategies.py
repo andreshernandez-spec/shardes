@@ -35,15 +35,27 @@ def rel_err(got, want):
     return jnp.linalg.norm(flat_g - flat_w) / jnp.linalg.norm(flat_w)
 
 
+def contracted(strategy, base_key, params, member_ids, weights):
+    """sample then contract, under one jit.
+
+    `jit` here is about the suite's runtime, not about what is being tested. A strategy is a
+    few hundred primitives (an FWHT chain, a 30-step XOR, a scan), and dispatching each one
+    eagerly compiles a tiny HLO module per primitive: `mirrored_hd_lr1` cost 3.7 s on a test
+    whose arrays are 8x5. One compile instead of hundreds took the fast tier from 98 s to
+    under budget. Nothing about the strategies changes; jit is not part of the contract.
+    """
+    f = jax.jit(lambda k, p, i, w: strategy.contract(strategy.sample(k, p, i), w))
+    return f(base_key, params, member_ids, weights)
+
+
 def epsilon(strategy, base_key, params, member_id, member_ids):
     """Member `member_id`'s perturbation, read out via a one-hot contraction.
 
     `member_ids` is the batch it was sampled as part of, which is exactly the thing the
     seed contract says must not matter.
     """
-    pert = strategy.sample(base_key, params, member_ids)
     onehot = (member_ids == member_id).astype(jnp.float32)
-    return strategy.contract(pert, onehot)
+    return contracted(strategy, base_key, params, member_ids, onehot)
 
 
 # --------------------------------------------------------------------------------------
@@ -138,25 +150,24 @@ def test_contract_chunks_additively(strategy, params):
     ids = jnp.arange(16)
     w = jax.random.normal(jax.random.key(3), (16,), dtype=jnp.float32)
 
-    whole = strategy.contract(strategy.sample(key, params, ids), w)
-    lo = strategy.contract(strategy.sample(key, params, ids[:6]), w[:6])
-    hi = strategy.contract(strategy.sample(key, params, ids[6:]), w[6:])
+    whole = contracted(strategy, key, params, ids, w)
+    lo = contracted(strategy, key, params, ids[:6], w[:6])
+    hi = contracted(strategy, key, params, ids[6:], w[6:])
     assert rel_err(jax.tree.map(jnp.add, lo, hi), whole) < RTOL
 
 
 @parametrize
 def test_contract_is_linear_in_weights(strategy, params):
     key, ids = jax.random.key(4), jnp.arange(12)
-    pert = strategy.sample(key, params, ids)
     w1 = jax.random.normal(jax.random.key(5), (12,), dtype=jnp.float32)
     w2 = jax.random.normal(jax.random.key(6), (12,), dtype=jnp.float32)
     a, b = 2.0, -0.5
 
-    got = strategy.contract(pert, a * w1 + b * w2)
+    got = contracted(strategy, key, params, ids, a * w1 + b * w2)
     want = jax.tree.map(
         lambda x, y: a * x + b * y,
-        strategy.contract(pert, w1),
-        strategy.contract(pert, w2),
+        contracted(strategy, key, params, ids, w1),
+        contracted(strategy, key, params, ids, w2),
     )
     assert rel_err(got, want) < RTOL
 
@@ -165,7 +176,7 @@ def test_contract_is_linear_in_weights(strategy, params):
 def test_contract_preserves_pytree_structure(strategy, params):
     """Update tree matches params tree, leaf for leaf. No global flattening."""
     key, ids = jax.random.key(7), jnp.arange(4)
-    out = strategy.contract(strategy.sample(key, params, ids), jnp.ones(4))
+    out = contracted(strategy, key, params, ids, jnp.ones(4))
     assert jax.tree.structure(out) == jax.tree.structure(params)
     for a, b in zip(jax.tree.leaves(out), jax.tree.leaves(params)):
         assert a.shape == b.shape
@@ -178,8 +189,8 @@ def test_sample_is_deterministic(strategy, params):
     # Not uniform weights: under Mirrored the pair contributions cancel exactly, so the
     # contraction would be zero and rel_err a 0/0.
     w = jax.random.normal(jax.random.key(80), (10,), dtype=jnp.float32)
-    a = strategy.contract(strategy.sample(key, params, ids), w)
-    b = strategy.contract(strategy.sample(key, params, ids), w)
+    a = contracted(strategy, key, params, ids, w)
+    b = contracted(strategy, key, params, ids, w)
     assert rel_err(a, b) == 0.0
 
 
@@ -197,9 +208,8 @@ def test_perturbation_is_unit_scale(strategy, params):
     """
     key = jax.random.key(9)
     ids = jnp.arange(2048)
-    pert = strategy.sample(key, params, ids)
     w = jax.random.normal(jax.random.key(90), (len(ids),), dtype=jnp.float32)
-    scaled = strategy.contract(pert, w / jnp.sqrt(len(ids)))
+    scaled = contracted(strategy, key, params, ids, w / jnp.sqrt(len(ids)))
     for leaf in jax.tree.leaves(scaled):
         assert 0.5 < float(jnp.sqrt(jnp.mean(leaf**2))) < 2.0
 
@@ -266,8 +276,8 @@ def test_seed_regenerated_matches_iid_gaussian(params):
     w = jax.random.normal(jax.random.key(22), (12,), dtype=jnp.float32)
 
     a, b = IIDGaussian(), SeedRegenerated()
-    got = a.contract(a.sample(key, params, ids), w)
-    want = b.contract(b.sample(key, params, ids), w)
+    got = contracted(a, key, params, ids, w)
+    want = contracted(b, key, params, ids, w)
     assert rel_err(got, want) < RTOL
 
 

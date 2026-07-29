@@ -32,6 +32,21 @@ strategies = pytest.mark.parametrize(
     or [pytest.param(None, id="none", marks=pytest.mark.skip(reason="no strategy registered"))],
 )
 
+# Properties of the *shaping* rather than of the strategy. The only strategy axis they depend
+# on is whether members arrive in antithetic pairs, because that is what decides whether
+# `f_bar` cancels out of the contraction. Rank and noise source have no part in that algebra.
+#
+# Narrowed deliberately: at R = 40000 these are the two most expensive tests in the suite, and
+# running them over all eleven registry entries would pay 11x for one bit of information. The
+# names are looked up in the registry rather than constructed here, so they cannot drift from
+# what the sweep actually runs.
+shaping_families = pytest.mark.parametrize(
+    "strategy",
+    [pytest.param(STRATEGIES[name].build(), id=name)
+     for name in ("iid_gaussian", "mirrored_full") if name in STRATEGIES]
+    or [pytest.param(None, id="none", marks=pytest.mark.skip(reason="no strategy registered"))],
+)
+
 # `estimate`'s own plumbing -- chunking, the two-pass shaping, the padding -- is
 # strategy-agnostic given that `contract` is additive over disjoint members, and
 # test_strategies.py::test_contract_chunks_additively already asserts that per strategy.
@@ -53,14 +68,21 @@ def problem():
 
 
 def run(strategy, problem, shaping, *, n=N, sigma=SIGMA, replicates=R, chunk=None, seed=2):
+    """R independent estimates, stacked. Jitted, for the same reason as
+    test_strategies.contracted: eagerly dispatching a strategy's few hundred primitives
+    compiles a tiny HLO module per primitive, and that cost dominates R here."""
     _q, theta, _truth, model = problem
     ids = jnp.arange(n)
 
-    def one(key):
-        return estimate(strategy, model, theta, jnp.float32(0.0), key,
-                        member_ids=ids, sigma=sigma, shaping=shaping, chunk=chunk)
+    @jax.jit
+    def many(keys):
+        def one(key):
+            return estimate(strategy, model, theta, jnp.float32(0.0), key,
+                            member_ids=ids, sigma=sigma, shaping=shaping, chunk=chunk)
 
-    return jax.vmap(one)(jax.random.split(jax.random.key(seed), replicates))
+        return jax.vmap(one)(keys)
+
+    return many(jax.random.split(jax.random.key(seed), replicates))
 
 
 @pytest.mark.slow
@@ -132,7 +154,7 @@ def test_chunking_does_not_change_the_shaping(strategy, problem):
 
 
 @pytest.mark.slow
-@strategies
+@shaping_families
 def test_centered_ranks_is_not_an_unbiased_estimator(strategy, problem):
     """Asserted, not tolerated.
 
@@ -148,7 +170,7 @@ def test_centered_ranks_is_not_an_unbiased_estimator(strategy, problem):
 
 
 @pytest.mark.slow
-@strategies
+@shaping_families
 def test_naive_mean_subtraction_would_be_biased(strategy, problem):
     """Pins why `centered` carries the n/(n-1) factor.
 
