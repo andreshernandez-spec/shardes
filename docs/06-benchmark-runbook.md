@@ -11,7 +11,8 @@ it, and how not to lose a session.
 |---|---|---|---|---|
 | **T0** | Local / any CPU | 8 simulated | $0 | No timing validity |
 | **T1** | **Kaggle TPU v5e-8** | **8 chips, 16 GB each** | **$0** | ~20 TPU-h/week, 9-h sessions |
-| **T2** | Kaggle GPU: P100 16 GB, or 2× T4 | 1–2 | $0 | ~30 GPU-h/week; Turing |
+| **T2** | **Local RTX 3080 Laptop, 16 GB, Ampere** | 1 | **$0** | Laptop thermals; single device, so no sharding |
+| **T2′** | Kaggle GPU: P100 16 GB, or 2× T4 | 1–2 | $0 | ~30 GPU-h/week; Turing. Fallback for T2 |
 | **T3** | TPU Research Cloud | 8–256 chips, per grant | $0 TPU + ~$10–20 VM/GCS | Temporary grant, ~30 days |
 | **T4** | GCP DWS, `a2-ultragpu-8g` | 8× A100 80 GB, NVLink | $19.20/h | Needs quota |
 | **T4′** | GCP DWS, `a3-highgpu-8g` | 8× H100 80 GB | $38.32/h flex-start | Only if matching EGGROLL's H100 numbers |
@@ -73,12 +74,25 @@ already have results, runs only the rest, and writes each one out as it complete
 
 ---
 
-## T2 — Kaggle GPU. Phase 0 only.
+## T2 — the local RTX 3080. Phase 0 only.
 
-P100 (16 GB) or 2× T4. ~30 GPU-hours/week. Runs **E1**, the estimator sweep, which is
-embarrassingly serial and doesn't care about the GPU generation.
+16 GB, Ampere. Runs **E1**, the estimator sweep. E1 is embarrassingly serial, needs one
+device, and measures statistics rather than throughput, which is exactly the shape a
+machine you already own handles best: no session cap, no weekly quota, no notebook driver,
+and results land straight on durable disk.
 
-T4s are Turing: no useful bf16 tensor cores, no Hopper features. **They never appear in a
+It beats the Kaggle GPU tier on every axis E1 cares about. Same 16 GB as the P100, real
+bf16 tensor cores that the Turing T4s don't have, and no 9-hour stop.
+
+Two things to respect. It's a laptop part, so a 20-hour sweep is a sustained thermal load
+and clock throttling will make wall-clock numbers meaningless. That's acceptable here
+only because **no timing claim comes from E1**; wall-clock per estimate is context, not a
+result. And it's a single device, so nothing about sharding is testable on it. Sharding
+stays on T0.
+
+**T2′, the fallback:** Kaggle GPU, P100 (16 GB) or 2× T4, ~30 GPU-hours/week, if the
+laptop is needed for something else or a config needs more memory headroom. T4s are
+Turing: no useful bf16 tensor cores, no Hopper features. **They never appear in a
 throughput claim.** Correctness and statistics only.
 
 ---
@@ -154,7 +168,9 @@ a debugged plan, never a debugging session.
 
 **Two weeks before** — GPU quota requested. TRC applied for.
 
-**The week before** — full dress rehearsal on T2/T5 at 1–2 GPUs with `N` reduced 100×:
+**The week before** — full dress rehearsal at 1–2 GPUs with `N` reduced 100×. The local
+T2 box covers the 1-GPU case; use T2′ or T5 if the rehearsal needs two devices to exercise
+a collective:
 - every configuration runs to completion,
 - results written incrementally, one file per config,
 - driver resumable — re-running skips what's done,
@@ -169,7 +185,7 @@ instance from it, confirm `jax.devices()` reports the GPU and the driver starts.
 build failures on an 8-GPU box bill at 8-GPU rates.
 
 **During** — priority order, so running out of time loses the least important measurement:
-E6 (F1) → E7 (F2) → E8-GPU (F4) → E9 (T1). Ordering matters more than duration.
+E6 (F1) → E7 (F2) → E8-GPU (F4) → E9 (TB1). Ordering matters more than duration.
 
 **Always** — hard shutdown in the driver when the sweep finishes or the cap trips. Never
 wait for a human to notice an idle 8-GPU node.
@@ -182,7 +198,7 @@ wait for a human to notice an idle 8-GPU node.
 |---|---|
 | T0 CPU | $0 |
 | T1 Kaggle TPU v5e-8 (~60 h) | $0 |
-| T2 Kaggle GPU (~20 h) | $0 |
+| T2 local RTX 3080 (~20 h) | $0, electricity |
 | T3 TRC — VM + GCS only | ~$10–20 |
 | T4 one 6-h A100 session | ~$115 |
 | T4′ optional H100 session for E9 | ~$120 |

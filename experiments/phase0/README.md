@@ -37,9 +37,12 @@ Metrics: cosine similarity (headline), relative MSE, bias check, wall-clock for 
 
 ## Where it runs
 
-Tier T2, Kaggle GPU (P100 or 2×T4), free, about 20 hours. The sweep is embarrassingly
-serial and does not care about the GPU generation. T4s are Turing, so they never appear in
-a throughput claim; correctness and statistics only.
+Tier T2, the local RTX 3080 (16 GB, Ampere), free, about 20 hours. The sweep is
+embarrassingly serial and needs one device.
+
+No timing claim comes out of E1, which is what makes a thermally throttling laptop GPU an
+acceptable host: wall-clock per estimate is recorded for context, not as a result.
+Checkpoint per configuration regardless. A 20-hour sweep should never be one run.
 
 ## Gate G0
 

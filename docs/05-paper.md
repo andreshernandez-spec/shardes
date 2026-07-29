@@ -83,7 +83,7 @@ argument is novel enough that a clean null is publishable inside a larger paper.
 ## Experiment matrix
 
 Tiers are defined in `docs/06-benchmark-runbook.md`. Short version: **T0** CPU (free),
-**T1** Kaggle TPU v5e-8 (free), **T2** Kaggle GPU P100/2×T4 (free), **T3** TRC TPU, larger
+**T1** Kaggle TPU v5e-8 (free), **T2** the local RTX 3080 (free), **T3** TRC TPU, larger
 slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 
 | ID | Experiment | Claim | Tier | Est. hrs | Cost |
@@ -137,9 +137,12 @@ smoothing caveat in `docs/00-context.md`). If C5 survives E1, it has to survive 
 | F4 | Low-rank vs dense cost surface, TPU vs GPU | E8 | C4; the cross-platform inversion |
 | F5 | Estimator quality vs `N/d_eff`, rank-1 and full-rank panels | E1 | C5, conditional |
 | F6 | End-to-end task curves, seed-variance bands | E12 | C5 validation |
-| T1 | Baseline throughput table, matched shapes | E9 | C2 |
-| T2 | Communication accounting: analytic vs measured | E0, E4 | Rigor; catches bugs |
-| T3 | Ablation table | E11 | Reviewer defence |
+| TB1 | Baseline throughput table, matched shapes | E9 | C2 |
+| TB2 | Communication accounting: analytic vs measured | E0, E4 | Rigor; catches bugs |
+| TB3 | Ablation table | E11 | Reviewer defence |
+
+Tables are `TBn`, not `Tn`, so they stay clear of the compute tiers `T0`–`T5` in
+`docs/06-benchmark-runbook.md`. Both were `T1`/`T2`/`T3` and both appear in this file.
 
 F2 is the figure to design first and work backwards from.
 
@@ -157,7 +160,7 @@ F2 is the figure to design first and work backwards from.
    crossover. *Written before the measurements, so the model is a prediction and not a
    post-hoc fit.*
 5. **Experimental setup** — platforms, shape-matching rule, measurement protocol.
-6. **Results** — F1–F4, T1–T3.
+6. **Results** — F1–F4, TB1–TB3.
 7. **Coupled sampling** (conditional) — F5, F6, or the negative result.
 8. **Limitations** — write this honestly and early; see below.
 9. **Related work** — ES at scale, ZO optimization for LLMs (P-GAP, LOREN, GRZO), coupling
@@ -195,7 +198,7 @@ Rough arc, from Phase 0 start:
 
 | Weeks | Work |
 |---|---|
-| 1–2 | E1 on Kaggle GPU; Gate G0 |
+| 1–2 | E1 on the local RTX 3080; Gate G0 |
 | 3–12 | Phase 1 library; E0 continuously on CPU; write §4's cost model |
 | ~10 | **Apply to TRC** — timed so the grant window opens when the code is ready |
 | 13–16 | E2, E3, E4, E8(TPU), E10, E11 on Kaggle + TRC |

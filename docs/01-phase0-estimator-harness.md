@@ -1,6 +1,7 @@
 # Phase 0 — Estimator harness
 
-**Compute**: 1 GPU, ~1 day of actual runtime. Develop on CPU.
+**Compute**: 1 GPU, ~1 day of actual runtime, on the local RTX 3080 (runbook tier T2).
+Develop on CPU.
 **Duration**: 1–2 weeks.
 **Gate**: G0 — see the bottom of this file.
 

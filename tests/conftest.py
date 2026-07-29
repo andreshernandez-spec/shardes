@@ -22,6 +22,12 @@ if "jax" in sys.modules:
         "Look for a jax import that happens at collection time outside tests/."
     )
 
+# A CUDA jaxlib is installed for the Phase 0 sweep, so jax would otherwise default to the
+# GPU, report one device, and quietly discard the simulated mesh. Tests are CPU-only by
+# convention, so pin the platform instead of depending on what happens to be installed.
+# setdefault, so `JAX_PLATFORMS=cuda pytest -m gpu tests/gpu/` still works.
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
+
 _flags = os.environ.get("XLA_FLAGS", "")
 if "xla_force_host_platform_device_count" not in _flags:
     os.environ["XLA_FLAGS"] = (

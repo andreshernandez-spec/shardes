@@ -38,12 +38,13 @@ is the most common way to waste money on a project like this.
 
 | Phase | Hardware | Duration | Notes |
 |---|---|---|---|
-| 0 | 1 GPU (any modern one; A100 or even L4 is fine) | ~1 day of runtime | Sweep is embarrassingly serial; run overnight |
+| 0 | 1 GPU. The local RTX 3080 covers it, see `docs/06-benchmark-runbook.md` T2 | ~1 day of runtime | Sweep is embarrassingly serial; run overnight |
 | 1 | CPU-8 simulated, plus 1–2 GPUs to confirm | hours of GPU time total | The 2-GPU confirmation of `test_device_invariance` is the one that matters |
 | 2 | **8 GPUs, one node** | 4–6 h | The real booking |
 | 3 | 8 GPUs, one node | 4–6 h | Second session, or the tail of Phase 2's |
 
-Phase 0 on 1 GPU is $2–4/hr almost anywhere. It is not worth optimizing.
+Phase 0 costs nothing now that it runs on the local 3080. Renting a GPU for it would be a
+mistake.
 
 ---
 
