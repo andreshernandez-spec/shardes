@@ -207,6 +207,10 @@ first is the `N/d_eff` argument in `docs/00-context.md`: coupling has no *levera
 `orthogonal_hd` has no such ceiling. `HD₁HD₂D₃…` is `O(d log d)` and dimension-agnostic, so
 it is the one scheme that appears in both rows, and it is what carries the G0 comparison.
 
+This grid gets encoded once, in `src/shardes/strategies/registry.py`, which both the test
+suite and the E1 driver iterate. Rebuilding it inside `experiments/phase0/run.py` would
+give it two homes and one of them would go stale.
+
 ---
 
 ## How to test it

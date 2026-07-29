@@ -6,9 +6,10 @@ Two halves.
 signature is load-bearing enough that drifting it silently would be worse than a
 compile error, and Protocols give no compile error.
 
-The parametrized suite covers any registered strategy. STRATEGIES is empty until the
-first one lands, so those skip rather than pass vacuously. Append to it and everything
-below applies immediately.
+The parametrized suite covers every strategy in `shardes.strategies.registry.STRATEGIES`.
+That registry is empty until the first strategy lands, so those tests skip rather than
+pass vacuously. Register a strategy there and everything below applies to it immediately,
+with no edit here.
 
 Observation channel: `Perturbation` is opaque by design, so member i is read out by
 contracting with a one-hot weight vector. That keeps these tests independent of any
@@ -22,10 +23,7 @@ import jax.numpy as jnp
 import pytest
 
 from shardes.strategies.protocol import Perturbation, PerturbationStrategy
-
-# Append (name, constructor) as strategies land: IIDGaussian, SeedRegenerated, LowRank(r),
-# then the Mirrored and Coupled wrappers around each.
-STRATEGIES: list = []
+from shardes.strategies.registry import STRATEGIES
 
 RTOL = 1e-6
 
@@ -89,11 +87,15 @@ def test_perturbation_carries_regeneration_state():
 # Properties. Skipped until STRATEGIES is populated.
 # --------------------------------------------------------------------------------------
 
-pytestmark_reason = "no strategy registered yet; see STRATEGIES at the top of this file"
+_reason = "no strategy registered yet; see src/shardes/strategies/registry.py"
+
+# The `or [...]` fallback exists because an empty parametrize list gives a bare "empty
+# parameter set" skip with no reason attached, which reads as "nothing to do here" rather
+# than "waiting on an implementation". Delete it once the registry is populated.
 parametrize = pytest.mark.parametrize(
     "strategy",
-    [pytest.param(c, id=n) for n, c in STRATEGIES]
-    or [pytest.param(None, id="none", marks=pytest.mark.skip(reason=pytestmark_reason))],
+    [pytest.param(build(), id=name) for name, build in STRATEGIES.items()]
+    or [pytest.param(None, id="none", marks=pytest.mark.skip(reason=_reason))],
 )
 
 
@@ -190,6 +192,14 @@ def test_perturbation_is_unit_scale(strategy, params):
     scaled = strategy.contract(pert, jnp.ones(len(ids)) / jnp.sqrt(len(ids)))
     for leaf in jax.tree.leaves(scaled):
         assert 0.5 < float(jnp.sqrt(jnp.mean(leaf**2))) < 2.0
+
+
+@parametrize
+def test_strategy_conforms_to_the_protocol(strategy):
+    """Structural check. runtime_checkable only verifies the methods exist, which is
+    exactly the failure the signature guards above cannot see: a strategy that forgot
+    `contract` entirely."""
+    assert isinstance(strategy, PerturbationStrategy)
 
 
 @parametrize

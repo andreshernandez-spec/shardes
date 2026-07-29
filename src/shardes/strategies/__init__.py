@@ -16,4 +16,8 @@ The two published algorithms should end up two lines of config apart:
 
 If switching between them is not close to this, the abstraction failed and gets reworked
 before going further.
+
+`protocol.py` is the interface. `registry.py` is the list of everything implemented, which
+both the test suite and the Phase 0 sweep iterate over: register a new strategy there or
+it goes untested.
 """
