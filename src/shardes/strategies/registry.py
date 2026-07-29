@@ -21,6 +21,7 @@ from typing import Callable
 from shardes.dimensions import FULL
 from shardes.strategies.iid_gaussian import IIDGaussian
 from shardes.strategies.lowrank import LowRank
+from shardes.strategies.mirrored import Mirrored
 from shardes.strategies.protocol import PerturbationStrategy
 from shardes.strategies.seed_regenerated import SeedRegenerated
 
@@ -61,13 +62,8 @@ def check_entry(name: str, entry: Entry) -> None:
 # The id lands in pytest test ids and in E1 result filenames, so it is part of the record:
 # renaming one orphans every result already on disk. Pick it once.
 #
-# Expected shape once the strategies exist, from docs/01 C0.1 and C0.5:
-#
 # Still to come, from docs/01 C0.1 and C0.5:
 #
-#     "mirrored_full":      Entry(lambda: Mirrored(IIDGaussian()), FULL, "mirrored"),
-#     "lowrank_r1":         Entry(lambda: LowRank(r=1), 1, "iid"),
-#     "mirrored_lr1":       Entry(lambda: Mirrored(LowRank(r=1)), 1, "mirrored"),
 #     "mirrored_hd_lr1":    Entry(lambda: Coupled(Mirrored(LowRank(r=1)), "orthogonal_hd"),
 #                                 1, "mirrored+orthogonal_hd"),
 #     "mirrored_sobol_lr1": Entry(lambda: Coupled(Mirrored(LowRank(r=1)), "sobol_scrambled"),
@@ -78,4 +74,8 @@ STRATEGIES: dict[str, Entry] = {
     "seed_regenerated": Entry(build=SeedRegenerated, rank=FULL, scheme="iid"),
     "lowrank_r1": Entry(build=lambda: LowRank(r=1), rank=1, scheme="iid"),
     "lowrank_r4": Entry(build=lambda: LowRank(r=4), rank=4, scheme="iid"),
+    "mirrored_full": Entry(build=lambda: Mirrored(IIDGaussian()), rank=FULL,
+                           scheme="mirrored"),
+    "mirrored_lr1": Entry(build=lambda: Mirrored(LowRank(r=1)), rank=1,
+                          scheme="mirrored"),
 }

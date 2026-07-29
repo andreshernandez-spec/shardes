@@ -118,9 +118,9 @@ def test_seed_by_member_index(strategy, params):
     thing sharding changes.
     """
     key = jax.random.key(1)
-    alone = epsilon(strategy, key, params, 7, jnp.array([7]))
+    alone = epsilon(strategy, key, params, 7, jnp.array([6, 7]))
     in_batch = epsilon(strategy, key, params, 7, jnp.arange(100))
-    shuffled = epsilon(strategy, key, params, 7, jnp.array([13, 7, 2, 99]))
+    shuffled = epsilon(strategy, key, params, 7, jnp.array([6, 7, 2, 3]))
     assert rel_err(alone, in_batch) < RTOL
     assert rel_err(alone, shuffled) < RTOL
 
@@ -173,8 +173,11 @@ def test_contract_preserves_pytree_structure(strategy, params):
 def test_sample_is_deterministic(strategy, params):
     """Same key, same ids, same perturbation. An experiment you cannot re-run is not one."""
     key, ids = jax.random.key(8), jnp.arange(10)
-    a = strategy.contract(strategy.sample(key, params, ids), jnp.ones(10))
-    b = strategy.contract(strategy.sample(key, params, ids), jnp.ones(10))
+    # Not uniform weights: under Mirrored the pair contributions cancel exactly, so the
+    # contraction would be zero and rel_err a 0/0.
+    w = jax.random.normal(jax.random.key(80), (10,), dtype=jnp.float32)
+    a = strategy.contract(strategy.sample(key, params, ids), w)
+    b = strategy.contract(strategy.sample(key, params, ids), w)
     assert rel_err(a, b) == 0.0
 
 
@@ -184,13 +187,17 @@ def test_perturbation_is_unit_scale(strategy, params):
 
     Loose tolerance on purpose: this catches a missing or doubled scale factor, not a
     subtly wrong distribution. Distributional correctness is test_estimator's job.
+
+    Weights are random, not uniform. Uniform weights are a degenerate case: under
+    Mirrored the pair contributions cancel exactly and the contraction is identically
+    zero, which is correct behaviour and useless as a scale check. With w ~ N(0,1)/sqrt(n)
+    the second moment is 1 for both the plain and the antithetic case.
     """
     key = jax.random.key(9)
     ids = jnp.arange(2048)
     pert = strategy.sample(key, params, ids)
-    # (1/sqrt(n)) * sum_i eps_i has unit second moment per element when the eps_i do.
-    # Aggregate rather than per-member, so this stays cheap at n = 2048.
-    scaled = strategy.contract(pert, jnp.ones(len(ids)) / jnp.sqrt(len(ids)))
+    w = jax.random.normal(jax.random.key(90), (len(ids),), dtype=jnp.float32)
+    scaled = strategy.contract(pert, w / jnp.sqrt(len(ids)))
     for leaf in jax.tree.leaves(scaled):
         assert 0.5 < float(jnp.sqrt(jnp.mean(leaf**2))) < 2.0
 
@@ -210,7 +217,7 @@ def test_apply_evaluates_each_member_at_its_own_epsilon(strategy, params):
     `x` is all ones, so `sum(dense(x, W))` is `sum(W)` and the expected value stays
     computable from `contract` alone, without the test knowing any strategy's layout.
     """
-    sigma, ids = 0.1, jnp.arange(5)
+    sigma, ids = 0.1, jnp.arange(6)
     x = jnp.ones((params["w"].shape[-1],), dtype=jnp.float32)
 
     def model(p, xx):
@@ -218,10 +225,10 @@ def test_apply_evaluates_each_member_at_its_own_epsilon(strategy, params):
 
     pert = strategy.sample(jax.random.key(11), params, ids)
     got = strategy.apply(model, params, pert, sigma)(x)
-    assert got.shape == (5,)
+    assert got.shape == (6,)
 
     base = sum(float(jnp.sum(leaf)) for leaf in jax.tree.leaves(params))
-    for i in range(5):
+    for i in range(6):
         eps_i = strategy.contract(pert, (ids == i).astype(jnp.float32))
         want = base + sigma * sum(float(jnp.sum(leaf)) for leaf in jax.tree.leaves(eps_i))
         assert jnp.isclose(got[i], want, rtol=1e-4), f"member {i}"
@@ -272,6 +279,6 @@ def test_strategy_conforms_to_the_protocol(strategy):
 
 @parametrize
 def test_perturbation_conforms_to_the_protocol(strategy, params):
-    pert = strategy.sample(jax.random.key(10), params, jnp.arange(3))
+    pert = strategy.sample(jax.random.key(10), params, jnp.arange(4))
     assert hasattr(pert, "base_key") and hasattr(pert, "member_ids")
-    assert jnp.array_equal(pert.member_ids, jnp.arange(3))
+    assert jnp.array_equal(pert.member_ids, jnp.arange(4))
