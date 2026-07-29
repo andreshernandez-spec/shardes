@@ -1,6 +1,6 @@
 """Fast Walsh-Hadamard transform. O(n log n) butterfly.
 
-Needed by Coupled(kind="orthogonal_hd"): the scalable orthogonal construction is
+Needed by shardes.coupling.OrthogonalHD: the scalable orthogonal construction is
 HD1 HD2 D3 ..., products of Hadamard transforms and Rademacher diagonals.
 
 The oracle ships in JAX: jax.scipy.linalg.hadamard(n) @ x. It is a dense O(n^2) Sylvester

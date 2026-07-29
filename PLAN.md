@@ -87,9 +87,14 @@ and find the crossover.
 
 ### Phase 3 — Coupling at scale → `docs/04-phase3-coupling.md`
 
-**Conditional on G0.** Coupled/low-discrepancy sampling as a strategy wrapper, validated
-end-to-end on task performance rather than estimator MSE — because lower variance does not
-straightforwardly mean better ES (see the smoothing caveat in `docs/00-context.md`).
+**Conditional on G0.** Coupled/low-discrepancy sampling, validated end-to-end on task
+performance rather than estimator MSE — because lower variance does not straightforwardly mean
+better ES (see the smoothing caveat in `docs/00-context.md`).
+
+The schemes themselves (`OrthogonalHD`, `ScrambledSobol`) shipped in Phase 0, since G0 needs
+them to answer its own question. What is conditional is making them survive sharding and
+validating them on tasks. They turned out to be a noise source handed to a strategy rather than
+a wrapper around one; `docs/04` C3.1 records why.
 
 ---
 

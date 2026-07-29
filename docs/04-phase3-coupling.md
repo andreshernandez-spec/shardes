@@ -25,16 +25,60 @@ Background and the derivation of the `N/d` scaling: `docs/00-context.md`.
 
 ## Capabilities delivered
 
-### C3.1 — `Coupled` as a strategy wrapper, not a fork
+### C3.1 — Coupling as a noise source, not a wrapper — **settled in Phase 0**
+
+The check this capability set up was: *if the abstraction is right this is a wrapper and
+nothing in the sharded core changes; if it requires touching the core, the API was wrong and
+that is itself a finding worth recording.* Both halves came back, and they disagree, so here
+is the finding.
+
+**A wrapper is not constructible. The core is still untouched.**
 
 ```python
-Coupled(LowRank(r=1), kind="orthogonal_hd")
-Coupled(LowRank(r=1), kind="sobol_scrambled")
+IIDGaussian(coupling=OrthogonalHD())          # not Coupled(IIDGaussian(), ...)
+Mirrored(LowRank(r=1, coupling=OrthogonalHD()))
 ```
 
-If Phase 1's abstraction was right, this is a wrapper and nothing in the sharded core
-changes. If it requires touching the core, the Phase 1 API was wrong and that is itself a
-finding worth recording.
+`Mirrored` gets to be a wrapper because antithetic sampling only touches **signs**: it
+reuses the inner perturbation untouched and folds the sign into `contract`'s weights, so the
+inner stays opaque. Coupling changes the **directions**, and a wrapper would have to reach
+inside the inner perturbation and replace the noise it had just drawn. Three separate things
+block that:
+
+- The perturbation is opaque by protocol, and only the strategy knows which of its arrays
+  are design axes. `LowRank`'s are the `(m, r)` and `(k, r)` factors, never the `(m, k)`
+  product; `IIDGaussian`'s is the flattened leaf. A wrapper would need both layouts, and the
+  next strategy's too.
+- `SeedRegenerated` materializes nothing. There is no array to reach into, by design.
+- HD coupling does not *transform* iid noise, it *replaces* it. Rows of `HD₁HD₂D₃` are built
+  from Rademacher signs and consume no Gaussian, so drawing one first is wasted work rather
+  than an input. QR of an iid block would be a genuine transform, and it is `O(d³)`, which is
+  the reason HD exists.
+
+So coupling is a constructor argument on the strategy: `Coupling` is a small protocol
+(`shardes/coupling.py`) that replaces "draw `d` iid normals for member `i`" with "give member
+`i` its share of a point set designed across members". `Gaussian` is the uncoupled default
+and is bitwise what the strategies did before. What moved is one line inside each `sample`.
+
+**This does not weaken the Phase 1 API, and it is worth being precise about why.** The
+`sample`/`apply`/`contract` split is unchanged, `Perturbation` stays opaque, and no collective
+was added. What the exercise showed is that the protocol was carved one level too high to
+express sample design: the three methods describe *what a member's perturbation does*, and
+coupling is a statement about *how members relate*. That is a different axis, and it gets its
+own seam rather than a fourth method.
+
+Two corrections to what this file used to claim, both from measurement:
+
+- `HD₁HD₂D₃` is **exactly** orthogonal, not orthogonal within an `O(1/√d)` band. `H/√d` is
+  orthogonal and symmetric and every Rademacher `D` is orthogonal, so the product is too.
+  The `O(1/√d)` band belongs to cross-block pairs and to how close a row is to Haar. The old
+  weak assertion would have passed on a broken chain.
+- Coupling leaves `E[εεᵀ] = I` and the pairwise cross-moments `E[ε_ij ε_i'j] = δ_ii'`
+  **unchanged**, inside a block as well as across. So it changes neither unbiasedness nor the
+  variance of a *linear* functional of the population. Any leverage has to come from the
+  higher-order joint structure the fitness nonlinearity sees. That sharpens Gate G0 rather
+  than threatening it, but it means the effect cannot be argued into existence, and a null
+  result is more likely a priori than the `N/d_eff` framing alone suggests.
 
 ### C3.2 — Coupling that survives sharding
 
@@ -109,14 +153,20 @@ interesting result than a win, and it's the honest read of the smoothing argumen
 
 ## How to test it
 
-| Test | Asserts |
-|---|---|
-| `test_coupled_unbiased` | `E[ĝ]` → `∇f` for every `kind`. Scrambling is what makes this true for Sobol; deterministic Sobol will fail it. |
-| `test_coupled_device_invariant` | Same point set for `D ∈ {1,2,4,8}` simulated devices |
-| `test_hd_block_orthogonality` | Per-device blocks orthogonal within tolerance; cross-block cosines within the `O(1/√d)` concentration band |
-| `test_sobol_skip_ahead` | Device `k`'s points == the corresponding slice of the sequential sequence |
-| `test_coupled_reduces_to_iid` | With coupling disabled, bitwise-identical to the uncoupled strategy |
-| `test_wrapper_does_not_touch_core` | Static: `Coupled` introduces no new collective in the update path |
+Everything except device invariance landed in Phase 0, in `tests/test_coupling.py`, because
+the coupling is a pure function of `(stream, member_id)` and needs no devices to test.
+
+| Test | Asserts | Status |
+|---|---|---|
+| `test_unbiased_on_the_quadratic` | `E[ĝ]` → `∇f` for every coupled entry in the registry. Scrambling is what makes this true for Sobol; deterministic Sobol will fail it. | Phase 0, via `tests/test_estimator.py` over `STRATEGIES` |
+| `test_hd_block_is_exactly_orthogonal` | A whole block's directions are orthonormal to float precision. **Not** "within a band" — see C3.1. | Phase 0 |
+| `test_hd_blocks_are_independent_and_only_near_orthogonal` | Cross-block cosines inside the `O(1/√d)` band, and **not at zero**: zero would mean the same block was reused for every device. | Phase 0 |
+| `test_a_members_draw_depends_only_on_its_global_id` | Block is `i // d`, position `i % d`. Device invariance follows from this without a device. | Phase 0 |
+| `test_passing_the_default_coupling_changes_nothing` | Coupling off is bitwise the uncoupled strategy. | Phase 0 |
+| `test_coupling_lands_on_the_lowrank_factors_not_the_product` | The design axis under low rank is `a ∈ ℝᵐ`, not `E ∈ ℝ^{mk}`. Coupling the product would still be unbiased and would sample in the wrong space. | Phase 0 |
+| `test_sobol_skip_ahead` | Point `i` == element `i` of scipy's sequential sequence, for scattered `i`. | Phase 0 |
+| `test_coupled_device_invariant` | Same point set for `D ∈ {1,2,4,8}` simulated devices | **Phase 3** |
+| `test_no_new_collective_in_the_update_path` | Static: coupling adds no collective. Cheap now that it is a constructor argument rather than a wrapper. | **Phase 3** |
 
 ---
 

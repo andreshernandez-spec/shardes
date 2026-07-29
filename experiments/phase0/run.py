@@ -34,25 +34,11 @@ import numpy as np
 import yaml
 
 from shardes import metrics
-from shardes.dimensions import FULL, sampling_dimension
-from shardes.strategies.registry import STRATEGIES, Entry, check_entry
+from shardes.dimensions import sampling_dimension
+from shardes.strategies.registry import STRATEGIES, check_entry
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
-
-# The grid the real registry is expected to hold, used ONLY by --dry-run while it is still
-# empty, so the pipeline and the figure can be rehearsed before any strategy exists. Note
-# the absence of full-rank sobol: that is the non-rectangular grid from docs/01 C0.5, and
-# check_entry enforces it here too.
-DRY_RUN_GRID = {
-    "iid_full": Entry(lambda: None, FULL, "iid"),
-    "mirrored_full": Entry(lambda: None, FULL, "mirrored"),
-    "mirrored_hd_full": Entry(lambda: None, FULL, "mirrored+orthogonal_hd"),
-    "iid_lr1": Entry(lambda: None, 1, "iid"),
-    "mirrored_lr1": Entry(lambda: None, 1, "mirrored"),
-    "mirrored_hd_lr1": Entry(lambda: None, 1, "mirrored+orthogonal_hd"),
-    "mirrored_sobol_lr1": Entry(lambda: None, 1, "mirrored+sobol"),
-}
 
 
 # ---------------------------------------------------------------------------------------
@@ -194,6 +180,9 @@ def capture_env() -> dict:
         "jax": jax.__version__,
         "jaxlib": getattr(__import__("jaxlib"), "__version__", "unknown"),
         "numpy": np.__version__,
+        # Sobol direction numbers are read out of scipy rather than vendored, so the scipy
+        # version is part of what a sobol result depends on.
+        "scipy": getattr(__import__("scipy"), "__version__", "unknown"),
         "python": sys.version.split()[0],
         "platform": platform.platform(),
         "hostname": socket.gethostname(),
@@ -400,16 +389,11 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
-    registry = STRATEGIES
-    if args.dry_run:
-        # Always the full expected grid, not just what is implemented today. The point of
-        # the rehearsal is to exercise the figure, and F5 needs both rank panels and every
-        # scheme; rehearsing on whatever happens to be registered would leave the
-        # low-rank panel untested until the last strategy lands.
-        registry = DRY_RUN_GRID
-        print(f"--dry-run: using the full expected grid from docs/01 C0.5 "
-              f"({len(DRY_RUN_GRID)} strategies), not the {len(STRATEGIES)} implemented")
-    configs = expand(cfg, registry)
+    # One registry for both modes. There used to be a separate rehearsal grid, because the
+    # registry held fewer strategies than F5 needs panels for and a --dry-run against it
+    # would have left the low-rank panel unexercised. The registry now covers every cell of
+    # docs/01 C0.5, asserted by test_registry.py, so the two would be copies of each other.
+    configs = expand(cfg, STRATEGIES)
 
     if args.list:
         for c in configs:

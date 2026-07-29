@@ -12,6 +12,10 @@ dependencies = [
     # Do not pin jax below 0.11. The whole point is that evosax is stuck at <0.7.
     "jax>=0.11",
     "numpy",
+    # Sobol direction numbers only: `ScrambledSobol` reads the Joe-Kuo table out of
+    # scipy.stats rather than vendoring 2.5 MB of it. Already a jax dependency, so this
+    # pins nothing new; listed because the import is ours.
+    "scipy",
 ]
 
 [project.optional-dependencies]

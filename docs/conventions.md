@@ -12,11 +12,19 @@ than working around it in code.
 | Thing | Oracle |
 |---|---|
 | FWHT | `jax.scipy.linalg.hadamard(n) @ x` — dense `O(n²)`, useless as an implementation, perfect as a test |
+| `coupling.hadamard_row(p, n)` | `fwht(one_hot(p))`, and so the dense matrix transitively |
 | ES estimator unbiasedness | Analytic `∇f` of a quadratic `½θᵀHθ` |
 | Estimator quality generally | Backprop through a differentiable model |
 | `LowRank.contract` | Explicit Python loop `Σ wₙ aₙ bₙᵀ` at small `N` |
 | Low-rank → full-rank | `IIDGaussian` estimator as `r` grows |
-| Scrambled Sobol | First two moments after `Φ⁻¹`; equidistribution of 2-D projections |
+| `OrthogonalHD` within a block | Gram matrix `== I` **exactly** (float tolerance), not within a band — the product of orthogonal matrices is orthogonal |
+| Sobol point `i` | `scipy.stats.qmc.Sobol(scramble=False)` at scattered `i`, compared as **integers**, so no tolerance is involved |
+| Sobol equidistribution | `N = 2^m` points fall one per `2^m` bin, per coordinate, **exactly** — a `(0,1)`-sequence property that an iid draw fails |
+
+Two of those replaced weaker versions that would have passed on a broken implementation: the
+`OrthogonalHD` Gram was going to be asserted "within an `O(1/√d)` band", and Sobol was going
+to be checked on its first two moments. Prefer the exact form when the construction admits
+one; a statistical check on something deterministic is measuring the wrong thing.
 
 Where no exact oracle exists, compare two *independent* implementations with different
 failure modes rather than one implementation against itself at higher precision.
@@ -99,6 +107,12 @@ and say so.
   `lax.scan` took the file to 29 s and fixed a real limitation for large sweeps. The tier
   split, by itself, bought 8 s. **Profile before deciding what to cut**; the expensive
   tests and the statistically expensive tests were not the same set.
+
+  `coupling._direction_numbers` is the case to remember for library code rather than tests:
+  it was memoized and returned a `jnp` array, so the first call cached a value built inside
+  whatever trace reached it first, and every later trace got a leaked tracer. **Anything
+  memoized inside `src/` has to be host data.** No eager test can see this, because there is
+  never a second trace; it showed up the moment a test helper was wrapped in `jit`.
 - Multi-device tests use `XLA_FLAGS=--xla_force_host_platform_device_count=8`. Set it in
   `conftest.py` so it can't be forgotten.
 - Anything needing a real GPU lives in `tests/gpu/`, is marked `@pytest.mark.gpu`, is

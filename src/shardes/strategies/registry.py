@@ -18,6 +18,7 @@ strategy under test and there is no class to hang a decorator on.
 from dataclasses import dataclass
 from typing import Callable
 
+from shardes.coupling import OrthogonalHD, ScrambledSobol
 from shardes.dimensions import FULL
 from shardes.strategies.iid_gaussian import IIDGaussian
 from shardes.strategies.lowrank import LowRank
@@ -62,12 +63,14 @@ def check_entry(name: str, entry: Entry) -> None:
 # The id lands in pytest test ids and in E1 result filenames, so it is part of the record:
 # renaming one orphans every result already on disk. Pick it once.
 #
-# Still to come, from docs/01 C0.1 and C0.5:
+# This is the whole non-rectangular grid from docs/01 C0.5, minus the two sobol cells which
+# land with `ScrambledSobol`. `orthogonal_hd` appears only composed with `mirrored`, which is
+# the grid's choice and not an oversight: mirroring is the honest baseline, so coupling is
+# measured as an increment on top of it rather than against an unmirrored strawman.
 #
-#     "mirrored_hd_lr1":    Entry(lambda: Coupled(Mirrored(LowRank(r=1)), "orthogonal_hd"),
-#                                 1, "mirrored+orthogonal_hd"),
-#     "mirrored_sobol_lr1": Entry(lambda: Coupled(Mirrored(LowRank(r=1)), "sobol_scrambled"),
-#                                 1, "mirrored+sobol"),
+# Coupling arrives as a constructor argument rather than a `Coupled(...)` wrapper. It changes
+# the perturbation *directions*, so it cannot be layered over an opaque inner perturbation
+# the way `Mirrored`'s sign flip can. See src/shardes/coupling.py and docs/04 C3.1.
 STRATEGIES: dict[str, Entry] = {
     # The class itself is the zero-argument factory.
     "iid_gaussian": Entry(build=IIDGaussian, rank=FULL, scheme="iid"),
@@ -78,16 +81,31 @@ STRATEGIES: dict[str, Entry] = {
                            scheme="mirrored"),
     "mirrored_lr1": Entry(build=lambda: Mirrored(LowRank(r=1)), rank=1,
                           scheme="mirrored"),
+    "mirrored_lr4": Entry(build=lambda: Mirrored(LowRank(r=4)), rank=4,
+                          scheme="mirrored"),
+    "mirrored_hd_full": Entry(build=lambda: Mirrored(IIDGaussian(coupling=OrthogonalHD())),
+                              rank=FULL, scheme="mirrored+orthogonal_hd"),
+    "mirrored_hd_lr1": Entry(build=lambda: Mirrored(LowRank(r=1, coupling=OrthogonalHD())),
+                             rank=1, scheme="mirrored+orthogonal_hd"),
+    "mirrored_hd_lr4": Entry(build=lambda: Mirrored(LowRank(r=4, coupling=OrthogonalHD())),
+                             rank=4, scheme="mirrored+orthogonal_hd"),
+    "mirrored_sobol_lr1": Entry(build=lambda: Mirrored(LowRank(r=1, coupling=ScrambledSobol())),
+                                rank=1, scheme="mirrored+sobol"),
+    "mirrored_sobol_lr4": Entry(build=lambda: Mirrored(LowRank(r=4, coupling=ScrambledSobol())),
+                                rank=4, scheme="mirrored+sobol"),
 }
 
 
 # The fast test tier runs the shared property suite over these only; the rest are marked
 # slow and run in the full suite. Each representative covers a distinct implementation
 # path: iid_gaussian materializes, seed_regenerated scans, mirrored_lr1 is a wrapper over
-# the factored path and so exercises LowRank transitively. lowrank_r1/r4 and mirrored_full
-# are recombinations of paths already covered, and test_lowrank.py covers LowRank directly
-# regardless.
+# the factored path and so exercises LowRank transitively, mirrored_hd_lr1 adds the coupled
+# noise source and LowRank's per-column design families. The rest are recombinations of paths
+# already covered, and test_lowrank.py and test_coupling.py cover LowRank and OrthogonalHD
+# directly regardless.
 #
 # This is a test-speed policy, but it is knowledge about which strategies are redundant
 # with which, so it lives with the strategies rather than in a test file.
-REPRESENTATIVES = frozenset({"iid_gaussian", "seed_regenerated", "mirrored_lr1"})
+REPRESENTATIVES = frozenset(
+    {"iid_gaussian", "seed_regenerated", "mirrored_lr1", "mirrored_hd_lr1"}
+)

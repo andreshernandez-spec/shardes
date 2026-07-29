@@ -29,6 +29,8 @@ from typing import Callable, NamedTuple
 import jax
 import jax.numpy as jnp
 
+from shardes.coupling import GAUSSIAN, Coupling
+from shardes.strategies._noise import leaf_streams
 from shardes.types import Array, Key, PyTree
 
 
@@ -69,32 +71,46 @@ class LowRankPerturbation(NamedTuple):
 
 
 class LowRank:
-    """Rank-r factored perturbation. r = 1 is enough in practice (Sarkar et al.)."""
+    """Rank-r factored perturbation. r = 1 is enough in practice (Sarkar et al.).
 
-    def __init__(self, r: int = 1):
+    `coupling` designs the a- and b-vectors across members. This is the panel the whole
+    coupling question is about: sampling happens in R^(m+r) and R^(k+r) rather than R^(mk),
+    so N/d_eff crosses 1 at populations that fit on a GPU (docs/00-context.md).
+
+    Each of the r columns is its own design family, so column j of every member's A is
+    coupled against column j of every other member's, and never against column j+1. Mixing
+    them would couple directions that are then summed, which is not the same point set.
+    """
+
+    def __init__(self, r: int = 1, coupling: Coupling = GAUSSIAN):
         if r < 1:
             raise ValueError(f"rank must be at least 1, got {r}")
         self.r = int(r)
+        self.coupling = coupling
 
     def sample(self, base_key: Key, params: PyTree, member_ids: Array) -> LowRankPerturbation:
         """Unit-variance E per entry: E[E_ij^2] = (1/r) sum_k E[a_ik^2] E[b_jk^2] = 1."""
         leaves, treedef = jax.tree.flatten(params)
+        streams = leaf_streams(base_key, len(leaves))
+        # Split off the design families outside the vmap: they are per (leaf, side, column)
+        # and must not depend on the member.
+        columns = [
+            None if x.ndim != 2 else tuple(jax.random.split(s, 2 * self.r))
+            for s, x in zip(streams, leaves)
+        ]
 
         def one(i: Array) -> PyTree:
-            keys = jax.random.split(jax.random.fold_in(base_key, i), 2 * len(leaves))
             out = []
-            for j, leaf in enumerate(leaves):
-                ka, kb = keys[2 * j], keys[2 * j + 1]
-                if leaf.ndim != 2:
-                    out.append(LeafFactors(jax.random.normal(ka, leaf.shape, leaf.dtype), None))
-                else:
-                    m, k = leaf.shape
-                    out.append(
-                        LeafFactors(
-                            jax.random.normal(ka, (m, self.r), leaf.dtype),
-                            jax.random.normal(kb, (k, self.r), leaf.dtype),
-                        )
-                    )
+            for leaf, stream, cols in zip(leaves, streams, columns):
+                if cols is None:
+                    a = self.coupling(stream, i, leaf.size, leaf.dtype).reshape(leaf.shape)
+                    out.append(LeafFactors(a, None))
+                    continue
+                m, k = leaf.shape
+                stack = lambda d, ks: jnp.stack(  # noqa: E731
+                    [self.coupling(c, i, d, leaf.dtype) for c in ks], axis=-1
+                )
+                out.append(LeafFactors(stack(m, cols[: self.r]), stack(k, cols[self.r :])))
             return jax.tree.unflatten(treedef, out)
 
         return LowRankPerturbation(base_key, member_ids, jax.vmap(one)(member_ids))

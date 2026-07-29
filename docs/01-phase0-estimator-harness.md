@@ -90,7 +90,7 @@ array of global member indices rather than a count.
    forward pass needs it, and `tell`'s `1/(N sigma)` scaling. `sigma` is a property of the
    distribution, not of the perturbation scheme. It is what the CMA family and every
    adaptive-sigma method updates, so filing it under the strategy would be wrong, and it
-   would have to be threaded through each `Mirrored` and `Coupled` wrapper.
+   would have to be threaded through the `Mirrored` wrapper.
 
    It also keeps the sigma sweep honest. Unit-scale perturbations mean the same directions
    are reused across sigma values, so a gap between sigma arms is the sigma and not a
@@ -132,13 +132,27 @@ Plus a wrapper, not a fourth implementation:
 
 ```python
 Mirrored(inner)      # antithetic pairs; halves effective N
-Coupled(inner, kind) # kind in {"none", "orthogonal_hd", "sobol_scrambled"}
 ```
 
 `Mirrored` is not optional — it's the honest baseline, since mirrored sampling is standard
 in ES. Reporting a win against unmirrored i.i.d. is reporting a known result.
 
-`kind="sobol_scrambled"` is **low-rank only**. See the sweep grid in C0.5 for why.
+**Sample design across members is a constructor argument, not a second wrapper.** This was
+originally scoped as `Coupled(inner, kind)`; it cannot be built that way, because coupling
+changes the perturbation *directions* while `Mirrored` only changes their signs, and a
+wrapper would have to reach into an opaque inner perturbation and replace the noise it just
+drew. So it is a `shardes.coupling.Coupling` handed to the strategy:
+
+```python
+IIDGaussian(coupling=OrthogonalHD())
+Mirrored(LowRank(r=1, coupling=ScrambledSobol()))
+```
+
+`Gaussian()` is the uncoupled default and is bitwise what the strategies did before coupling
+existed. The reasoning is in `src/shardes/coupling.py`; `docs/04-phase3-coupling.md` C3.1
+records it as the finding that capability asked for.
+
+`ScrambledSobol` is **low-rank only**. See the sweep grid in C0.5 for why.
 
 ### C0.2 — Contraction cost is understood, not guessed
 
@@ -150,12 +164,17 @@ whether you hit that; it motivates the seed-regeneration-inside-low-rank synthes
 
 ### C0.3 — An FWHT with an exact correctness oracle
 
-Needed for `Coupled(kind="orthogonal_hd")`: the scalable orthogonal construction is
-`HD₁HD₂D₃…`, products of Hadamard transforms and Rademacher diagonals. A reference
-`O(n log n)` butterfly is enough here; a Mosaic GPU kernel is out of scope for Phase 0.
+Needed for `OrthogonalHD`: the scalable orthogonal construction is `HD₁HD₂D₃…`, products of
+Hadamard transforms and Rademacher diagonals. A reference `O(n log n)` butterfly is enough
+here; a Mosaic GPU kernel is out of scope for Phase 0.
 
 **The oracle ships in JAX**: `jax.scipy.linalg.hadamard(n) @ x`. It is a dense `O(n²)`
 Sylvester constructor, so it's useless as an implementation and perfect as a test.
+
+The coupling only ever needs *one row* of the product, so it never forms the matrix: row `p`
+of `H` is `(-1)^popcount(p & j)` in `O(d)`, then `factors - 1` butterflies and `factors` sign
+flips. `shardes.coupling.hadamard_row` is that row, checked against `fwht` of a one-hot and
+so transitively against the dense oracle.
 
 ### C0.4 — Test models with analytic or backprop gradients
 

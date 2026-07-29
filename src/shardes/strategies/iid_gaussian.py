@@ -13,6 +13,7 @@ from typing import Callable, NamedTuple
 import jax
 import jax.numpy as jnp
 
+from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
 from shardes.types import Array, Key, PyTree
 
@@ -32,7 +33,15 @@ class IIDPerturbation(NamedTuple):
 
 
 class IIDGaussian:
-    """Full-rank i.i.d. normal perturbation, materialized per member."""
+    """Full-rank perturbation, materialized per member.
+
+    `coupling` is the sample design across members; the default draws each member
+    independently, which is the textbook algorithm. Under full rank the design dimension is
+    the whole leaf, so a 512x512 matrix couples in R^262144 (docs/01 C0.4).
+    """
+
+    def __init__(self, coupling: Coupling = GAUSSIAN):
+        self.coupling = coupling
 
     def sample(self, base_key: Key, params: PyTree, member_ids: Array) -> IIDPerturbation:
         """Unit-scale noise for exactly the members in `member_ids`.
@@ -48,7 +57,7 @@ class IIDGaussian:
         two cannot drift: they must produce identical noise or Qiu's seed trick has
         stopped reproducing full-rank noise.
         """
-        eps = jax.vmap(lambda i: member_noise(base_key, params, i))(member_ids)
+        eps = jax.vmap(lambda i: member_noise(base_key, params, i, self.coupling))(member_ids)
         return IIDPerturbation(base_key, member_ids, eps)
 
     def apply(

@@ -21,6 +21,7 @@ from typing import Callable, NamedTuple
 import jax
 import jax.numpy as jnp
 
+from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
 from shardes.types import Array, Key, PyTree
 
@@ -43,7 +44,14 @@ class SeedPerturbation(NamedTuple):
 
 
 class SeedRegenerated:
-    """Full-rank noise regenerated from per-member seeds. Qiu et al."""
+    """Full-rank noise regenerated from per-member seeds. Qiu et al.
+
+    Coupling composes with regeneration for free: a coupled draw is still a pure function
+    of (stream, member_id), so there is nothing extra to store and nothing to synchronize.
+    """
+
+    def __init__(self, coupling: Coupling = GAUSSIAN):
+        self.coupling = coupling
 
     def sample(self, base_key: Key, params: PyTree, member_ids: Array) -> SeedPerturbation:
         """Does no work. That is the whole idea: the noise is a function of (key, id)."""
@@ -65,7 +73,7 @@ class SeedRegenerated:
 
         def g(x: Array) -> Array:
             def step(carry, i):
-                eps = member_noise(pert.base_key, pert.like, i)
+                eps = member_noise(pert.base_key, pert.like, i, self.coupling)
                 perturbed = jax.tree.map(lambda p, e: p + sigma * e, params, eps)
                 return carry, model(perturbed, x)
 
@@ -84,7 +92,7 @@ class SeedRegenerated:
 
         def step(acc, iw):
             i, wi = iw
-            eps = member_noise(pert.base_key, pert.like, i)
+            eps = member_noise(pert.base_key, pert.like, i, self.coupling)
             return jax.tree.map(lambda a, e: a + wi * e.astype(jnp.float32), acc, eps), None
 
         init = jax.tree.map(lambda x: jnp.zeros(x.shape, jnp.float32), pert.like)

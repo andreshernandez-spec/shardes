@@ -68,12 +68,6 @@ def test_expand_validates_against_the_sweep_grid():
         run.expand(CFG, bad)
 
 
-def test_dry_run_grid_is_itself_valid():
-    """The rehearsal grid is not exempt from the constraint it is rehearsing."""
-    for name, entry in run.DRY_RUN_GRID.items():
-        check_entry(name, entry)
-
-
 def test_slug_is_stable_and_filesystem_safe():
     c = run.expand(CFG, GRID)[0]
     slug = c.slug()
@@ -269,9 +263,6 @@ def test_a_failing_config_does_not_kill_the_sweep(tmp_path, monkeypatch, capsys)
     monkeypatch.setattr(run, "RESULTS", tmp_path)
     monkeypatch.setattr(run, "HERE", tmp_path)
     monkeypatch.setattr(run, "STRATEGIES", GRID)
-    # --dry-run deliberately uses the full expected grid rather than what is registered,
-    # so pin that too or this test runs against seven strategies instead of two.
-    monkeypatch.setattr(run, "DRY_RUN_GRID", GRID)
 
     real_estimate = run.synthetic_estimate  # capture before patching, or flaky recurses
 
