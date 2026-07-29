@@ -49,6 +49,7 @@ def run(strategy, problem, shaping, *, n=N, sigma=SIGMA, replicates=R, chunk=Non
     return jax.vmap(one)(jax.random.split(jax.random.key(seed), replicates))
 
 
+@pytest.mark.slow
 @strategies
 @pytest.mark.parametrize("shaping", [shp.none, shp.centered], ids=["none", "centered"])
 def test_unbiased_on_the_quadratic(strategy, problem, shaping):
@@ -58,6 +59,7 @@ def test_unbiased_on_the_quadratic(strategy, problem, shaping):
     assert float(metrics.relative_bias(got, truth)) < BIAS_GATE
 
 
+@pytest.mark.slow
 @strategies
 @pytest.mark.parametrize("sigma", [0.25, 1.0, 4.0])
 def test_unbiased_at_every_sigma(strategy, problem, sigma):
@@ -109,6 +111,7 @@ def test_chunking_does_not_change_the_shaping(strategy, problem):
     assert float(metrics.relative_mse(per_one, whole)) < 1e-8
 
 
+@pytest.mark.slow
 @strategies
 def test_centered_ranks_is_not_an_unbiased_estimator(strategy, problem):
     """Asserted, not tolerated.
@@ -124,6 +127,7 @@ def test_centered_ranks_is_not_an_unbiased_estimator(strategy, problem):
     assert float(metrics.cosine_similarity(got, truth)) > 0.9
 
 
+@pytest.mark.slow
 @strategies
 def test_naive_mean_subtraction_would_be_biased(strategy, problem):
     """Pins why `centered` carries the n/(n-1) factor.

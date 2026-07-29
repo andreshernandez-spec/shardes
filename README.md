@@ -54,7 +54,8 @@ pip install -U "jax[cuda12]"             # drop [cuda12] for CPU-only
 pip install -e ".[dev,experiments]"      # the suite covers the experiment drivers too
 
 # conftest pins JAX_PLATFORMS=cpu and 8 simulated devices, so this is just:
-pytest tests/
+pytest              # everything, ~2 min: includes the statistical tier
+pytest --fast       # inner loop, ~1 min: structural checks only
 ```
 
 The header line reports the device count. If it says anything other than

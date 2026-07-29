@@ -71,8 +71,28 @@ and say so.
 
 ## Tests
 
-- `tests/` runs on CPU, no GPU, no network, under **two minutes** total. Enforce it; a
-  slow suite stops being run.
+- `tests/` runs on CPU, no GPU, no network. **Two tiers:**
+
+  | command | what | budget |
+  |---|---|---|
+  | `pytest --fast` | structural only: protocols, invariants, shapes, chunk equality, dispatch, config validation | **90 s** |
+  | `pytest` | everything except `gpu`, including the statistical tier | **5 min** |
+
+  The default is the complete suite. Making speed the default would mean the statistical
+  tests only run when someone remembers a flag, which is the failure the old rule guarded
+  against, pointed the other way.
+
+  Mark a test `slow` when it is a **statistical measurement rather than a unit test** —
+  Monte Carlo unbiasedness, bias estimates, anything whose cost is proportional to the
+  confidence it buys. Do not mark something slow because it happens to be slow; fix that
+  instead.
+
+  The original rule said two minutes total. That number was written before any code
+  existed and it started driving design: the alternative to this split was cutting `R` in
+  the unbiasedness tests from 10 000 to 5 000, which trades a 4× margin on the 2% gate for
+  2.8× in order to satisfy a figure nobody had measured. Measured breakdown at 205 tests:
+  42 s in the estimator's Monte Carlo, ~60 s structural across everything else, and no
+  meaningful fat (vectorising the FWHT basis-vector test recovers 1.6 s of 15 s).
 - Multi-device tests use `XLA_FLAGS=--xla_force_host_platform_device_count=8`. Set it in
   `conftest.py` so it can't be forgotten.
 - Anything needing a real GPU lives in `tests/gpu/`, is marked `@pytest.mark.gpu`, is

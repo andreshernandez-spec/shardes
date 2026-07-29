@@ -26,4 +26,7 @@ packages = ["src/shardes"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not gpu'"
-markers = ["gpu: needs a real GPU, deselected by default, run by hand before each gate"]
+markers = [
+    "gpu: needs a real GPU, deselected by default, run by hand before each gate",
+    "slow: a statistical measurement rather than a unit test; skipped by --fast",
+]

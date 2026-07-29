@@ -35,6 +35,30 @@ if "xla_force_host_platform_device_count" not in _flags:
     ).strip()
 
 import jax  # noqa: E402
+import pytest  # noqa: E402
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--fast",
+        action="store_true",
+        help="skip tests marked slow: the inner-loop tier, structural checks only",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """`--fast` is opt-in, so a plain `pytest` still runs everything.
+
+    The default has to be the complete suite. Making speed the default would mean the
+    statistical tests only run when someone remembers a flag, which is the same failure
+    the two-minute rule was written to prevent, just pointed the other way.
+    """
+    if not config.getoption("--fast"):
+        return
+    skip = pytest.mark.skip(reason="--fast: statistical tests deselected")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip)
 
 
 def pytest_report_header(config):
