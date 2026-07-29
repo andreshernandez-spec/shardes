@@ -1,21 +1,140 @@
 """LowRank(r): EGGROLL. Perturbation E = (1/sqrt(r)) A B^T, never materialized.
 
     A: (n_members, m, r)
-    B: (n_members, n, r)
+    B: (n_members, k, r)     for a leaf of shape (m, k)
 
-apply rewrites the layer so all members share one base GEMM:
+`apply` substitutes a `LowRankWeight` into the params tree and the model's `nn.dense`
+dispatches to it, rewriting `x @ W.T` into `x @ W.T + (x @ B) @ A.T`. The base term has no
+batched operand, so vmap leaves it unbatched and every member shares one GEMM. That is
+EGGROLL's whole trick and here it falls out of vmap rather than being arranged by hand.
 
-    base = x @ W.T
-    out  = base + (x @ B) @ A.T
+`contract` is `sum_n w_n a_n b_n^T`, one (m x nr) by (nr x k) GEMM: m*k*n*r FLOPs. At
+m = k = 4096, n = 2^18, r = 1 that is 4.4 TFLOP, about 6 ms on an H100. The cost that
+bites is storage: A and B together are n*r*(m+k), roughly 2 GB per layer in bf16, which is
+what motivates regenerating them from seeds during contraction (docs/00-context.md).
 
-contract is sum_n w_n a_n b_n^T = (A * w) B^T, one (m x Nr) by (Nr x n) GEMM, m*n*N*r
-FLOPs. At m = n = 4096, N = 2^18, r = 1 that is 4.4 TFLOP, about 6 ms on an H100. The cost
-that bites is storage: A and B together are N*r*(m+n), roughly 2 GB per layer in bf16.
-That threshold is what motivates regenerating A and B from seeds during contraction, the
-synthesis noted in docs/00-context.md.
+**Leaves that are not rank-2 are perturbed densely.** A vector has no low-rank
+factorisation, and `E = a b^T` for a (d,) leaf is just a scaled `a`. This matters more
+than it looks: it is the same case EGGROLL's reference implementation raises
+NotImplementedError for on embeddings, and it means `LowRank` on the quadratic problem
+degenerates exactly to `IIDGaussian`, which is a useful cross-check rather than a bug.
 
-Invariant 3 (CLAUDE.md): if a profile shows an (n_members, m, n) array under this path,
-the implementation is wrong. There is a jaxpr test for it.
-
-Reductions over members accumulate in f32 even when A and B are bf16.
+Invariant 3 (CLAUDE.md): an (n_members, m, k) array under this path is a bug. There is a
+jaxpr test.
 """
+
+import math
+from typing import Callable, NamedTuple
+
+import jax
+import jax.numpy as jnp
+
+from shardes.types import Array, Key, PyTree
+
+
+class LowRankWeight(NamedTuple):
+    """W + scale * A B^T, applied without ever forming the sum.
+
+    Satisfies `shardes.nn.StructuredWeight` structurally, so `dense` dispatches to it.
+    """
+
+    w: Array  # (m, k) base, unbatched under vmap so its GEMM is shared
+    a: Array  # (m, r)
+    b: Array  # (k, r)
+    scale: Array  # sigma / sqrt(r)
+
+    def apply_to(self, x: Array) -> Array:
+        return x @ self.w.T + ((x @ self.b) @ self.a.T) * self.scale
+
+
+class LeafFactors(NamedTuple):
+    """Per-leaf perturbation state. `b is None` marks a densely perturbed leaf.
+
+    None is an empty pytree node, so a dense leaf simply contributes no `b` array rather
+    than needing a sentinel or a parallel structure.
+    """
+
+    a: Array
+    b: Array | None
+
+
+def _is_factors(node) -> bool:
+    return isinstance(node, LeafFactors)
+
+
+class LowRankPerturbation(NamedTuple):
+    base_key: Key
+    member_ids: Array
+    factors: PyTree  # params-shaped, a LeafFactors at each leaf position
+
+
+class LowRank:
+    """Rank-r factored perturbation. r = 1 is enough in practice (Sarkar et al.)."""
+
+    def __init__(self, r: int = 1):
+        if r < 1:
+            raise ValueError(f"rank must be at least 1, got {r}")
+        self.r = int(r)
+
+    def sample(self, base_key: Key, params: PyTree, member_ids: Array) -> LowRankPerturbation:
+        """Unit-variance E per entry: E[E_ij^2] = (1/r) sum_k E[a_ik^2] E[b_jk^2] = 1."""
+        leaves, treedef = jax.tree.flatten(params)
+
+        def one(i: Array) -> PyTree:
+            keys = jax.random.split(jax.random.fold_in(base_key, i), 2 * len(leaves))
+            out = []
+            for j, leaf in enumerate(leaves):
+                ka, kb = keys[2 * j], keys[2 * j + 1]
+                if leaf.ndim != 2:
+                    out.append(LeafFactors(jax.random.normal(ka, leaf.shape, leaf.dtype), None))
+                else:
+                    m, k = leaf.shape
+                    out.append(
+                        LeafFactors(
+                            jax.random.normal(ka, (m, self.r), leaf.dtype),
+                            jax.random.normal(kb, (k, self.r), leaf.dtype),
+                        )
+                    )
+            return jax.tree.unflatten(treedef, out)
+
+        return LowRankPerturbation(base_key, member_ids, jax.vmap(one)(member_ids))
+
+    def apply(
+        self,
+        model: Callable[[PyTree, Array], Array],
+        params: PyTree,
+        pert: LowRankPerturbation,
+        sigma: float,
+    ) -> Callable[[Array], Array]:
+        """The perturbed weights are never formed. See the module docstring."""
+        scale = sigma / math.sqrt(self.r)
+
+        def g(x: Array) -> Array:
+            def one(factors: PyTree) -> Array:
+                def substitute(leaf, lf):
+                    if lf.b is None:
+                        return leaf + sigma * lf.a
+                    return LowRankWeight(leaf, lf.a, lf.b, jnp.asarray(scale, leaf.dtype))
+
+                return model(jax.tree.map(substitute, params, factors), x)
+
+            return jax.vmap(one)(pert.factors)
+
+        return g
+
+    def contract(self, pert: LowRankPerturbation, weights: Array) -> PyTree:
+        """sum_n w_n E_n, params-shaped, unit scale.
+
+        The only place a full (m, k) tensor is instantiated, and it is the *update*, not
+        any member's perturbation.
+        """
+        w = weights.astype(jnp.float32)
+        scale = 1.0 / math.sqrt(self.r)
+
+        def leaf(lf: LeafFactors):
+            a = lf.a.astype(jnp.float32)
+            if lf.b is None:
+                return jnp.einsum("n,n...->...", w, a)
+            return scale * jnp.einsum("n,nmr,nkr->mk", w, a, lf.b.astype(jnp.float32))
+
+        return jax.tree.map(leaf, pert.factors, is_leaf=_is_factors)

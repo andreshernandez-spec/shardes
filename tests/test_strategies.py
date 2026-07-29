@@ -22,6 +22,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from shardes.nn import dense
 from shardes.strategies.protocol import Perturbation, PerturbationStrategy
 from shardes.strategies.registry import STRATEGIES
 
@@ -201,18 +202,22 @@ def test_apply_evaluates_each_member_at_its_own_epsilon(strategy, params):
     The model sums its params, so the expected value per member is computable from
     `contract` alone and the test never has to look inside the perturbation.
 
-    Note for when LowRank arrives: this model has no matmul to rewrite, so a strategy
-    that works by intercepting `dot_general` cannot satisfy it. If that happens, it is a
-    finding about `apply`'s contract being model-dependent, not a bad test. See the
-    deferred question in docs/01 C0.1.
+    The model goes through `shardes.nn.dense`, which is required rather than stylistic:
+    a structured strategy substitutes a weight that is not an array, so a model doing
+    arithmetic on it directly raises. That was predicted when this test was written and
+    LowRank duly failed it.
+
+    `x` is all ones, so `sum(dense(x, W))` is `sum(W)` and the expected value stays
+    computable from `contract` alone, without the test knowing any strategy's layout.
     """
     sigma, ids = 0.1, jnp.arange(5)
+    x = jnp.ones((params["w"].shape[-1],), dtype=jnp.float32)
 
-    def model(p, x):
-        return x * sum(jnp.sum(leaf) for leaf in jax.tree.leaves(p))
+    def model(p, xx):
+        return jnp.sum(dense(xx, p["w"])) + jnp.sum(p["b"])
 
     pert = strategy.sample(jax.random.key(11), params, ids)
-    got = strategy.apply(model, params, pert, sigma)(jnp.float32(1.0))
+    got = strategy.apply(model, params, pert, sigma)(x)
     assert got.shape == (5,)
 
     base = sum(float(jnp.sum(leaf)) for leaf in jax.tree.leaves(params))
@@ -226,14 +231,15 @@ def test_apply_evaluates_each_member_at_its_own_epsilon(strategy, params):
 def test_apply_scales_with_sigma(strategy, params):
     """Doubling sigma doubles the deviation from the unperturbed model."""
     ids = jnp.arange(4)
+    x = jnp.ones((params["w"].shape[-1],), dtype=jnp.float32)
 
-    def model(p, x):
-        return x * sum(jnp.sum(leaf) for leaf in jax.tree.leaves(p))
+    def model(p, xx):
+        return jnp.sum(dense(xx, p["w"])) + jnp.sum(p["b"])
 
     pert = strategy.sample(jax.random.key(12), params, ids)
-    base = model(params, jnp.float32(1.0))
-    one = strategy.apply(model, params, pert, 0.1)(jnp.float32(1.0)) - base
-    two = strategy.apply(model, params, pert, 0.2)(jnp.float32(1.0)) - base
+    base = model(params, x)
+    one = strategy.apply(model, params, pert, 0.1)(x) - base
+    two = strategy.apply(model, params, pert, 0.2)(x) - base
     assert jnp.allclose(two, 2 * one, rtol=1e-4)
 
 

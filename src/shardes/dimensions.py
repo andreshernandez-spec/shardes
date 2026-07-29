@@ -30,14 +30,15 @@ def sampling_dimension(params: PyTree, rank: int | str) -> int:
     One member's perturbation covers every leaf at once, so this sums rather than taking
     a per-leaf maximum or picking a representative matrix.
 
-    Leaves with fewer than two axes (norm scales, biases) have no low-rank factorisation,
-    so they contribute their full size at any rank. With the Phase 0 block every leaf is a
-    matrix and that branch is unused, but it is what makes the number correct once mixed
-    leaf types arrive in Phase 1.
+    Leaves that are not rank-2 (norm scales, biases, and anything higher-order) have no
+    two-factor decomposition, so they contribute their full size at any rank. `LowRank`
+    perturbs exactly those leaves densely, and the two must agree or the x-axis stops
+    describing what was sampled. With the Phase 0 block every leaf is a matrix and this
+    branch is unused; it is what makes the number correct once mixed leaf types arrive.
     """
     total = 0
     for leaf in jax.tree.leaves(params):
-        if rank == FULL or leaf.ndim < 2:
+        if rank == FULL or leaf.ndim != 2:
             total += int(leaf.size)
         else:
             total += int(rank) * int(sum(leaf.shape))

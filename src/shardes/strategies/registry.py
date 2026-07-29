@@ -20,6 +20,7 @@ from typing import Callable
 
 from shardes.dimensions import FULL
 from shardes.strategies.iid_gaussian import IIDGaussian
+from shardes.strategies.lowrank import LowRank
 from shardes.strategies.protocol import PerturbationStrategy
 from shardes.strategies.seed_regenerated import SeedRegenerated
 
@@ -75,4 +76,6 @@ STRATEGIES: dict[str, Entry] = {
     # The class itself is the zero-argument factory.
     "iid_gaussian": Entry(build=IIDGaussian, rank=FULL, scheme="iid"),
     "seed_regenerated": Entry(build=SeedRegenerated, rank=FULL, scheme="iid"),
+    "lowrank_r1": Entry(build=lambda: LowRank(r=1), rank=1, scheme="iid"),
+    "lowrank_r4": Entry(build=lambda: LowRank(r=4), rank=4, scheme="iid"),
 }
