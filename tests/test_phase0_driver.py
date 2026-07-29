@@ -195,6 +195,11 @@ def test_the_shipped_config_loads():
     assert cfg["replicates"] >= 30  # docs/01 C0.5
     assert cfg["axes"]["population"] == sorted(cfg["axes"]["population"])
 
+    # `chunk` is load-bearing, not optional: full rank OOMs from N = 1024 without it on the
+    # 3080 (docs/01 C0.2). A config that lost it would OOM through most of the grid, and the
+    # driver would dutifully record every failure and carry on.
+    assert cfg["chunk"] and cfg["chunk"] % 2 == 0
+
     shaping = cfg["axes"]["shaping"]
     assert set(shaping) == set(run.SHAPING_SIDES)
     assert all(isinstance(s, str) for side in shaping.values() for s in side)
@@ -240,6 +245,76 @@ def test_quoting_fixes_the_coercion_but_not_a_wrong_name(tmp_path):
     path = _write(tmp_path, BASE + axes(shaping="  shaping:\n    iid: ['no']\n    mirrored: ['none']\n"))
     with pytest.raises(ValueError, match="not a shaping mode"):
         run.load_config(path)
+
+
+@pytest.mark.parametrize("bad,match", [("3", "must be even"), ("0", "positive int"),
+                                       ("-2", "positive int"), ("true", "positive int")])
+def test_rejects_a_nonsense_chunk(tmp_path, bad, match):
+    """`chunk` is what makes the sweep runnable at all, so a bad value has to fail at load.
+
+    Odd is the interesting case: every mirrored scheme in the registry would raise partway
+    through, after the sweep had already spent time on the unmirrored ones.
+    """
+    path = _write(tmp_path, BASE + f"chunk: {bad}\n" + axes())
+    with pytest.raises(ValueError, match=match):
+        run.load_config(path)
+
+
+def test_accepts_an_even_chunk_and_no_chunk(tmp_path):
+    assert run.load_config(_write(tmp_path, BASE + "chunk: 256\n" + axes()))["chunk"] == 256
+    assert run.load_config(_write(tmp_path, BASE + axes())).get("chunk") is None
+
+
+def test_make_estimator_wires_the_config_to_the_library():
+    """The one seam between the driver and the library, and the only untested one.
+
+    A field wired to the wrong argument here yields plausible numbers rather than a crash,
+    which is the worst failure mode available. The quadratic makes it checkable: the ES
+    estimator is *exact* there at any sigma, so the mean over replicates must land on the
+    analytic gradient.
+
+    The tight bias gate is what pins `sigma`. It appears twice, in `apply` and in `tell`'s
+    1/(N sigma), and if the driver dropped it the normalisation would be off by 1/0.01 and
+    the bias would come back around 99 rather than under 0.1.
+    """
+    cfg = {
+        "seed": 0, "replicates": 1, "wall_clock_cap_s": 60, "chunk": 4,
+        "model": {"kind": "quadratic", "d": 8},
+        "axes": {"population": [64], "sigma": [0.01], "shaping": {"iid": ["centered"],
+                                                                  "mirrored": ["none"]}},
+    }
+    estimate = run.make_estimator(cfg)
+    config = run.Config("iid_gaussian", FULL, "iid", 64, 0.01, "centered", 1, 0)
+
+    from shardes import metrics  # noqa: PLC0415
+
+    gs = []
+    for r in range(400):
+        g, truth = estimate(config, jax.random.fold_in(jax.random.key(7), r))
+        gs.append(g)
+    mean = jax.tree.map(lambda *xs: sum(xs) / len(xs), *gs)
+
+    assert truth.shape == (8,)
+    assert float(metrics.relative_bias(mean, truth)) < 0.1
+    assert float(metrics.cosine_similarity(mean, truth)) > 0.9  # no sign flip
+
+
+def test_make_estimator_respects_the_shaping_field():
+    """`shaping_name` is a static jit argument, so a wrong one would silently reuse a cached
+    executable for a different shaping. Two modes have to give two answers."""
+    cfg = {
+        "seed": 0, "replicates": 1, "wall_clock_cap_s": 60, "chunk": 4,
+        "model": {"kind": "quadratic", "d": 8},
+        "axes": {"population": [16], "sigma": [0.1], "shaping": {"iid": ["centered"],
+                                                                 "mirrored": ["none"]}},
+    }
+    estimate = run.make_estimator(cfg)
+    key = jax.random.key(3)
+    out = {}
+    for mode in ("centered", "centered_ranks"):
+        g, _ = estimate(run.Config("iid_gaussian", FULL, "iid", 16, 0.1, mode, 1, 0), key)
+        out[mode] = g
+    assert not bool((out["centered"] == out["centered_ranks"]).all())
 
 
 def test_rejects_unquoted_scientific_notation(tmp_path):

@@ -233,6 +233,19 @@ class ScrambledSobol:
     **Low-rank paths only.** The design dimension has to be under 21,201, which a factor axis
     (m or k) is and a whole leaf (mk) is not. `_direction_numbers` raises on the latter, and
     `registry.check_entry` refuses the cell before it gets that far.
+
+    **Two reasons to expect this arm to underperform, written down before the run.** Recording
+    them now so a null result reads as a prediction rather than an excuse:
+
+    - Sobol's guarantee rests on **low effective dimension**, and `f(theta + sigma eps)`
+      depends on every coordinate of eps roughly equally. High effective dimension is the
+      worst case for QMC, and it is the case ES is in by construction.
+    - Sobol's **2-D projections degrade badly in the later dimensions**. At m = 512 the design
+      is a 512-dimensional point set, well into the range where that is a known weakness of
+      Joe-Kuo tables rather than a subtlety. `orthogonal_hd` has no analogue of this, which is
+      part of why docs/01 C0.5 puts it in both rank panels and makes it carry the comparison.
+
+    Neither is a reason not to measure it. They are reasons the measurement is the point.
     """
 
     def __init__(self, scramble: bool = True):

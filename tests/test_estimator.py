@@ -118,26 +118,59 @@ def test_no_sign_flip(strategy, problem):
     assert float(metrics.cosine_similarity(got, truth)) > 0.9
 
 
-@one_strategy
-def test_chunked_matches_unchunked(strategy, problem):
+@pytest.mark.parametrize(
+    "name,chunks",
+    # `iid_gaussian` covers the plumbing. `mirrored_hd_lr1` is here for one reason the
+    # plumbing argument does not cover: a coupling designs a point set *across* members, so
+    # it is the one thing whose result could depend on where the chunk boundaries fall. The
+    # block index is `member_id // d` and the position `member_id % d`, both global, so it
+    # must not; and chunking is the configuration the E1 sweep actually runs at large N,
+    # because the forward pass materializes activations per member even under LowRank.
+    #
+    # Its chunk sizes are all even. Mirrored pairs members as (2k, 2k+1), so an odd chunk
+    # splits a pair; that is asserted separately below rather than avoided quietly.
+    [("iid_gaussian", (1, 3, 8, 16)), ("mirrored_hd_lr1", (2, 6, 8, 16))],
+)
+def test_chunked_matches_unchunked(name, chunks, problem):
     """Contraction Strategy A against Strategy B, on one device.
 
     chunk=None keeps the perturbation and contracts once. An int re-derives each chunk
     from (key, member_ids) in a second pass. They must agree, which is Phase 1's
     test_strategy_A_equals_strategy_B available now.
     """
-    n, chunks = 16, (1, 3, 8, 16)
+    if name not in STRATEGIES:
+        pytest.skip(f"{name} not registered")
+    strategy, n = STRATEGIES[name].build(), 16
 
-    # chunk=3 leaves a ragged final chunk, which is the only place the padding can hide a
-    # wrong answer. Asserted rather than assumed, so nobody tidies the list into divisors
-    # and silently drops the coverage. Padded slots carry weight zero, and a multiply by
-    # 0.0 is exact, so their contribution is zero rather than merely small.
+    # A ragged final chunk is the only place the padding can hide a wrong answer. Asserted
+    # rather than assumed, so nobody tidies the list into divisors and silently drops the
+    # coverage. Padded slots carry weight zero, and a multiply by 0.0 is exact, so their
+    # contribution is zero rather than merely small.
     assert any(n % c for c in chunks), "no ragged chunk: the padding path is untested"
 
     whole = run(strategy, problem, shp.centered_ranks, n=n, replicates=32, chunk=None)
     for chunk in chunks:
         part = run(strategy, problem, shp.centered_ranks, n=n, replicates=32, chunk=chunk)
         assert float(metrics.relative_mse(part, whole)) < 1e-8, f"chunk={chunk}"
+
+
+def test_an_odd_chunk_under_mirroring_is_refused():
+    """A caller constraint, not an implementation detail, so it fails loudly.
+
+    Mirrored pairs members as (2k, 2k+1). An odd chunk splits a pair across two chunks,
+    which loses the antithetic cancellation and quietly returns a noisier estimate rather
+    than a wrong one. Silent degradation is the worst case here, so `sample` raises.
+
+    Pinned at the estimator level because `chunk` is set in the E1 config, where nothing
+    else would catch an odd value.
+    """
+    if "mirrored_hd_lr1" not in STRATEGIES:
+        pytest.skip("mirrored_hd_lr1 not registered")
+    strategy = STRATEGIES["mirrored_hd_lr1"].build()
+    with pytest.raises(ValueError, match="even member count"):
+        estimate(strategy, lambda p, _x: jnp.sum(p), jnp.zeros((4,)), jnp.float32(0.0),
+                 jax.random.key(0), member_ids=jnp.arange(8), sigma=0.1,
+                 shaping=shp.none, chunk=3)
 
 
 @one_strategy

@@ -83,8 +83,18 @@ and say so.
 
   | command | what | budget |
   |---|---|---|
-  | `pytest --fast` | structural only: protocols, invariants, shapes, chunk equality, dispatch, config validation | **90 s** |
+  | `pytest --fast` | structural only: protocols, invariants, shapes, chunk equality, dispatch, config validation | **120 s** |
   | `pytest` | everything except `gpu`, including the statistical tier | **5 min** |
+
+  Measured after coupling landed: 95 s fast (317 tests), 243 s full (483 tests), on CPU with
+  8 simulated devices. Both figures are contended-sensitive — a concurrent GPU job pushed the
+  fast tier to 146 s once, which is not a regression.
+
+  The fast budget was 90 s, set when the registry held 6 strategies and there was no
+  `coupling.py`. It now holds 12 and there are three noise sources. Raised rather than met,
+  because meeting it meant deleting a real test to hit a number chosen for a smaller suite,
+  which is the same mistake as the original two-minute rule below. Cut tests when they are
+  redundant, not when the clock is inconvenient.
 
   The default is the complete suite. Making speed the default would mean the statistical
   tests only run when someone remembers a flag, which is the failure the old rule guarded

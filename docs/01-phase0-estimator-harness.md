@@ -162,6 +162,32 @@ Fine. But storing `A` and `B` costs `N·r·(m+n)` ≈ 2 GB/layer in bf16. Note i
 whether you hit that; it motivates the seed-regeneration-inside-low-rank synthesis
 (`docs/00-context.md`).
 
+**Measured, and it is not `A` and `B` that bind.** On the RTX 3080 (16 GB, ~12.2 GB usable
+after JAX's preallocation) at `m = n = 512`, unchunked:
+
+| strategy | first `N` that OOMs |
+|---|---|
+| `iid_gaussian` | 1,024 |
+| `lowrank_r1` | 4,096 |
+| `seed_regenerated` | none up to 2¹⁸ |
+
+`lowrank_r1` OOMing at all is the point. The *perturbation* stays factored exactly as
+designed: `A` and `B` at `N = 4096, r = 1` are 100 MB together, measured from their shapes.
+What blows up is the **forward pass**. `apply` vmaps the model over members, so the block's
+activations carry a members axis: `batch·seq = 256` tokens × 512 × 4 B is 512 KB per
+intermediate per member, and the block has six projections plus attention scores, so roughly
+4–5 MB live per member (derived, not measured). At `N = 4096` that is 16–20 GB against a
+100 MB perturbation — the activations bind **~86× harder**, and invariant 3 does nothing about
+them because it is a statement about the perturbation.
+
+So `chunk` in `experiments/phase0/config.yaml` is not a tuning knob, it is what makes the
+sweep runnable at all. It bounds the member axis in both of `estimate`'s passes. With
+`chunk = 256` every strategy runs to `N = 2¹⁸` with no OOM.
+
+`seed_regenerated` never OOMs because it already scans one member at a time. That is Qiu's
+bet paying off on the axis nobody advertises: it buys activation memory, not just
+perturbation storage.
+
 ### C0.3 — An FWHT with an exact correctness oracle
 
 Needed for `OrthogonalHD`: the scalable orthogonal construction is `HD₁HD₂D₃…`, products of
@@ -286,6 +312,20 @@ Extending Joe-Kuo past that is its own research problem, not a Phase 0 task.
 This is a second, independent reason coupling only has room to work under low rank. The
 first is the `N/d_eff` argument in `docs/00-context.md`: coupling has no *leverage* at
 `N ≪ d`. This one is sharper: Sobol is not *constructible* at `d = mn` at all.
+
+**Two reasons to expect the sobol arm to underperform, on the record before the run.** Both
+are properties of the method rather than of the implementation, so a null result there is a
+prediction and not an excuse:
+
+- Sobol's guarantee rests on **low effective dimension**. `f(θ + σε)` depends on every
+  coordinate of `ε` roughly equally, which is the worst case for QMC and the case ES is in by
+  construction.
+- Sobol's **2-D projections degrade in the later dimensions**. At `m = 512` the design is a
+  512-dimensional point set, well inside the range where that is a documented weakness of
+  Joe-Kuo tables rather than a subtlety.
+
+`orthogonal_hd` has no analogue of either, which is a third reason it is the curve that
+carries the G0 comparison across both panels.
 
 `orthogonal_hd` has no such ceiling. `HD₁HD₂D₃…` is `O(d log d)` and dimension-agnostic, so
 it is the one scheme that appears in both rows, and it is what carries the G0 comparison.

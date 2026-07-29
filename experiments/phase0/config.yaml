@@ -23,6 +23,26 @@ replicates: 30              # R >= 30 per config (docs/01 C0.5)
 # records what it has with truncated=true and the sweep moves on rather than stalling.
 wall_clock_cap_s: 900
 
+# Members are evaluated `chunk` at a time and the perturbation is re-derived per chunk
+# (contraction Strategy A). NOT a tuning knob: without it the sweep cannot run.
+#
+# Measured on the RTX 3080 (16 GB, ~12.2 GB usable after JAX preallocation), unchunked:
+# iid_gaussian OOMs from N = 1024, lowrank_r1 from N = 4096, seed_regenerated never.
+#
+# lowrank_r1 OOMing is the surprise, and it is not invariant 3 failing. The perturbation
+# stays factored: A and B at N = 4096, r = 1 are 100 MB together. What blows up is the
+# forward pass, because `apply` vmaps the model over members and the block's activations
+# then carry a members axis at roughly 4-5 MB each. At N = 4096 that is 16-20 GB against a
+# 100 MB perturbation. See docs/01 C0.2.
+#
+# 256 clears every strategy to N = 2^18. Bigger would mean fewer scan steps and better
+# occupancy, but full rank OOMs unchunked at 1024, so the ceiling there is under it.
+#
+# Must be even: Mirrored pairs members as (2k, 2k+1) and an odd chunk splits a pair, losing
+# the antithetic cancellation. load_config rejects an odd value rather than let every
+# mirrored scheme raise partway through the sweep.
+chunk: 256
+
 model:
   kind: transformer_block
   m: 512

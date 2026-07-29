@@ -47,6 +47,12 @@ def rows(coupling: Coupling, ids, d: int, stream: jax.Array = STREAM) -> jax.Arr
     return f(jnp.asarray(ids))
 
 
+def sampled(strategy, base_key, params, member_ids):
+    """`strategy.sample`, jitted. Same reason as `rows`: eager dispatch of a few hundred
+    primitives costs seconds on arrays this small."""
+    return jax.jit(strategy.sample)(base_key, params, member_ids)
+
+
 # --------------------------------------------------------------------------------------
 # hadamard_row: the O(n) shortcut into the HD chain.
 # --------------------------------------------------------------------------------------
@@ -411,8 +417,8 @@ def test_passing_the_default_coupling_changes_nothing():
         (SeedRegenerated(), SeedRegenerated(coupling=GAUSSIAN)),
         (LowRank(r=2), LowRank(r=2, coupling=Gaussian())),
     ]:
-        a = default.contract(default.sample(key, params, ids), w)
-        b = explicit.contract(explicit.sample(key, params, ids), w)
+        a = default.contract(sampled(default, key, params, ids), w)
+        b = explicit.contract(sampled(explicit, key, params, ids), w)
         for x, y in zip(jax.tree.leaves(a), jax.tree.leaves(b)):
             assert jnp.array_equal(x, y), type(default).__name__
 
@@ -427,7 +433,7 @@ def test_coupling_lands_on_the_lowrank_factors_not_the_product():
     m, k = 16, 5
     params = {"w": jnp.zeros((m, k), dtype=jnp.float32)}
     s = LowRank(r=1, coupling=OrthogonalHD())
-    pert = s.sample(jax.random.key(3), params, jnp.arange(m))  # exactly one block
+    pert = sampled(s, jax.random.key(3), params, jnp.arange(m))  # exactly one block
 
     a = pert.factors["w"].a[:, :, 0]
     assert float(jnp.max(jnp.abs(a @ a.T / m - jnp.eye(m)))) < 1e-4
@@ -444,7 +450,7 @@ def test_lowrank_columns_are_separate_design_families():
     m, r = 32, 4
     params = {"w": jnp.zeros((m, 6), dtype=jnp.float32)}
     s = LowRank(r=r, coupling=OrthogonalHD())
-    a = s.sample(jax.random.key(4), params, jnp.arange(m)).factors["w"].a
+    a = sampled(s, jax.random.key(4), params, jnp.arange(m)).factors["w"].a
 
     for j in range(1, r):
         assert not jnp.allclose(a[:, :, 0], a[:, :, j]), f"column {j} duplicates column 0"

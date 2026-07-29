@@ -18,6 +18,7 @@ environment capture, results IO and aggregation over replicates. It calls an
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import platform
@@ -141,6 +142,17 @@ def load_config(path: Path) -> dict:
                     f"mode. Known: {sorted(SHAPING_NAMES)}. Caught here rather than as a "
                     "KeyError partway through a 20-hour sweep."
                 )
+
+    chunk = cfg.get("chunk")
+    if chunk is not None:
+        if not isinstance(chunk, int) or isinstance(chunk, bool) or chunk < 1:
+            raise ValueError(f"{path}: chunk must be a positive int or absent, got {chunk!r}")
+        if chunk % 2:
+            raise ValueError(
+                f"{path}: chunk must be even, got {chunk}. Mirrored pairs members as "
+                "(2k, 2k+1), so an odd chunk splits a pair and loses the antithetic "
+                "cancellation. Every mirrored scheme in the registry would raise."
+            )
 
     for value in axes["population"]:
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
@@ -303,6 +315,16 @@ def make_estimator(cfg: dict):
 
     The library takes (strategy, model, params, x, key, ...) and must not import this
     driver's dataclass, so the adaptation lives here rather than there.
+
+    **Jitted, and it matters more than it looks.** Unjitted, every replicate re-traces the
+    whole estimator: two `lax.scan`s over chunks plus the strategy's few hundred primitives.
+    Measured on the 3080 at N = 1024, chunk = 256, the tracing floor was ~2 s against ~0.6 s
+    of actual work. Across 504 configs x 30 replicates that is hours of pure overhead.
+
+    `sigma` is a traced argument rather than static, so the sigma axis costs no extra
+    compilations: 12 strategies x 7 populations x 2 shapings, not x 3 again. `params` and
+    `batch` are arguments rather than closure constants, so a 6 MB params tree is not
+    embedded in every executable.
     """
     from shardes.estimator import estimate as library_estimate  # noqa: PLC0415
 
@@ -310,14 +332,22 @@ def make_estimator(cfg: dict):
     model, params, batch, truth = build_problem(cfg, key)
     chunk = cfg.get("chunk")
 
-    def estimate(config: Config, replicate_key):
-        strategy = STRATEGIES[config.strategy].build()
-        g_hat = library_estimate(
-            strategy, model, params, batch, replicate_key,
-            member_ids=jnp.arange(config.population),
-            sigma=config.sigma,
-            shaping=shaping.BY_NAME[config.shaping],
+    @functools.partial(jax.jit, static_argnames=("strategy", "population", "shaping_name"))
+    def compiled(params, batch, replicate_key, sigma, *, strategy, population, shaping_name):
+        return library_estimate(
+            STRATEGIES[strategy].build(), model, params, batch, replicate_key,
+            member_ids=jnp.arange(population),
+            sigma=sigma,
+            shaping=shaping.BY_NAME[shaping_name],
             chunk=chunk,
+        )
+
+    def estimate(config: Config, replicate_key):
+        g_hat = compiled(
+            params, batch, replicate_key, jnp.float32(config.sigma),
+            strategy=config.strategy,
+            population=config.population,
+            shaping_name=config.shaping,
         )
         return g_hat, truth
 
