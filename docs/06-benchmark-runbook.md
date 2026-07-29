@@ -1,0 +1,222 @@
+# 06 — Benchmark runbook
+
+The operational half of `docs/05-paper.md`. Which machine runs which experiment, how to get
+it, and how not to lose a session.
+
+---
+
+## Compute tiers
+
+| Tier | What | Devices | Cost | Limits |
+|---|---|---|---|---|
+| **T0** | Local / any CPU | 8 simulated | $0 | No timing validity |
+| **T1** | **Kaggle TPU v5e-8** | **8 chips, 16 GB each** | **$0** | ~20 TPU-h/week, 9-h sessions |
+| **T2** | Kaggle GPU: P100 16 GB, or 2× T4 | 1–2 | $0 | ~30 GPU-h/week; Turing |
+| **T3** | TPU Research Cloud | 8–256 chips, per grant | $0 TPU + ~$10–20 VM/GCS | Temporary grant, ~30 days |
+| **T4** | GCP DWS, `a2-ultragpu-8g` | 8× A100 80 GB, NVLink | $19.20/h | Needs quota |
+| **T4′** | GCP DWS, `a3-highgpu-8g` | 8× H100 80 GB | $38.32/h flex-start | Only if matching EGGROLL's H100 numbers |
+| **T5** | Vast/RunPod spot | 1–8 | ~$0.7–2/GPU-h | Reruns, host quality varies |
+
+The routing principle: **every experiment goes to the cheapest tier that can answer it.**
+Almost everything lands on T0–T3, which are free.
+
+---
+
+## T0 — CPU. Where most of the work happens.
+
+```bash
+XLA_FLAGS=--xla_force_host_platform_device_count=8 pytest tests/
+```
+
+Eight simulated devices. `Mesh`, `PartitionSpec`, `shard_map` signatures, collective
+placement, device-count invariance, communication *byte counts* — all reproduce faithfully.
+Interconnect latency does not, so no timing claim comes from here.
+
+If any Pallas kernels get written, `interpret=True` runs them on CPU — qwix's own CI does
+exactly this for its TPU kernels. Between the two flags, every correctness question in this
+project is answerable for free. **Rent only to measure.** More money gets burned debugging
+at $2/hr than on the benchmarks themselves.
+
+---
+
+## T1 — Kaggle TPU v5e-8. The primary scaling platform.
+
+Eight chips, free, ~20 TPU-hours/week, 9-hour session cap, no credit card. This carries
+E2, E3, E4 (first pass), E8-TPU, E10, E11 — the bulk of the paper.
+
+**Constraints to design around:**
+
+- **16 GB HBM per chip.** Population sizes are memory-bound well below EGGROLL's H100
+  figures. Choose model shapes so that `D ∈ {1,2,4,8}` all fit at the same per-device `N`,
+  or the scaling curve compares different computations.
+- **9-hour hard stop, ephemeral filesystem.** Anything not written out is gone.
+- **Notebook execution, no SSH.** The library must be `pip install`-able from GitHub so the
+  notebook is a thin driver, not a code dump. Commit SHA gets pinned and logged.
+- **Weekly quota resets.** Plan `E4`'s grid as four ~5-hour chunks across two weeks rather
+  than one heroic run.
+
+**Session template:**
+
+```python
+# Cell 1 — pin and install
+!pip install -q "git+https://github.com/<you>/shardes@<SHA>"
+import jax; print(jax.__version__, jax.devices(), jax.device_count())   # expect 8
+
+# Cell 2 — resume state from a Kaggle Dataset or GCS
+# Cell 3 — run only configs not already present in results/
+# Cell 4 — write results incrementally; push after EVERY config, not at the end
+```
+
+Make the driver **idempotent and resumable**: it reads which `(experiment, config)` pairs
+already have results, runs only the rest, and writes each one out as it completes. A
+9-hour session that dies at hour 8 should cost you one configuration, not everything.
+
+---
+
+## T2 — Kaggle GPU. Phase 0 only.
+
+P100 (16 GB) or 2× T4. ~30 GPU-hours/week. Runs **E1**, the estimator sweep, which is
+embarrassingly serial and doesn't care about the GPU generation.
+
+T4s are Turing: no useful bf16 tensor cores, no Hopper features. **They never appear in a
+throughput claim.** Correctness and statistics only.
+
+---
+
+## T3 — TPU Research Cloud. The scaling-past-8 tier.
+
+Free Cloud TPU quota granted to your GCP project, ready to use within minutes of accepting
+an invitation. TPUs are free; you pay only for a small `n1-standard-2` driver VM and a GCS
+bucket, which is minimal. The stated obligation is to share the work publicly through
+peer-reviewed publications, open source code, or blog posts — precisely the plan.
+
+**The timing trap, and it's the most important paragraph on this page.**
+
+Invitations go out on a rolling basis, and the grant is **temporary** — historically a
+30-day window, with a specific quota in a specific zone (e.g. "32 on-demand v4 chips in
+us-central2-b"), and you cannot create TPU types you don't have quota for. The clock starts
+when you accept.
+
+So: **apply around week 10, not week 1.** This is the opposite of the GPU-quota advice in
+`docs/compute.md`. Applying early and accepting before the code runs is the standard way to
+burn the window. Have E5 and E12 ready to launch the day the quota lands.
+
+In the application, describe the actual project — a sharded ES library, an open-source
+artifact, a paper. That's exactly the profile the program funds.
+
+**Also worth knowing:**
+
+- TRC quota is not compatible with Vertex-based workflows; use the plain GCE/TPU-VM path.
+- Preemptible capacity sees frequent interruptions. The same resumability discipline as
+  Kaggle applies, doubly.
+- Ask for what you need. A `v5e-32` or `v5e-64` grant is what makes E5's 64-device curve
+  possible; a `v5e-8` grant just duplicates Kaggle.
+
+```bash
+gcloud compute tpus tpu-vm create shardes-bench \
+  --zone=<ZONE_FROM_GRANT_EMAIL> \
+  --accelerator-type=v5litepod-32 \
+  --version=<TPU_SOFTWARE_VERSION>
+
+gcloud compute tpus tpu-vm ssh shardes-bench --zone=<ZONE> \
+  --worker=all --command="pip install -q 'git+https://github.com/<you>/shardes@<SHA>'"
+```
+
+Multi-host slices (>8 chips) do need `jax.distributed.initialize()` and run one process per
+host. This is the one place the "single-node only" simplification breaks, so budget a day
+for it and rehearse on a `v5e-8` first.
+
+---
+
+## T4 — GCP paid GPU. One session, cross-platform comparison.
+
+`a2-ultragpu-8g` — 8× A100 80 GB, NVLink — at **$19.20/hr via DWS flex-start**. Six hours
+is **~$115**. Runs E6, E7, E8-GPU, E9.
+
+A100 rather than H100 because the GPU session's job is now the *NVLink-vs-ICI comparison*,
+not an absolute throughput record. If a headline number matched to EGGROLL's published
+H100 figures is wanted, add a short second session on `a3-highgpu-8g` ($38.32/hr
+flex-start) with only E9 in it.
+
+DWS has two modes: **flex-start** queues until capacity appears (cheapest), **calendar**
+books a known window (slightly more, 8-GPU shapes only). For a scheduled benchmark day,
+calendar is worth the difference.
+
+**Request GPU quota during Phase 0.** A fresh project has zero A100/H100 quota and approval
+runs days to weeks. Unlike TRC, there's no cost to having it early.
+
+---
+
+## Not losing the paid session
+
+Rented multi-GPU time is the only irreversible cost here. The session is an *execution* of
+a debugged plan, never a debugging session.
+
+**Two weeks before** — GPU quota requested. TRC applied for.
+
+**The week before** — full dress rehearsal on T2/T5 at 1–2 GPUs with `N` reduced 100×:
+- every configuration runs to completion,
+- results written incrementally, one file per config,
+- driver resumable — re-running skips what's done,
+- hard wall-clock cap per config; exceeding it logs and moves on,
+- `plot.py` runs end-to-end on rehearsal data and emits the final figures.
+
+If the rehearsal doesn't produce publication-shaped figures from fake numbers, the real
+session won't either.
+
+**The day before** — build and push the container image, boot one cheap single-GPU
+instance from it, confirm `jax.devices()` reports the GPU and the driver starts. Image
+build failures on an 8-GPU box bill at 8-GPU rates.
+
+**During** — priority order, so running out of time loses the least important measurement:
+E6 (F1) → E7 (F2) → E8-GPU (F4) → E9 (T1). Ordering matters more than duration.
+
+**Always** — hard shutdown in the driver when the sweep finishes or the cap trips. Never
+wait for a human to notice an idle 8-GPU node.
+
+---
+
+## Budget
+
+| Item | Cost |
+|---|---|
+| T0 CPU | $0 |
+| T1 Kaggle TPU v5e-8 (~60 h) | $0 |
+| T2 Kaggle GPU (~20 h) | $0 |
+| T3 TRC — VM + GCS only | ~$10–20 |
+| T4 one 6-h A100 session | ~$115 |
+| T4′ optional H100 session for E9 | ~$120 |
+| T5 reruns, spot | ~$20 |
+| **Total** | **~$150 realistic, ~$300 with the H100 session and a rerun** |
+
+Against the original `docs/compute.md` plan, the free tiers absorb the entire primary
+scaling study. The cost is scheduling: Kaggle's weekly quota and TRC's grant window impose
+a calendar that a rented node doesn't.
+
+---
+
+## Reproducibility, since this becomes a paper
+
+Every experiment directory carries:
+
+```
+experiments/EN-name/
+├── config.yaml      committed BEFORE the run
+├── run.py           resumable, idempotent, incremental writes
+├── plot.py          regenerates every figure from results/
+├── results/         raw outputs, one file per config
+├── figures/
+└── env.json         auto-captured: platform, chip/GPU model, driver, JAX version,
+                     libtpu/CUDA version, commit SHA, wall-clock, cost
+```
+
+`env.json` is written by the driver, never by hand. Reconstructing an environment
+afterwards is never accurate, and for a paper it has to be exact.
+
+Two rules carried over from `docs/conventions.md` that matter more once this is a
+submission:
+
+- **No number in any document without a committed script that regenerates it.**
+- **Assert the optimizer trajectory is identical across device counts before comparing
+  timings.** Otherwise the scaling figure compares two different computations, which is the
+  single most common way scaling results turn out to be wrong.

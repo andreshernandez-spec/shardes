@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "shardes"
+version = "0.0.0"
+description = "Sharded evolution strategies for JAX"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Do not pin jax below 0.11. The whole point is that evosax is stuck at <0.7.
+    "jax>=0.11",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/shardes"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not gpu'"
+markers = ["gpu: needs a real GPU, deselected by default, run by hand before each gate"]
