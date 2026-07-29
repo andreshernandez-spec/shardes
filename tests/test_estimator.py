@@ -30,6 +30,18 @@ strategies = pytest.mark.parametrize(
     or [pytest.param(None, id="none", marks=pytest.mark.skip(reason="no strategy registered"))],
 )
 
+# `estimate`'s own plumbing -- chunking, the two-pass shaping, the padding -- is
+# strategy-agnostic given that `contract` is additive over disjoint members, and
+# test_strategies.py::test_contract_chunks_additively already asserts that per strategy.
+# Running the plumbing tests once avoids re-paying for coverage that exists elsewhere;
+# every *statistical* test still runs against every strategy.
+_first = next(iter(STRATEGIES.items()), None)
+one_strategy = pytest.mark.parametrize(
+    "strategy",
+    [pytest.param(_first[1].build(), id=_first[0])] if _first
+    else [pytest.param(None, id="none", marks=pytest.mark.skip(reason="no strategy registered"))],
+)
+
 
 @pytest.fixture(scope="module")
 def problem():
@@ -82,7 +94,7 @@ def test_no_sign_flip(strategy, problem):
     assert float(metrics.cosine_similarity(got, truth)) > 0.9
 
 
-@strategies
+@one_strategy
 def test_chunked_matches_unchunked(strategy, problem):
     """Contraction Strategy A against Strategy B, on one device.
 
@@ -104,7 +116,7 @@ def test_chunked_matches_unchunked(strategy, problem):
         assert float(metrics.relative_mse(part, whole)) < 1e-8, f"chunk={chunk}"
 
 
-@strategies
+@one_strategy
 def test_chunking_does_not_change_the_shaping(strategy, problem):
     """The reason chunking needs two passes: centered ranks are global.
 
