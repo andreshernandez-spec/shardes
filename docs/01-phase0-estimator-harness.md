@@ -268,10 +268,19 @@ Per configuration, over `R ≥ 30` independent replicates:
   configs, but that's a compute-budget call.
 - Wall-clock per estimate, for context. Not the point of this phase.
 
-Sweep axes: `N` × `rank ∈ {full, 4, 1}` × `scheme` × `shaping ∈ {none, centered_ranks}` ×
-`σ ∈ {3 values}`.
+Sweep axes: `N` × `rank ∈ {full, 4, 1}` × `scheme` × `shaping` × `σ ∈ {3 values}`.
 
-**The grid is not rectangular:**
+**Three of those axes are conditional rather than crossed.** `scheme` on `rank`, `shaping` on
+`scheme`, and `population` on `rank`. All three are encoded once, in
+`src/shardes/strategies/registry.py` and `experiments/phase0/config.yaml`, and
+`tests/test_phase0_driver.py` pins each one in both directions.
+
+| rank | populations | why it stops there |
+|---|---|---|
+| full | 2⁶ … 2¹⁴ | `N/d_eff` tops out at 0.010, two decades below the line it exists to sit under. Full-rank `orthogonal_hd` costs >400 s per replicate at 2¹⁸, so that cell cannot reach `R = 30` on one GPU: the 900 s cap would record 2 replicates. Measured, `docs/04` C3.3. |
+| 4, 1 | 2⁶ … 2¹⁸ | Crosses `N/d_eff = 1` near `N = 6144` and reaches 42.7. This is the regime the figure is about, and it is cheap: 10.8 s per replicate at 2¹⁸. |
+
+**The scheme grid is not rectangular either:**
 
 | rank | schemes |
 |---|---|

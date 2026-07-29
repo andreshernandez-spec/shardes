@@ -53,9 +53,24 @@ model:
                             # dimension is what this experiment is about, not the data
 
 axes:
-  # 2^6 .. 2^18. Do not raise m/n before checking memory: full-rank at 2^18 and m=n=512
-  # would be 275 TB of materialized perturbation, which is what the chunking path is for.
-  population: [64, 256, 1024, 4096, 16384, 65536, 262144]
+  # Conditional on rank, and measured rather than guessed. Do not raise m/n before checking
+  # memory: full rank at 2^18 and m=n=512 would be 275 TB of materialized perturbation,
+  # which is what `chunk` above is for.
+  population:
+    # Full rank stops at 2^14. It never reaches N/d_eff = 1 anyway (2^18 only gets to 0.167),
+    # and its job in F5 is to show curves NOT separating at N/d_eff << 1, which 0.010 does
+    # two decades clear of the line.
+    #
+    # The two cells dropped here cost 9 of the sweep's 16.8 h, and `mirrored_hd_full` cannot
+    # reach R = 30 in either of them. Under full rank the orthogonal_hd design dimension is
+    # the whole 512x512 leaf, so every member pays two FWHTs of length 2^18 per leaf: one
+    # replicate at N = 2^18 exceeds 400 s, which the 900 s cap would truncate to 2 replicates.
+    # A 2-replicate point with an IQR is worse than no point. See docs/04 C3.3.
+    full: [64, 256, 1024, 4096, 16384]
+    # Rank 1 crosses N/d_eff = 1 near N = 6144 and reaches 42.7 at 2^18. That is the regime
+    # the figure is about, and it is cheap: 10.8 s per replicate at 2^18, against 36.6 s for
+    # full rank and >400 s for full-rank orthogonal_hd.
+    low: [64, 256, 1024, 4096, 16384, 65536, 262144]
   sigma: [0.001, 0.01, 0.1]
 
   # The shaping axis is conditional on the scheme, and neither list is a subset of the

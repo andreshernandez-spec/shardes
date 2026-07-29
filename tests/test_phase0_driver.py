@@ -37,7 +37,9 @@ CFG = {
     "replicates": 5,
     "wall_clock_cap_s": 60,
     "axes": {
-        "population": [64, 256],
+        # Deliberately different lengths per side: crossing the axis instead of selecting
+        # from it would change the config count, which test_expand_crosses_every_axis sees.
+        "population": {"full": [256], "low": [64, 256]},
         "sigma": [0.001, 0.01],
         # One mode per side, so a test that accidentally crossed the axis instead of
         # selecting from it would still produce the right *count*. The membership
@@ -53,8 +55,10 @@ GRID = {
 
 
 def test_expand_crosses_every_axis():
+    """Not a product any more. `a_full` is full rank and gets one population, `b_lr1` is
+    rank 1 and gets two, so a crossed axis would give 8 rather than 6."""
     configs = run.expand(CFG, GRID)
-    assert len(configs) == 2 * 2 * 2 * 1  # strategies x population x sigma x shaping
+    assert len(configs) == (1 + 2) * 2 * 1  # populations-per-rank x sigma x shaping
 
 
 def test_shaping_axis_is_conditional_on_the_scheme():
@@ -71,6 +75,36 @@ def test_shaping_axis_is_conditional_on_the_scheme():
 
     assert by_strategy["a_full"] == {"centered"}
     assert by_strategy["b_lr1"] == {"none"}
+
+
+def test_population_axis_is_conditional_on_rank():
+    """docs/01 C0.5. Full rank stops earlier, and the reason is measured, not budgetary.
+
+    Under full rank the orthogonal_hd design dimension is the whole 512x512 leaf, so a member
+    pays two FWHTs of length 2^18 per leaf and one replicate at N = 2^18 costs >400 s. The
+    900 s cap would record 2 replicates, and a 2-replicate point with an IQR is worse than no
+    point. The full-rank panel loses nothing it needs: it tops out at N/d_eff = 0.167 even at
+    2^18, and its job is to show curves *not* separating well below 1.
+    """
+    by_strategy = {}
+    for c in run.expand(CFG, GRID):
+        by_strategy.setdefault(c.strategy, set()).add(c.population)
+
+    assert by_strategy["a_full"] == {256}
+    assert by_strategy["b_lr1"] == {64, 256}
+
+
+@pytest.mark.parametrize("rank,want", [(FULL, "f"), (1, "l"), (4, "l")])
+def test_every_rank_picks_a_population_side(rank, want):
+    assert run.population_for(rank, {"full": "f", "low": "l"}) == want
+
+
+def test_population_axis_must_be_a_mapping(tmp_path):
+    """A flat list is valid YAML and would silently give full rank the whole range, which is
+    the 9 hours and the 2-replicate cell this replaced."""
+    path = _write(tmp_path, BASE + axes(population="  population: [64, 256]\n"))
+    with pytest.raises(ValueError, match="must be a mapping"):
+        run.load_config(path)
 
 
 @pytest.mark.parametrize(
@@ -91,7 +125,7 @@ def test_shaping_axis_must_be_a_mapping(tmp_path):
     p.write_text(
         "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
         "model:\n  kind: quadratic\n  d: 8\n"
-        "axes:\n  population: [64]\n  sigma: [0.01]\n  shaping: ['none', 'centered_ranks']\n"
+        + axes(shaping="  shaping: ['none', 'centered_ranks']\n")
     )
     with pytest.raises(ValueError, match="must be a mapping"):
         run.load_config(p)
@@ -103,8 +137,7 @@ def test_shaping_axis_rejects_an_unknown_mode(tmp_path):
     p.write_text(
         "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
         "model:\n  kind: quadratic\n  d: 8\n"
-        "axes:\n  population: [64]\n  sigma: [0.01]\n"
-        "  shaping:\n    iid: ['centred']\n    mirrored: ['none']\n"
+        + axes(shaping="  shaping:\n    iid: ['centred']\n    mirrored: ['none']\n")
     )
     with pytest.raises(ValueError, match="not a shaping mode"):
         run.load_config(p)
@@ -182,18 +215,28 @@ def _write(tmp_path, body: str):
 BASE = ("seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
         "model:\n  kind: quadratic\n  d: 8\n")
 SHAPING = "  shaping:\n    iid: ['centered']\n    mirrored: ['none']\n"
-AXES = "axes:\n  population: [64]\n  sigma: [0.01]\n" + SHAPING
+def pop(full="[64]", low="[64]") -> str:
+    return f"  population:\n    full: {full}\n    low: {low}\n"
 
 
-def axes(population="[64]", sigma="[0.01]", shaping=SHAPING) -> str:
-    return f"axes:\n  population: {population}\n  sigma: {sigma}\n{shaping}"
+POPULATION = pop()
+
+
+def axes(population=POPULATION, sigma="[0.01]", shaping=SHAPING) -> str:
+    return f"axes:\n{population}  sigma: {sigma}\n{shaping}"
 
 
 def test_the_shipped_config_loads():
     """The one that actually runs. A typo here is a sweep that dies on line one."""
     cfg = run.load_config(DRIVER.parent / "config.yaml")
     assert cfg["replicates"] >= 30  # docs/01 C0.5
-    assert cfg["axes"]["population"] == sorted(cfg["axes"]["population"])
+    population = cfg["axes"]["population"]
+    assert set(population) == set(run.POPULATION_SIDES)
+    for side, values in population.items():
+        assert values == sorted(values), f"{side} is not ascending"
+    # docs/01 C0.5 and docs/04 C3.3: full rank stops earlier because full-rank
+    # orthogonal_hd cannot reach R=30 at the top of the axis on one GPU.
+    assert max(population["full"]) < max(population["low"])
 
     # `chunk` is load-bearing, not optional: full rank OOMs from N = 1024 without it on the
     # 3080 (docs/01 C0.2). A config that lost it would OOM through most of the grid, and the
@@ -331,18 +374,18 @@ def test_accepts_proper_scientific_notation(tmp_path):
 
 @pytest.mark.parametrize("bad", ["[0]", "[-5]", "[true]", "[3.5]"])
 def test_rejects_nonsense_populations(tmp_path, bad):
-    path = _write(tmp_path, BASE + axes(population=bad))
+    path = _write(tmp_path, BASE + axes(population=pop(full=bad)))
     with pytest.raises(ValueError, match="positive int"):
         run.load_config(path)
 
 
 @pytest.mark.parametrize("key", ["seed", "replicates", "wall_clock_cap_s", "axes", "model"])
 def test_rejects_missing_required_keys(tmp_path, key):
-    body = BASE + AXES
+    body = BASE + axes()
     if key == "axes":
         body = BASE
     elif key == "model":
-        body = "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n" + AXES
+        body = "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n" + axes()
     else:
         body = "\n".join(l for l in body.splitlines() if not l.startswith(key)) + "\n"
     with pytest.raises(ValueError, match="missing required key"):
@@ -444,7 +487,7 @@ def test_a_failing_config_does_not_kill_the_sweep(tmp_path, monkeypatch, capsys)
     cfg_path.write_text(
         "seed: 0\nreplicates: 2\nwall_clock_cap_s: 60\n"
         "model:\n  kind: quadratic\n  d: 8\n"
-        + axes(population="[64, 256]")
+        + axes(population=pop(full="[64, 256]", low="[64, 256]"))
     )
 
     rc = run.main(["--dry-run", "--config", str(cfg_path)])

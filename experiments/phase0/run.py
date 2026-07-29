@@ -35,7 +35,7 @@ import numpy as np
 import yaml
 
 from shardes import metrics, shaping
-from shardes.dimensions import sampling_dimension
+from shardes.dimensions import FULL, sampling_dimension
 from shardes.strategies.registry import STRATEGIES, check_entry
 
 HERE = Path(__file__).resolve().parent
@@ -45,6 +45,21 @@ RESULTS = HERE / "results"
 # composes Mirrored, which every coupled scheme does.
 SHAPING_SIDES = ("iid", "mirrored")
 SHAPING_NAMES = frozenset(shaping.BY_NAME)
+
+# Two axes are conditional, both for reasons in docs/01 C0.5 rather than for tidiness.
+POPULATION_SIDES = ("full", "low")
+
+
+def population_for(rank: int | str, axis: dict) -> list[int]:
+    """The populations that apply at `rank`.
+
+    Full rank stops earlier, and it is the figure that says so rather than the clock: the
+    full-rank panel exists to show curves not separating at N/d_eff << 1, and it never
+    reaches 1 at any N that fits on one GPU. The measured half of the argument is in
+    config.yaml and docs/04 C3.3: full-rank orthogonal_hd costs >400 s per replicate at
+    N = 2^18, so that cell cannot reach R = 30.
+    """
+    return axis["full" if rank == FULL else "low"]
 
 
 def shaping_for(scheme: str, axis: dict) -> list[str]:
@@ -114,9 +129,20 @@ def load_config(path: Path) -> dict:
         raise ValueError(f"{path}: model.kind is required")
 
     axes = cfg["axes"]
-    for name in ("population", "sigma"):
-        if not isinstance(axes.get(name), list) or not axes[name]:
-            raise ValueError(f"{path}: axes.{name} must be a non-empty list")
+    if not isinstance(axes.get("sigma"), list) or not axes["sigma"]:
+        raise ValueError(f"{path}: axes.sigma must be a non-empty list")
+
+    population = axes.get("population")
+    if not isinstance(population, dict) or set(population) != set(POPULATION_SIDES):
+        raise ValueError(
+            f"{path}: axes.population must be a mapping with keys "
+            f"{sorted(POPULATION_SIDES)}, got {population!r}. Full rank stops earlier than "
+            "low rank: it never reaches N/d_eff = 1, and full-rank orthogonal_hd cannot "
+            "reach R=30 at N=2^18 on one GPU. docs/01-phase0-estimator-harness.md C0.5."
+        )
+    for side, values in population.items():
+        if not isinstance(values, list) or not values:
+            raise ValueError(f"{path}: axes.population.{side} must be a non-empty list")
 
     shaping = axes.get("shaping")
     if not isinstance(shaping, dict) or set(shaping) != set(SHAPING_SIDES):
@@ -154,9 +180,12 @@ def load_config(path: Path) -> dict:
                 "cancellation. Every mirrored scheme in the registry would raise."
             )
 
-    for value in axes["population"]:
-        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-            raise ValueError(f"{path}: axes.population contains {value!r}, want a positive int")
+    for side, values in population.items():
+        for value in values:
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(
+                    f"{path}: axes.population.{side} contains {value!r}, want a positive int"
+                )
     for value in axes["sigma"]:
         try:
             sigma = float(value)
@@ -176,13 +205,16 @@ def expand(cfg: dict, registry: dict | None = None) -> list[Config]:
 
     Sorted by population so a truncated sweep still has complete small-N curves rather
     than a ragged edge across every N.
+
+    Two axes are selected by the entry rather than crossed with it: `population` by rank and
+    `shaping` by scheme. Both are non-rectangular for reasons in docs/01 C0.5.
     """
     axes = cfg["axes"]
     registry = STRATEGIES if registry is None else registry
     out = []
     for name, entry in sorted(registry.items()):
         check_entry(name, entry)
-        for population in sorted(axes["population"]):
+        for population in sorted(population_for(entry.rank, axes["population"])):
             for sigma in axes["sigma"]:
                 for mode in shaping_for(entry.scheme, axes["shaping"]):
                     out.append(

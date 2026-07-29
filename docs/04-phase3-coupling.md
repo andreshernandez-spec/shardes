@@ -180,6 +180,43 @@ the coupling is a pure function of `(stream, member_id)` and needs no devices to
 3. **A cost table**: wall-clock overhead of coupling per generation. If `orthogonal_hd`
    costs 3% and buys nothing, that's the finding.
 
+   **Measured in Phase 0, and the overhead is two numbers rather than one.** RTX 3080, one
+   replicate, `m = n = 512`, `chunk = 256`, seconds per replicate:
+
+   | strategy | 2¹⁰ | 2¹² | 2¹⁴ | 2¹⁶ | 2¹⁸ |
+   |---|---|---|---|---|---|
+   | `iid_gaussian` | 0.139 | 0.557 | 2.222 | 8.962 | 36.587 |
+   | `seed_regenerated` | 0.199 | 0.763 | 3.045 | 12.470 | 49.170 |
+   | `lowrank_r1` | 0.044 | 0.169 | 0.676 | 2.693 | 10.825 |
+   | `mirrored_hd_lr1` | 0.045 | 0.178 | 0.712 | 2.804 | 11.283 |
+   | `mirrored_sobol_lr1` | 0.044 | 0.170 | 0.695 | 2.754 | 10.791 |
+   | `mirrored_hd_full` | 1.216 | 4.867 | 19.489 | 77.929 | **>400** |
+
+   | | design dim | coupling overhead |
+   |---|---|---|
+   | rank 1, `orthogonal_hd` | 512 | **+4.2%** |
+   | rank 1, `sobol_scrambled` | 512 | **−0.3%** (within noise) |
+   | full rank, `orthogonal_hd` | 262,144 | **+770%** |
+
+   The `3%` guess above is almost exactly right for the panel Gate G0 is about and wildly
+   wrong for the other one. Coupling is free where it has leverage and ruinous where it does
+   not, which is a happier coincidence than it had any right to be.
+
+   `>400` is a probe timeout, so it is a lower bound. It is also why the full-rank population
+   axis stops at 2¹⁴: 30 replicates of that cell need >3.3 h, and the 900 s cap would have
+   recorded 2 replicates with an IQR. Reproduce with `experiments/phase0/`.
+
+   **The cost is my reference FWHT, not the construction.** `transforms/fwht.py` is an
+   18-stage butterfly that materializes a fresh array per stage, so it is memory-bound at
+   ~9.6 GB of traffic per leaf per chunk against a forward-pass GEMM that is compute-dense and
+   ~4× cheaper. Under full rank the design dimension is the whole `512×512` leaf, so every
+   member pays two length-2¹⁸ transforms per leaf and the coupling costs more than the model.
+   Under rank 1 it is `d = 512` and disappears into the noise.
+
+   This is the first concrete number behind the "a real FWHT for JAX is its own project"
+   claim below. It is a *reason* for that project, not a defect to fix mid-experiment:
+   optimizing it now would change what E1 measures.
+
 ---
 
 ## Adjacent things this opens, deliberately out of scope
