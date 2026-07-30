@@ -3,7 +3,7 @@
 
     python plot.py                      # figures/f5-estimator-quality.png
     python plot.py --sigma 0.01         # pick the sigma slice
-    python plot.py --shaping none
+    python plot.py --shaping centered_ranks   # the shaped comparison
 
 F5: log-log, x = N/d_eff, y = 1 - cos(g_hat, grad). Two panels, full rank and rank 1.
 One curve per scheme with an IQR band, and a vertical line at N/d_eff = 1.
@@ -47,6 +47,34 @@ def rank_key(rank) -> tuple:
 FULL_RANK = "full"
 
 
+# The shaping axis is conditional on the scheme (docs/01 C0.5), so **no single shaping mode
+# exists across all four schemes**: iid schemes carry {centered, centered_ranks} and mirrored
+# schemes carry {none, centered_ranks}. F5 wants one curve per scheme on one panel, so it has
+# to select by *role* rather than by literal mode.
+#
+# `baseline` is each scheme's unbiased, variance-reduced arm: `centered` on the iid side, and
+# `none` under mirroring, where the pair already cancels f_bar so `none` is centred by
+# construction and `centered` would over-correct. Same role, different name, which is exactly
+# what the conditional axis is saying.
+#
+# This is the headline slice because it is the one where g_hat is actually estimating grad f,
+# and so where coupling has any right to show an effect. `centered_ranks` exists on both sides
+# and is the supporting comparison: docs/00 obstacle 2 predicts rank shaping erodes QMC's
+# advantage, so leading with it would bias the figure toward a null.
+BASELINE = {"iid": "centered", "mirrored": "none"}
+
+
+def scheme_side(scheme: str) -> str:
+    """Mirror of run.py's `shaping_for` predicate. Duplicated rather than imported, because
+    importing the driver pulls in jax for a plotting script; a drift guard in
+    tests/test_phase0_driver.py asserts the two agree."""
+    return "mirrored" if "mirrored" in scheme else "iid"
+
+
+def wanted_shaping(scheme: str, shaping: str) -> str:
+    return BASELINE[scheme_side(scheme)] if shaping == "baseline" else shaping
+
+
 def load(sigma: float | None, shaping: str | None) -> list[dict]:
     records = []
     for path in sorted(RESULTS.glob("*.json")):
@@ -54,7 +82,7 @@ def load(sigma: float | None, shaping: str | None) -> list[dict]:
         cfg = rec["config"]
         if sigma is not None and abs(cfg["sigma"] - sigma) > 1e-12:
             continue
-        if shaping is not None and cfg["shaping"] != shaping:
+        if shaping is not None and cfg["shaping"] != wanted_shaping(cfg["scheme"], shaping):
             continue
         records.append(rec)
     return records
@@ -63,7 +91,17 @@ def load(sigma: float | None, shaping: str | None) -> list[dict]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sigma", type=float, default=0.01)
-    ap.add_argument("--shaping", default="none")
+    ap.add_argument("--shaping", default="baseline",
+                    help="a literal mode, or 'baseline' for each scheme's unbiased arm "
+                         "(centered on the iid side, none under mirroring). See BASELINE.")
+    # docs/01 C0.5 specifies y = 1 - cos, which is the right transform when cosine
+    # approaches 1: it turns "almost perfect" into a readable decade. Measured, cosine on
+    # the transformer block spans about 0.008 to 0.1, so 1 - cos lands in [0.9, 1.0] and a
+    # log axis spends its whole range on the third decimal. Plotting cosine directly gives
+    # more than a decade of legible range over the same data. Both are kept: switch back
+    # with --y one-minus-cos if a future model gets close enough to 1 for it to mean
+    # something.
+    ap.add_argument("--y", choices=("cos", "one-minus-cos"), default="cos")
     ap.add_argument("--out", type=Path, default=FIGURES / "f5-estimator-quality.png")
     args = ap.parse_args(argv)
 
@@ -106,12 +144,14 @@ def main(argv=None) -> int:
             colour, marker, label = SCHEME_STYLE.get(scheme, ("#000000", "x", scheme))
             points.sort()
             x = [ratio for ratio, *_ in points]
-            ax.plot(x, [1 - m for _, m, _, _ in points], marker=marker, color=colour,
+            f = (lambda v: 1 - v) if args.y == "one-minus-cos" else (lambda v: v)
+            ax.plot(x, [f(m) for _, m, _, _ in points], marker=marker, color=colour,
                     label=label, lw=1.6, ms=5)
             # Bands are IQR over replicates, not a standard error: R = 30 gives wide
             # bars at large N and hiding that would misrepresent the evidence.
-            ax.fill_between(x, [1 - q3 for *_, q3 in points],
-                            [1 - q1 for _, _, q1, _ in points], color=colour, alpha=0.15)
+            lo = [f(q) for *_, q in points]
+            hi = [f(q) for _, _, q, _ in points]
+            ax.fill_between(x, lo, hi, color=colour, alpha=0.15)
 
         ax.axvline(1.0, color="k", ls=":", lw=1)
         ax.set_xscale("log")
@@ -120,10 +160,14 @@ def main(argv=None) -> int:
         ax.set_title("full rank" if rank == FULL_RANK else f"rank {rank}")
         ax.grid(alpha=0.25, which="both")
 
-    axes[0].set_ylabel(r"$1 - \cos(\hat{g}, \nabla f)$")
+    axes[0].set_ylabel(r"$1 - \cos(\hat{g}, \nabla f)$" if args.y == "one-minus-cos"
+                       else r"$\cos(\hat{g}, \nabla f)$")
     axes[-1].legend(frameon=False, fontsize=9)
 
     caption = f"E1  sigma={args.sigma}  shaping={args.shaping}"
+    if args.shaping == "baseline":
+        modes = sorted({wanted_shaping(r["config"]["scheme"], "baseline") for r in records})
+        caption += f" ({'/'.join(modes)} per scheme)"
     if truncated:
         caption += f"  ({truncated} config(s) truncated by the wall-clock cap)"
     fig.suptitle(caption, fontsize=10)

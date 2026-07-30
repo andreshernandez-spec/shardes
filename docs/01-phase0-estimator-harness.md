@@ -374,9 +374,36 @@ Two properties that are easy to get wrong and worth their own tests:
 
 ## How to showcase it
 
-**One figure.** Log–log, x-axis `N/d_eff`, y-axis `1 − cos(ĝ, ∇f)`. Two panels: full-rank
+**One figure.** Log–log, x-axis `N/d_eff`, y-axis `cos(ĝ, ∇f)`. Two panels: full-rank
 and rank-1. Three curves in the full-rank panel, four in the rank-1 panel, one per scheme,
 IQR bands over replicates. A vertical line at `N/d_eff = 1`.
+
+**The y-axis was `1 − cos` and is now `cos`, because of what the measurement turned out to
+be.** `1 − cos` is the right transform when cosine approaches 1: it turns "almost perfect"
+into a readable decade. On this block cosine spans about **0.008 to 0.1**, so `1 − cos` lands
+in `[0.9, 1.0]` and a log axis spends its entire range on the third decimal. Plotting cosine
+directly gives over a decade of legible range on the same data. `plot.py --y one-minus-cos`
+still produces the original, for a model that ever gets close enough to 1 for it to mean
+something.
+
+**Measured, and worth stating because it validates the estimator independently of G0:** in
+the full-rank panel `cos ≈ √(N/d_eff)` to within the marker size — 0.1 at `N/d_eff = 10⁻²`,
+0.0063 at `4·10⁻⁵`, slope ½ on log–log. That is the textbook ES scaling, and getting it for
+free is a stronger check on the harness than any single unit test.
+
+**The two panels' x-axes are different quantities and the caption must say so** (see
+`src/shardes/dimensions.py`). Reading across them at equal `N` rather than equal `N/d_eff`:
+at `N = 16384` full rank reaches `cos ≈ 0.1` and rank 1 reaches `≈ 0.045`, so the factored
+perturbation costs roughly 2.2× in estimator quality per member. That is the EGGROLL
+tradeoff, priced.
+
+**F5 selects the shaping arm by role, not by name.** The conditional shaping axis leaves no
+single mode common to all four schemes, so `plot.py` defaults to `--shaping baseline`, which
+means `centered` on the iid side and `none` under mirroring: each scheme's unbiased,
+variance-reduced arm. That is the slice where `ĝ` is actually estimating `∇f`, and therefore
+the only one where coupling has any right to show an effect. `--shaping centered_ranks` is the
+supporting comparison, kept separate because `docs/00` obstacle 2 predicts rank shaping erodes
+QMC's advantage and leading with it would bias the figure toward a null.
 
 The claim the figure either supports or kills: *curves separate in the rank-1 panel to the
 right of the line, and do not separate in the full-rank panel to the left of it.*

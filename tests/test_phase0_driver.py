@@ -194,6 +194,41 @@ def test_write_atomic_overwrites_cleanly(tmp_path):
     assert json.loads(target.read_text()) == {"x": 2}
 
 
+def _load_plot():
+    spec = importlib.util.spec_from_file_location("phase0_plot", DRIVER.parent / "plot.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["phase0_plot"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize(
+    "scheme", ["iid", "mirrored", "mirrored+orthogonal_hd", "mirrored+sobol"]
+)
+def test_the_plotter_and_the_driver_agree_on_which_side_a_scheme_is_on(scheme):
+    """plot.py duplicates run.py's scheme predicate rather than importing it, to keep jax out
+    of a plotting script. Duplicated logic drifts, and the failure here would be silent: F5
+    would quietly select the wrong shaping arm for a scheme and the curves would not be
+    comparable.
+
+    The plotter has to select by *role*, because the conditional shaping axis leaves no single
+    mode common to all four schemes: iid carries {centered, centered_ranks} and mirrored
+    carries {none, centered_ranks}.
+    """
+    plot = _load_plot()
+    sides = {"iid": ["centered"], "mirrored": ["none"]}
+    assert plot.BASELINE[plot.scheme_side(scheme)] == run.shaping_for(scheme, sides)[0]
+
+
+def test_the_baseline_arm_exists_in_the_shipped_config():
+    """F5's headline slice must actually be in the sweep. If config.yaml ever drops `centered`
+    from the iid side or `none` from the mirrored side, the figure silently loses a panel."""
+    plot = _load_plot()
+    axis = run.load_config(DRIVER.parent / "config.yaml")["axes"]["shaping"]
+    for side, mode in plot.BASELINE.items():
+        assert mode in axis[side], f"F5 wants {mode!r} on the {side} side; config has {axis[side]}"
+
+
 def test_a_resumed_sweep_is_not_reported_as_dirty(tmp_path, monkeypatch):
     """The provenance flag must not be tripped by the sweep's own output.
 
