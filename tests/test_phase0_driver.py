@@ -8,6 +8,7 @@ The driver lives under experiments/, so it is loaded by path rather than importe
 
 import importlib.util
 import json
+import os
 import pathlib
 import sys
 
@@ -192,6 +193,34 @@ def test_write_atomic_overwrites_cleanly(tmp_path):
     run.write_atomic(target, {"x": 1})
     run.write_atomic(target, {"x": 2})
     assert json.loads(target.read_text()) == {"x": 2}
+
+
+def test_the_triton_workaround_is_applied():
+    """jaxlib 0.11.0 aborts in XLA's Triton GEMM fusion partway through this sweep.
+
+    An abort() in the compiler is not catchable from Python, so a sweep without the flag dies
+    outright rather than losing one config. It has to be set before `import jax`, which means
+    a shell wrapper is the wrong home for it: forgetting it costs hours, and the failure lands
+    a quarter of the way in rather than at startup.
+    """
+    assert run._TRITON_WORKAROUND in os.environ["XLA_FLAGS"]
+
+
+def test_the_workaround_does_not_clobber_existing_xla_flags(monkeypatch):
+    """XLA_FLAGS is a single space-separated string, so appending is the only safe edit.
+    Overwriting it would silently drop --xla_force_host_platform_device_count, which is how
+    the multi-device tests get their 8 devices."""
+    src = (DRIVER).read_text()
+    monkeypatch.setenv("XLA_FLAGS", "--xla_force_host_platform_device_count=8")
+    ns = {"os": os, "__name__": "not_main"}
+    # Anchored to the line start: the block carries a comment mentioning `import jax`, and
+    # splitting on the bare string cuts before the code under test and passes vacuously.
+    head = src.split("\nimport jax")[0]
+    assert run._TRITON_WORKAROUND in head, "split cut away the code under test"
+    exec(compile(head, str(DRIVER), "exec"), ns)  # noqa: S102
+    flags = os.environ["XLA_FLAGS"]
+    assert "--xla_force_host_platform_device_count=8" in flags
+    assert run._TRITON_WORKAROUND in flags
 
 
 def _load_plot():

@@ -29,6 +29,26 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+# Must precede `import jax`: XLA reads XLA_FLAGS once, when the backend initializes.
+#
+# jaxlib 0.11.0 hits a fatal CHECK in XLA's Triton GEMM fusion on this sweep:
+#
+#   F triton_tiling_propagation.cc:698]
+#   Check failed: src_fragment_it != src_fragments_order.end()
+#
+# It is an abort() inside the compiler, not a Python exception, so `run_one`'s try/except
+# cannot contain it: the whole process dies and the sweep stops. Deterministic, and it first
+# fires on mirrored_full at N=256, about a quarter of the way in.
+#
+# Disabling the fusion is measured to be numerically free and not free in time. Re-running
+# three completed cells with it off changed cosine_median by 3e-6 to 5e-5 relative, which is
+# f32 reassociation noise roughly 100x below the R=30 sampling IQR, and cost 1.14x to 1.51x
+# wall clock. Set here rather than in a shell wrapper so a future run cannot forget it and
+# crash at hour four; `capture_env` records the result either way.
+_TRITON_WORKAROUND = "--xla_gpu_enable_triton_gemm=false"
+if _TRITON_WORKAROUND not in os.environ.get("XLA_FLAGS", ""):
+    os.environ["XLA_FLAGS"] = f"{os.environ.get('XLA_FLAGS', '')} {_TRITON_WORKAROUND}".strip()
+
 import jax
 import jax.numpy as jnp
 import numpy as np
