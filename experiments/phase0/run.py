@@ -266,6 +266,13 @@ def _git(*args: str) -> str:
         return "unknown"
 
 
+# What this driver writes. Outputs are not provenance: a rerun that overwrites its own
+# results, env.json or figures has not changed the code that produced them, and treating it
+# as dirty makes every resumed sweep flag itself as unreproducible. Anything NOT in here
+# still counts, including untracked files.
+OUTPUTS = ("results", "env.json", "figures")
+
+
 def worktree_is_dirty() -> bool:
     """Tracked edits, or untracked files that are not this sweep's own output.
 
@@ -288,9 +295,10 @@ def worktree_is_dirty() -> bool:
     if not root or root == "unknown" or not Path(root).is_dir():
         return True
     try:
-        skip = f"{Path(RESULTS).relative_to(root)}/"
+        base = Path(HERE).relative_to(root)
+        skip = tuple(str(base / o) for o in OUTPUTS)
     except ValueError:
-        skip = None  # results live outside the repo; then nothing is exempt
+        skip = None  # outputs live outside the repo; then nothing is exempt
 
     # --untracked-files=all, because the default collapses a wholly-untracked directory to
     # its shortest prefix: a tree whose only untracked content is results/ reports
@@ -307,7 +315,7 @@ def worktree_is_dirty() -> bool:
     # under src/, which is the opposite of the point.
     def counts(line: str) -> bool:
         path = line[3:].strip().strip('"')
-        return skip is None or not path.startswith(skip)
+        return skip is None or not path.startswith(skip)  # tuple prefix: str.startswith
 
     return any(counts(line) for line in status.splitlines())
 
