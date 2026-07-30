@@ -223,6 +223,83 @@ def test_the_workaround_does_not_clobber_existing_xla_flags(monkeypatch):
     assert run._TRITON_WORKAROUND in flags
 
 
+def _load_report():
+    spec = importlib.util.spec_from_file_location("phase0_report", DRIVER.parent / "report.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["phase0_report"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _cell(**kw):
+    d = {"config": {"strategy": "s", "rank": "full", "scheme": "iid", "population": 64,
+                    "sigma": 0.01, "shaping": "centered", "replicates": 30, "seed": 0},
+         "cosine_median": 0.1, "cosine_q1": 0.09, "cosine_q3": 0.11,
+         "relative_mse_median": 1.0, "relative_mse_q1": 0.9, "relative_mse_q3": 1.1,
+         "relative_bias": 0.5, "wall_clock_s": 3.0, "replicates_completed": 30,
+         "truncated": False, "SYNTHETIC": False, "d_eff": 64,
+         "env": {"commit": "a"*40, "dirty_worktree": False, "device_kind": "gpu",
+                 "device_count": 1, "jax": "0.11.0", "jaxlib": "0.11.0", "numpy": "2",
+                 "scipy": "1", "python": "3.13", "platform": "linux", "xla_flags": "",
+                 "jax_platforms": "", "dry_run": False}}
+    d.update(kw)
+    return d
+
+
+def test_report_flags_a_mixed_environment(tmp_path, monkeypatch):
+    """The whole reason the sweep was restarted twice. If cells ever span two commits or two
+    XLA_FLAGS, the writeup has to say so on its face rather than in a per-cell field nobody
+    opens."""
+    rep = _load_report()
+    monkeypatch.setattr(rep, "RESULTS", tmp_path / "results")
+    monkeypatch.setattr(rep, "README", tmp_path / "README.md")
+    rep.RESULTS.mkdir()
+
+    a, b = _cell(), _cell()
+    b["env"] = {**b["env"], "xla_flags": "--xla_gpu_enable_triton_gemm=false"}
+    for i, c in enumerate((a, b)):
+        (rep.RESULTS / f"{i}.json").write_text(json.dumps(c))
+
+    assert rep.main([]) == 0
+    text = rep.README.read_text()
+    assert "MIXED" in text and "more than one environment" in text
+
+    (rep.RESULTS / "1.json").write_text(json.dumps(_cell()))
+    rep.main([])
+    assert "MIXED" not in rep.README.read_text()
+
+
+def test_report_flags_synthetic_and_truncated_cells(tmp_path, monkeypatch):
+    """A dry-run cell must never be mistaken for a measurement, and a cell the wall-clock cap
+    cut short must not be read as R=30."""
+    rep = _load_report()
+    monkeypatch.setattr(rep, "RESULTS", tmp_path / "results")
+    monkeypatch.setattr(rep, "README", tmp_path / "README.md")
+    rep.RESULTS.mkdir()
+    (rep.RESULTS / "a.json").write_text(json.dumps(
+        _cell(SYNTHETIC=True, truncated=True, replicates_completed=2)))
+
+    rep.main([])
+    text = rep.README.read_text()
+    assert "SYNTHETIC" in text
+    assert "{2: 1}" in text          # replicates histogram exposes the short cell
+    assert "| truncated by the wall-clock cap | 1 |" in text
+
+
+def test_report_check_detects_a_stale_readme(tmp_path, monkeypatch):
+    rep = _load_report()
+    monkeypatch.setattr(rep, "RESULTS", tmp_path / "results")
+    monkeypatch.setattr(rep, "README", tmp_path / "README.md")
+    rep.RESULTS.mkdir()
+    (rep.RESULTS / "a.json").write_text(json.dumps(_cell()))
+
+    assert rep.main(["--check"]) == 1      # no README yet
+    rep.main([])
+    assert rep.main(["--check"]) == 0      # freshly written
+    rep.README.write_text("hand-edited\n")
+    assert rep.main(["--check"]) == 1
+
+
 def _load_plot():
     spec = importlib.util.spec_from_file_location("phase0_plot", DRIVER.parent / "plot.py")
     mod = importlib.util.module_from_spec(spec)
