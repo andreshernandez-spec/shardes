@@ -246,11 +246,57 @@ def _git(*args: str) -> str:
         return "unknown"
 
 
+def worktree_is_dirty() -> bool:
+    """Tracked edits, or untracked files that are not this sweep's own output.
+
+    `git status --porcelain` on its own counts the results directory, and `capture_env` runs
+    once at startup, so a *resumed* sweep would see the previous session's untracked results
+    and stamp `dirty_worktree: True` on everything it went on to write. The first 70 cells of
+    the real E1 run recorded False and the resume recorded True from identical tracked code,
+    which is how this was found.
+
+    Results are outputs, not provenance. Everything else still counts, including untracked
+    files: a new module that a strategy imports is exactly the kind of thing that makes a
+    number unreproducible, and it would not show up in `git diff`.
+
+    Fails safe: if git cannot answer, report dirty. An unknown provenance is not a clean one.
+    """
+    # `_git` swallows a failure and returns "" for it, which is also what a clean tree looks
+    # like, so the repo probe has to be `rev-parse` rather than `status`. No repo means no
+    # provenance.
+    root = _git("rev-parse", "--show-toplevel")
+    if not root or root == "unknown" or not Path(root).is_dir():
+        return True
+    try:
+        skip = f"{Path(RESULTS).relative_to(root)}/"
+    except ValueError:
+        skip = None  # results live outside the repo; then nothing is exempt
+
+    # --untracked-files=all, because the default collapses a wholly-untracked directory to
+    # its shortest prefix: a tree whose only untracked content is results/ reports
+    # `?? experiments/`, which no results-prefix filter can match. Treating that prefix as
+    # clean would also hide a genuine untracked `experiments/phase0/new_script.py`. Listing
+    # every file makes the filter exact, and makes the answer independent of the user's
+    # status.showUntrackedFiles setting.
+    status = _git("status", "--porcelain", "--untracked-files=all")
+    if status == "unknown":
+        return True
+
+    # Filtered here rather than with a pathspec: `_git` runs with cwd=HERE, so a `-- .`
+    # pathspec would have scoped the check to experiments/phase0 and stopped noticing edits
+    # under src/, which is the opposite of the point.
+    def counts(line: str) -> bool:
+        path = line[3:].strip().strip('"')
+        return skip is None or not path.startswith(skip)
+
+    return any(counts(line) for line in status.splitlines())
+
+
 def capture_env() -> dict:
     """Written by the driver, never by hand. Reconstructing it afterwards is never
     accurate, and for a paper it has to be exact (docs/06)."""
     devices = jax.devices()
-    dirty = bool(_git("status", "--porcelain"))
+    dirty = worktree_is_dirty()
     return {
         "commit": _git("rev-parse", "HEAD"),
         # A number from a dirty tree is not reproducible. Record it rather than trust

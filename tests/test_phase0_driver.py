@@ -194,6 +194,55 @@ def test_write_atomic_overwrites_cleanly(tmp_path):
     assert json.loads(target.read_text()) == {"x": 2}
 
 
+def test_a_resumed_sweep_is_not_reported_as_dirty(tmp_path, monkeypatch):
+    """The provenance flag must not be tripped by the sweep's own output.
+
+    `capture_env` runs once at startup and asked `git status --porcelain`, which counts
+    untracked files. The first session's results are untracked when the second starts, so
+    every resumed cell recorded `dirty_worktree: True` while the cells from session one
+    recorded False, from identical tracked code. Found on the real E1 run after a reboot,
+    which is the first time resume ran against results that already existed.
+
+    A results directory full of files must read clean; anything else must not.
+    """
+    repo = tmp_path / "repo"
+    (repo / "experiments" / "phase0" / "results").mkdir(parents=True)
+    import subprocess as sp  # noqa: PLC0415
+
+    def git(*a):
+        sp.run(["git", *a], cwd=repo, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (repo / "src.py").write_text("x = 1\n")
+    git("add", "-A")
+    git("commit", "-qm", "base")
+
+    monkeypatch.setattr(run, "HERE", repo / "experiments" / "phase0")
+    monkeypatch.setattr(run, "RESULTS", repo / "experiments" / "phase0" / "results")
+    assert run.worktree_is_dirty() is False
+
+    for i in range(3):  # a resumed sweep's own output
+        (run.RESULTS / f"r{i}.json").write_text("{}")
+    assert run.worktree_is_dirty() is False, "the sweep's own results flagged it as dirty"
+
+    (repo / "src.py").write_text("x = 2\n")  # a real tracked edit
+    assert run.worktree_is_dirty() is True
+
+    git("checkout", "--", "src.py")
+    (repo / "new_module.py").write_text("y = 1\n")  # untracked, outside results, still counts
+    assert run.worktree_is_dirty() is True
+
+
+def test_dirty_check_fails_safe_outside_a_repo(tmp_path, monkeypatch):
+    """No git answer means unknown provenance, and unknown is not clean."""
+    monkeypatch.setattr(run, "HERE", tmp_path)
+    monkeypatch.setattr(run, "RESULTS", tmp_path / "results")
+    monkeypatch.setattr(run, "_git", lambda *a: "unknown")
+    assert run.worktree_is_dirty() is True
+
+
 def test_resume_skips_existing_results(tmp_path, monkeypatch):
     """The property the whole driver exists for."""
     monkeypatch.setattr(run, "RESULTS", tmp_path)
