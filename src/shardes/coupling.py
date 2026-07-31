@@ -280,13 +280,24 @@ class ScrambledSobol:
             if self.scramble
             else jnp.zeros((d,), jnp.uint32)
         )
+        x = sobol_point(self.directions(k_block, d), member_id, shift)
+        u = (x >> (_SOBOL_BITS - _UNIFORM_BITS)).astype(jnp.float32)
+        return jax.scipy.special.ndtri((u + 0.5) * 2.0**-_UNIFORM_BITS).astype(dtype)
+
+    def directions(self, k_block: Key, d: int) -> Array:
+        """This stream's (bits, d) direction numbers.
+
+        Public so a test can exercise the block choice through the real code rather than
+        restating it. That is not a stylistic preference: the first version of
+        `test_sobol_streams_get_different_direction_numbers` reimplemented this selection
+        inline, so it compared its own copy against itself and a mutation that made every
+        stream draw block 0 survived unnoticed. `experiments/mutation.py` found it.
+        """
         v = jnp.asarray(_direction_numbers(self._span(d)))
         if self.scramble and self.blocks > 1:
             b = jax.random.randint(k_block, (), 0, self._blocks(d))
             v = jax.lax.dynamic_slice_in_dim(v, b * d, d, axis=1)
-        x = sobol_point(v, member_id, shift)
-        u = (x >> (_SOBOL_BITS - _UNIFORM_BITS)).astype(jnp.float32)
-        return jax.scipy.special.ndtri((u + 0.5) * 2.0**-_UNIFORM_BITS).astype(dtype)
+        return v
 
     def _blocks(self, d: int) -> int:
         """How many disjoint d-dimension blocks the Joe-Kuo table affords."""

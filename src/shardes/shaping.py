@@ -105,10 +105,16 @@ def group_relative(fitness: Array) -> Array:
     standard deviation, which is arithmetic without meaning. Read this as a different update
     direction, not as a noisier `centered`.
 
-    Known sharp edge, inherited from GRPO rather than introduced here: normalizing by the
-    per-group standard deviation upweights low-variance groups, because a group where the
-    population barely differs gets its small differences divided by a small number. The
-    fix in the literature is to drop the `sd` divisor and keep only the centering. That is
+    Known sharp edge, inherited from GRPO rather than introduced here, and worth stating
+    precisely because the loose version is misleading. Standardising is **scale-invariant**,
+    so the weights within a group are bounded by `sqrt(n-1)` however small the spread —
+    measured at ~1.5 for spreads from 1e-2 down to 1e-7 at n=8, and nothing blows up. What it
+    does is give a group where the population barely differs the *same say* as one where it
+    differs a lot, so a task carrying almost no signal is weighted like a task carrying a
+    great deal. That is a statement about weighting **between** groups, not about magnitudes
+    within one.
+
+    The fix in the literature is to drop the `sd` divisor and keep only the centering. That is
     one line away and deliberately not the default, because the default should be the thing
     the papers ran.
     """

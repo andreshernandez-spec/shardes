@@ -104,6 +104,24 @@ and say so.
   caching the D=1 reference that every invariance comparison shares. Two that did not and
   should not be retried: shrinking `n`, and dropping strategies from a parametrization.
 
+  **Mutation testing is how a test earns its place.** `experiments/mutation.py` breaks the
+  library on purpose and checks something notices. A **survivor** names a real gap; run it
+  after adding tests for a new invariant, not on a schedule.
+
+  Read "caught" as carefully as "survived". Two mutations reported caught by a `TypeError`
+  and a `NameError` — both were *malformed*, leaving inconsistent shapes or naming an
+  unimported symbol. A mutation that crashes proves the harness ran, not that the suite
+  defends anything, and one of the two was hiding a genuine gap underneath.
+
+  The gap it found is the one worth generalising: a test that **reimplements the logic it is
+  testing** compares its own copy against itself and cannot fail.
+  `test_sobol_streams_get_different_direction_numbers` restated the Sobol block arithmetic
+  inline, so a mutation making every stream draw block 0 — the exact defect B1 had just fixed
+  — survived. The fix was to make the code testable (`ScrambledSobol.directions` is public)
+  rather than to keep the duplicate in sync.
+
+  Record equivalent mutants in the harness rather than deleting them, so nobody retries one.
+
   Cut tests when they are redundant, not when the clock is inconvenient. Move a test to the
   slow tier when it is *behavioural* rather than structural — `test_tell_descends_on_the
   _objective` runs five generations to check a sign convention, and that is exactly the shape

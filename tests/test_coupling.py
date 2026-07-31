@@ -481,12 +481,15 @@ def test_sobol_streams_get_different_direction_numbers():
     d, ids = 32, jnp.arange(8)
 
     def geometry(coupling, stream):
-        """x_i XOR x_j for the first two members, which the shift cannot change."""
+        """Pairwise XOR against member 0, which the shift cannot change.
+
+        Goes through `coupling.directions`, the real selection. An earlier version restated
+        the block arithmetic here and therefore compared its own copy against itself: a
+        mutation making every stream draw block 0 survived, because the test never touched
+        the mutated line. Found by experiments/mutation.py.
+        """
         k_shift, k_block = jax.random.split(stream)
-        v = jnp.asarray(_direction_numbers(coupling._span(d)))
-        if coupling.blocks > 1:
-            b = jax.random.randint(k_block, (), 0, coupling._blocks(d))
-            v = jax.lax.dynamic_slice_in_dim(v, b * d, d, axis=1)
+        v = coupling.directions(k_block, d)
         shift = jax.random.bits(k_shift, (d,), jnp.uint32) >> (32 - _SOBOL_BITS)
         pts = jnp.stack([sobol_point(v, i, shift) for i in ids])
         # Every member against member 0, not just members 0 and 1. Members 0 and 1 differ by
