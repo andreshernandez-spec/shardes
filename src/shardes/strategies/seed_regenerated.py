@@ -95,6 +95,13 @@ class SeedRegenerated:
             eps = member_noise(pert.base_key, pert.like, i, self.coupling)
             return jax.tree.map(lambda a, e: a + wi * e.astype(jnp.float32), acc, eps), None
 
-        init = jax.tree.map(lambda x: jnp.zeros(x.shape, jnp.float32), pert.like)
+        # zeros_like, not zeros(x.shape): the accumulator has to inherit whatever type
+        # metadata the leaf carries, and a static shape discards it. Under shard_map the
+        # scan body produces values varying across the manual axis, so an accumulator built
+        # from a bare shape starts invariant and `lax.scan` rejects the carry as changing
+        # type mid-loop. Outside shard_map the two are identical, which is why this reads
+        # like a style preference and is not one. contraction.contract_sharded is the other
+        # half; neither works alone.
+        init = jax.tree.map(lambda x: jnp.zeros_like(x, dtype=jnp.float32), pert.like)
         acc, _ = jax.lax.scan(step, init, (pert.member_ids, w))
         return acc

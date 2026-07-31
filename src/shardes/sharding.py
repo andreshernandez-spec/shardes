@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
-from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+from jax.sharding import AxisType, Mesh, NamedSharding, PartitionSpec as P
 
 from shardes.types import Array, PyTree
 
@@ -55,7 +55,35 @@ def make_mesh(n_devices: int | None = None) -> Mesh:
         n_devices = len(devices)
     if not 1 <= n_devices <= len(devices):
         raise ValueError(f"asked for {n_devices} devices, {len(devices)} visible")
-    return jax.make_mesh((n_devices,), (POP,), devices=devices[:n_devices])
+    # AxisType.Auto, not jax.make_mesh's Explicit default. This is a load-bearing choice,
+    # not a stylistic one: see AXIS_TYPE_NOTE below.
+    return jax.make_mesh((n_devices,), (POP,), axis_types=(AxisType.Auto,),
+                         devices=devices[:n_devices])
+
+
+AXIS_TYPE_NOTE = """Why the mesh is Auto rather than Explicit.
+
+JAX 0.11's `jax.make_mesh` defaults to `AxisType.Explicit`, which carries sharding in the
+type system and refuses operations whose output sharding is ambiguous. Under Explicit:
+
+  - `with_sharding_constraint(x, replicated(mesh))` is silently *ignored*: the result still
+    reports P("pop"). Measured, not assumed.
+  - `contract`'s `einsum("n,n...->...")` then raises ShardingTypeError, because both
+    operands are sharded along the contracted axis and JAX will not guess where the output
+    goes. Fixing that means passing `out_sharding=` at the einsum.
+
+That last point is the whole argument. The einsum lives inside `IIDGaussian.contract`, so
+Explicit mode would push a mesh-aware annotation down into every strategy. The strategies
+were written in Phase 0 knowing nothing about devices, and the protocol
+(`sample`/`apply`/`contract`) is deliberately silent about them: that is what let coupling
+become a constructor argument and what keeps a user-defined strategy first-class. Trading
+that for compile-time sharding checks is a bad trade.
+
+Auto uses classic GSPMD propagation, `with_sharding_constraint` behaves as written, and the
+strategies stay sharding-agnostic. `shard_map` runs its body under `AxisType.Manual`
+regardless, so Strategy B is unaffected either way.
+
+Revisit if the strategy protocol ever grows a sharding-aware seam for another reason."""
 
 
 def n_devices(mesh: Mesh) -> int:
