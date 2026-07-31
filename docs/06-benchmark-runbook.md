@@ -90,6 +90,59 @@ only because **no timing claim comes from E1**; wall-clock per estimate is conte
 result. And it's a single device, so nothing about sharding is testable on it. Sharding
 stays on T0.
 
+### T2′ for Gate G1 criterion 2 — the two-GPU invariance check
+
+**Status 2026-07-31: half done.** The portability half passes on the local 3080; the sharding
+half needs two devices and is the only thing still open in G1.
+
+The check splits into two claims that want different hardware and different tolerances, and
+`tests/gpu/test_device_invariance_gpu.py` keeps them apart:
+
+| claim | needs | tolerance | status |
+|---|---|---|---|
+| one real GPU reproduces the CPU-8 simulated reference | 1 GPU | `1e-4`, loose: different kernels, different reduction trees | **passing** on the RTX 3080, 3 strategies × A and B |
+| 2 GPUs give the same update as 1 | **2 GPUs** | `1e-5`, tight: only summation order changes | skipped, needs T2′ |
+| A and B agree over a real interconnect | **2 GPUs** | `1e-5` | skipped, needs T2′ |
+
+The second and third are the ones simulated devices *cannot* answer:
+`--xla_force_host_platform_device_count` gives eight devices that share one memory space and
+never actually communicate, so a collective that is wrong over a real interconnect still
+passes there. That is the whole reason docs/02 asks for this before Phase 2.
+
+**Set `jax_default_matmul_precision="highest"`.** The test fixture does it, but know why: an
+Ampere GPU defaults to TF32 for matmuls, which is ~1e-3 relative and reads exactly like a
+device-invariance failure. Also pass `XLA_FLAGS=--xla_gpu_deterministic_ops=true`.
+
+**Getting the code onto Kaggle, given there is no git remote.** The repo is local-only and
+`CLAUDE.md` forbids pushing, so the `pip install git+…@SHA` path in Cell 1 below does not
+exist yet. Two options that need no push:
+
+1. **Kaggle Dataset (recommended).** `git archive --format=zip HEAD -o shardes.zip`, upload as
+   a private dataset, then `pip install /kaggle/input/<name>/shardes.zip`. The commit SHA goes
+   in the dataset description so the result stays attributable, which is the property the
+   pip-from-SHA path was there to provide.
+2. Publish the repo. That needs an explicit decision and the right account
+   (`CLAUDE.md` §1), and it is not required for this check.
+
+```python
+# Kaggle notebook, accelerator = GPU T4 x2
+!pip install -q /kaggle/input/shardes/shardes.zip
+!cd /kaggle/working && git clone --depth 1 file:///kaggle/input/shardes 2>/dev/null || true
+import os
+os.environ["JAX_PLATFORMS"] = "cuda"
+os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
+!python -m pytest tests/gpu -m gpu -q -s        # expects 16 passed on 2 GPUs
+```
+
+`experiments/phase1/reference.json` is committed and travels with the checkout, so the CPU-8
+reference does not have to be regenerated on Kaggle — and must not be: the point is to carry
+the *simulated* result to hardware that does not share its assumptions.
+
+Record the output of `test_report_the_environment` with the result. A green tick that names no
+hardware is not evidence.
+
+---
+
 **T2′, the fallback:** Kaggle GPU, P100 (16 GB) or 2× T4, ~30 GPU-hours/week, if the
 laptop is needed for something else or a config needs more memory headroom. T4s are
 Turing: no useful bf16 tensor cores, no Hopper features. **They never appear in a
