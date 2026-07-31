@@ -120,6 +120,46 @@ transformer block, which is ours, and revisit in Phase 1. If the jaxpr route pro
 tractable there it generalizes later; if it does not, that was learned on a model we
 control rather than on someone's checkpoint. G0 needs statistics, not generality.
 
+---
+
+**Revisited in Phase 1, 2026-07-31.** The constraint held up; what did not was everything
+around it. Measuring the failure modes first turned up three problems of very different
+severity, and the worst had nothing to do with generality.
+
+**A silent-wrong path, which mattered more than the constraint.** `LowRankWeight` was a
+`NamedTuple`, so it inherited tuple semantics: `table[0]` returned the base matrix `w` rather
+than row 0, `len(table)` was the field count, and iterating yielded fields. No error, wrong
+answer. It is now a registered dataclass — not a sequence — so all three are refused. Same
+four pytree leaves, same behaviour under jit/vmap/shard_map.
+
+**Unreadable errors.** All six ways of misusing a weight leaked the NamedTuple: `jnp.einsum`
+gave *"setting an array element with a sequence… inhomogeneous"*. The dunders now raise a
+message naming `dense` or `embed`.
+
+**The failure arrived too late.** `shardes.check.check_model(model, params, batch)` reports
+every leaf the model does not reach through a seam, in a second, on CPU, before a sweep is
+booked. It reports *unread* leaves too — a parameter no forward pass touches is still
+perturbed and still contracted, so it spends population variance on something that cannot
+affect fitness, which is a quieter bug than an unrouted matmul.
+
+**A jaxpr rewriter is still deferred, and now has a trigger rather than a date**: a real user
+with a real Flax model. Two alternatives were considered and rejected on evidence rather than
+taste, and are recorded so they are not revisited casually:
+
+- *Operator overloading* (`__matmul__`, `.T`, a working `__getitem__`) so natural code works.
+  Checked against the three real violations committed while writing Phase 1 — `jnp.einsum`,
+  elementwise arithmetic, and `x @ W.T` — and it would have caught **none** of them: einsum
+  does not route through `__matmul__`. It adds API surface and a second way to do everything
+  while covering the cases that do not occur.
+- *A `__jax_array__` fallback* that materializes when interception fails. This converts a loud
+  error into a silent `(n, V, d)` allocation. For a library whose claim is not materializing,
+  that is the one failure mode worse than an error.
+
+**The constraint is real and it bites.** It was violated three separate times in one session,
+each time by writing the obvious thing. It fails loudly every time, which is why it is a cost
+rather than a defect — but it is the first thing a porting user meets, and `check_model` exists
+because "safe" and "discoverable" are different properties.
+
 Implementations:
 
 | Name | Rank | Materializes? | Corresponds to |

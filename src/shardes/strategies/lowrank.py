@@ -24,10 +24,12 @@ jaxpr test.
 """
 
 import math
+from dataclasses import dataclass
 from typing import Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
+from jax.tree_util import register_dataclass
 
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import leaf_streams
@@ -35,16 +37,76 @@ from shardes.strategies._scale import per_leaf
 from shardes.types import Array, Key, PyTree
 
 
-class LowRankWeight(NamedTuple):
+def _not_an_array(op: str, seam: str):
+    raise TypeError(
+        f"LowRankWeight does not support {op}. It is a structured weight standing in for "
+        f"`W + scale * A B^T`, and the whole point is that the sum is never formed, so it "
+        f"cannot be used as an array. Route this leaf through `shardes.nn.{seam}` instead. "
+        "docs/01-phase0-estimator-harness.md C0.1."
+    )
+
+
+@register_dataclass
+@dataclass(frozen=True)
+class LowRankWeight:
     """W + scale * A B^T, applied without ever forming the sum.
 
-    Satisfies `shardes.nn.StructuredWeight` structurally, so `dense` dispatches to it.
+    Satisfies `shardes.nn.StructuredWeight` and `GatherableWeight` structurally, so `dense`
+    and `embed` dispatch to it.
+
+    **A registered dataclass rather than a NamedTuple, and that is a correctness fix.** As a
+    NamedTuple it inherited tuple semantics, so a model that wrote the natural thing got a
+    wrong answer *silently* rather than an error:
+
+        table[0]         -> the base matrix `w`, not row 0
+        len(table)       -> 4, the field count, not the vocabulary size
+        for row in table -> iterates the four fields
+
+    None of those raised. A dataclass is not a sequence, so all three are now loud, and the
+    dunders below turn the remaining array-shaped mistakes into a message that names the seam
+    to use. Being a pytree is unaffected: four leaves either way, and it travels through jit,
+    vmap and shard_map the same.
     """
 
     w: Array  # (m, k) base, unbatched under vmap so its GEMM is shared
     a: Array  # (m, r)
     b: Array  # (k, r)
     scale: Array  # sigma / sqrt(r)
+
+    #: Metadata is safe to expose and useful for a caller's own shape assertions. Data is not.
+    @property
+    def shape(self):
+        return self.w.shape
+
+    @property
+    def dtype(self):
+        return self.w.dtype
+
+    @property
+    def T(self):
+        _not_an_array("transposition", "dense")
+
+    def __getitem__(self, _i):
+        _not_an_array("indexing", "embed")
+
+    def __iter__(self):
+        _not_an_array("iteration", "embed")
+
+    def __len__(self):
+        _not_an_array("len()", "embed")
+
+    def __array__(self, *_a, **_k):
+        _not_an_array("conversion to a numpy array", "dense")
+
+    def __mul__(self, _o):
+        _not_an_array("elementwise arithmetic", "dense")
+
+    __rmul__ = __add__ = __radd__ = __sub__ = __rsub__ = __mul__
+
+    def __matmul__(self, _o):
+        _not_an_array("`@`", "dense")
+
+    __rmatmul__ = __matmul__
 
     def apply_to(self, x: Array) -> Array:
         return x @ self.w.T + ((x @ self.b) @ self.a.T) * self.scale

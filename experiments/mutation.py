@@ -159,6 +159,15 @@ MUTATIONS = [
         "tests/test_nn.py tests/test_lowrank.py",
         "structured weights stop dispatching: LowRank silently wrong or raising",
     ),
+    # --- the structured weight is not a sequence -----------------------------------------
+    Mutation(
+        "lowrank/weight-indexable-again", "strategies/lowrank.py",
+        "    def __getitem__(self, _i):\n        _not_an_array(\"indexing\", \"embed\")",
+        "    def __getitem__(self, i):\n        return self.w[i]",
+        "tests/test_lowrank.py tests/test_nn.py",
+        "indexing a structured weight silently returns the base matrix again -- the "
+        "NamedTuple bug, which was silent-wrong rather than loud",
+    ),
     # --- the diagonal ------------------------------------------------------------------
     # Broadcasts leaf 0 everywhere: a scalar sigma is unaffected, a diagonal collapses. The
     # earlier version referenced `jnp`, which _scale.py does not import, and was "caught" by a

@@ -199,3 +199,36 @@ def test_low_rank_weight_is_a_structured_weight():
 def test_rejects_a_nonsense_rank(bad):
     with pytest.raises(ValueError, match="rank must be at least 1"):
         LowRank(r=bad)
+
+
+def test_a_structured_weight_is_not_a_sequence():
+    """Regression: `LowRankWeight` was a NamedTuple and inherited tuple semantics, so a model
+    writing the natural thing got a **wrong answer silently** rather than an error.
+
+        table[0]          returned the base matrix `w`, not row 0
+        len(table)        returned 4, the field count, not the vocabulary size
+        for row in table  iterated the four fields
+
+    None of those raised. That is the one failure mode worse than the seam constraint itself,
+    because the seam constraint is at least loud. A registered dataclass is not a sequence, so
+    all three are refused, and the message names `dense` or `embed`.
+
+    Being a pytree is unaffected, which is the property that made NamedTuple attractive: four
+    leaves either way. `test_low_rank_weight_is_a_structured_weight` pins that.
+    """
+    w = LowRankWeight(jnp.arange(24, dtype=jnp.float32).reshape(6, 4),
+                      jnp.ones((6, 1), jnp.float32), jnp.ones((4, 1), jnp.float32),
+                      jnp.float32(0.1))
+    assert not isinstance(w, tuple)
+    for label, call in (
+        ("indexing", lambda: w[0]),
+        ("len", lambda: len(w)),
+        ("iteration", lambda: list(w)),
+        ("transposition", lambda: w.T),
+        ("elementwise", lambda: w * 2.0),
+        ("matmul", lambda: w @ jnp.ones((4, 2))),
+    ):
+        with pytest.raises(TypeError, match="shardes.nn"):
+            call()
+    # metadata stays available: a caller's own shape assertions should not have to change
+    assert w.shape == (6, 4) and w.dtype == jnp.float32
