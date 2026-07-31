@@ -130,7 +130,7 @@ class ShardedES:
     def init(self, key: Key, params: PyTree) -> State:
         """Params replicated, everything else scalar. No solution is ever flattened."""
         return State(
-            params=jax.device_put(params, sharding.replicated(self.mesh)),
+            params=params,
             sigma=jax.tree.map(jnp.float32, self.sigma),
             key=key,
             generation=jnp.int32(0),
@@ -159,6 +159,17 @@ class ShardedES:
         The strategy owns this because the perturbation scheme determines how the forward
         pass is structured: full rank materializes per member, low rank rewrites the matmul
         and never does.
+
+        **`x` is replicated to match `params`, and that is a correctness fix rather than a
+        convenience.** Every member of a generation must be evaluated on the *same* data —
+        common random numbers — or the fitness differences report which member drew an easy
+        batch rather than which perturbation was good. Sharding `x` across members would
+        break that comparison silently.
+
+        It is also a real footgun without this line. `init` commits `params` to the mesh,
+        while a freshly built batch is committed to device 0, and any `lax.scan` inside the
+        model that carries both raises "Received incompatible devices" from deep inside the
+        user's rollout. The MuJoCo adapter hit exactly that.
         """
         return self.strategy.apply(model, state.params, pert, state.sigma)
 
@@ -178,6 +189,19 @@ class ShardedES:
         weights = self.shaping(
             jax.lax.with_sharding_constraint(fitness, sharding.replicated(self.mesh))
         )
+        # The shaping contract is "leading axis is members, returns (n,)", and nothing
+        # enforced it until this check. A 1-D shaping handed an (n, episodes) fitness does
+        # not raise: `centered_ranks` ranks along the last axis and hands back (n, episodes),
+        # which then fails inside `contract`'s einsum with a message about subscript 'n' that
+        # says nothing about episodes or shaping. Caught here, where the fix is obvious:
+        # reduce the episode axis yourself, or use a shaping that consumes it
+        # (`group_relative`).
+        if weights.shape != (self.n,):
+            raise ValueError(
+                f"shaping returned {weights.shape}, expected {(self.n,)}. A fitness with "
+                "more than one axis needs a shaping that reduces the extra axes "
+                "(shardes.shaping.group_relative), or reduce them before calling tell."
+            )
         weights = jax.lax.with_sharding_constraint(weights, sharding.members(self.mesh))
 
         update = contraction.contract(
