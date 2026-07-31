@@ -3,14 +3,22 @@
 Things deferred with a reason, not forgotten. Each entry says what would settle it and what
 it blocks, so picking one up does not start with re-deriving why it is here.
 
-Not a wishlist. If an item stops being worth doing, delete it and say so in the commit.
+Not a wishlist. An item that stops being worth doing moves to **Closed** at the bottom with
+the reasoning, rather than being deleted: the decision is usually more reusable than the
+question was.
 
 ---
 
 ## B1 — Why scrambled Sobol degrades with N
 
 **Status**: open. Measured in E1, cause unidentified.
-**Blocks**: any public claim about QMC for ES, in either direction.
+**Blocks**: describing `ScrambledSobol`'s behaviour, in either direction.
+
+This is **not** a live coupling question — coupling is settled and closed (B3). This is a
+correctness question about a component that ships: `ScrambledSobol` is in the library, passes
+the property suite, and demonstrably underperforms for a reason nobody has identified. Either
+it has a defect worth fixing or it has a documented weakness worth stating. Right now it has
+neither, and that is the problem.
 
 `mirrored_sobol_lr1` is systematically worse than uncoupled `mirrored_lr1`, and the gap
 **grows monotonically with N**:
@@ -76,24 +84,6 @@ Not needed by this library any more: G0 came back negative, so nothing here depe
 
 ---
 
-## B3 — Does coupling help on a multimodal objective?
-
-**Status**: open, and G0 does **not** answer it. **Blocks**: nothing; a follow-up.
-
-E1 measured that coupling does not improve the *estimator* on one transformer block. It did
-not measure task performance, and `docs/04` C3.3's own caveat cuts both ways: parameter-space
-noise acts as Gaussian smoothing, so a better-conditioned estimate can be a worse smoother,
-and the classical QMC-for-ES results are strongest exactly where this experiment is silent —
-multimodal control tasks.
-
-**What would settle it**: end-to-end runs at matched compute on a multimodal control task,
-≥3 seeds, coupled vs uncoupled, reporting variance across seeds.
-
-Keep this distinct from B1. B1 asks whether the Sobol implementation is sound; B3 asks
-whether the whole idea has a regime where it pays. A negative on B1 does not resolve B3.
-
----
-
 ## B4 — Embedding layers under low-rank perturbation
 
 **Status**: open, pre-existing, not required for any gate.
@@ -108,3 +98,36 @@ win exactly where the parameters are largest. A real contribution if cracked.
 
 **Status**: deferred. Zero hits across the JAX ecosystem; cheap to add; orthogonal to
 everything above. Classical NES sample reuse. Revisit after G2.
+
+---
+
+# Closed
+
+Decisions, kept because the reasoning is the useful part. Reopening one needs a reason that
+did not exist when it was closed — not just renewed interest.
+
+## B3 — Does coupling help an optimizer on a multimodal objective? — **CLOSED 2026-07-30**
+
+**Decision: coupling is settled for this project. Not disproven in general; done with.**
+
+Gate G0 measured that coupled sampling does not improve ES gradient *estimates* on a
+transformer block, at any rank, sigma or population out to `N/d_eff = 42.7`, with the
+treatment verified maximal. Strictly, that leaves a gap: estimator MSE is not task
+performance, parameter-space noise acts as Gaussian smoothing so a better-conditioned
+estimate can be a worse smoother, and the classical QMC-for-ES wins are on multimodal control
+problems that a single transformer block is not. Settling that gap would need end-to-end runs
+at matched compute on ≥3 seeds — roughly Phase 3's C3.3, which is the part that was dropped.
+
+**Why it is closed rather than left open.** The gap is real and the project is not going to
+close it. Leaving it as an open item would be an invitation to relitigate a gate that was
+answered cleanly, and a project that reconsiders every past conclusion does not advance. The
+honest thing is to state the boundary of the claim — which `docs/05-paper.md` does, in
+"Limitations to state, not bury" — and move on.
+
+**What would justify reopening**: someone publishing a positive coupled-ES task result in a
+regime this project can reach, or the sharded core turning out to need a design axis that
+coupling happens to supply. Renewed curiosity is not a reason.
+
+**What survives elsewhere**: `OrthogonalHD` and `ScrambledSobol` stay in the library. They are
+covered by the property suite, they cost nothing to keep, and removing them would delete the
+evidence that the question was asked properly.

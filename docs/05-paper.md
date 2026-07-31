@@ -72,11 +72,48 @@ Structurally this is the same intellectual move as the FWHT crossover question �
 does the fast transform beat the dense matmul, and why does the answer differ by
 accelerator* — which is a coherent through-line if both projects get written up.
 
-### C5 — Coupled sampling under low-rank perturbation (conditional on Gate G0)
+### C5 — Sample design does not improve ES gradient estimates in the `N/d_eff ≳ 1` regime — **settled, negative**
 
-Only if Phase 0 says yes. See `docs/04-phase3-coupling.md`. If G0 says no, this becomes a
-short negative-result section, which is still worth including — the `N/d_eff ≳ 1` regime
-argument is novel enough that a clean null is publishable inside a larger paper.
+**Gate G0 answered "no" on 2026-07-30.** This is a resolved negative result and it is written
+up as one, not as future work. Evidence: `experiments/phase0/`, 456 configurations at
+`R = 30`, one uniform environment, 13.07 h on an RTX 3080. Full answer in
+`docs/01-phase0-estimator-harness.md`.
+
+The setup is what makes it worth a section. Low-rank perturbation genuinely inverts the `N/d`
+arithmetic that makes sample design hopeless in high-dimensional ES: rank 1 samples in
+`ℝ^(m+n)` rather than `ℝ^(mn)`, so a population that reaches `N/d_eff = 42.7` is affordable
+where full rank tops out at `0.167`. Classical coupling arguments should have room to work
+there for the first time. They do not.
+
+| claim | measurement |
+|---|---|
+| `orthogonal_hd` vs uncoupled, rank 1 and 4 | cosine ratio 0.99–1.01, IQRs overlap at every `N`, σ and rank, out to `N/d_eff = 42.7` |
+| the treatment was applied | a 512-member coupled block is an **exactly** orthonormal basis of `ℝ⁵¹²` (max off-diagonal Gram `0.0e+00`); the i.i.d. block reaches `0.215`; contractions differ by 1.4 relative |
+| why | measured `cos ≈ √(N/d_ambient)`; every curve slope ½ on log–log; full rank at `N = 2¹⁴` predicts 0.1021 against 0.1013 measured |
+
+**The mechanism, which is the transferable part.** Coupling leaves `E[εεᵀ]` and the pairwise
+cross-moments `E[ε_ij ε_i'j] = δ_ii'` unchanged, inside a design block as well as across it.
+It therefore cannot alter the variance of a *linear* functional of the population; only
+higher-order joint structure was ever in play. The `N/d_eff` argument establishes that low
+rank creates *room* for sample design, which is not the same claim as a mechanism existing.
+Conflating those two is the error, and it is the reusable content of the section.
+
+**Two supporting results that came out of the same sweep:**
+
+- **Coupling's cost is two numbers**, and they differ by 180×: **+4.2%** per generation at
+  rank 1, **+770%** at full rank, because the design dimension is `m` versus `m·n`. The
+  full-rank figure is dominated by a reference FWHT butterfly being memory-bound, which is
+  the first concrete argument for a real JAX FWHT kernel as separate work.
+- **Mirroring is not a free win, and its sign flips with σ.** At rank 1 it is 1.67× *better*
+  than i.i.d. at `σ = 1e-2` and ~1.4× *worse* at `σ = 1e-3`. It cancels the even part of `f`,
+  which matters only once σ is large enough to sample curvature; below that, mean-centering
+  already removes the constant and mirroring merely spends the population on half as many
+  distinct directions. "Use antithetic sampling" is doing unexamined work in the ES
+  literature.
+
+**Scope.** E1 measured estimator quality, not task performance, on one transformer block. The
+smoothing caveat in `docs/00-context.md` cuts both ways and is stated in the limitations
+rather than hedged here. `docs/BACKLOG.md` records the decision to treat this as settled.
 
 ---
 
@@ -89,7 +126,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 | ID | Experiment | Claim | Tier | Est. hrs | Cost |
 |---|---|---|---|---|---|
 | **E0** | Correctness, device-invariance, comm accounting | C2 | T0 | ∞ | $0 |
-| **E1** | Estimator quality: `N` × rank × scheme × shaping × σ | C5 | T2 | ~20 | $0 |
+| **E1** | Estimator quality: `N` × rank × scheme × shaping × σ | C5 | T2 | **done, 13.1** | $0 |
 | **E2** | Strong scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | ~12 | $0 |
 | **E3** | Weak scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | ~8 | $0 |
 | **E4** | Contraction crossover, TPU, `(N, d)` grid at `D=8` | **C1** | T1→T3 | ~20 | $0 |
@@ -100,7 +137,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 | **E9** | Baselines: naive ES, EGGROLL ref impl, evosax | C2 | T4 + T1 | ~4 | in session |
 | **E10** | Shaping-barrier cost (global rank sort) | C1 | T1 | ~4 | $0 |
 | **E11** | Ablations: `r`, σ, dtype, accumulation precision | all | T1 | ~15 | $0 |
-| **E12** | End-to-end task validation, ≥3 seeds | C2, C5 | T3 | ~30 | ~$15 |
+| **E12** | End-to-end task validation, ≥3 seeds | C2 | T3 | ~15 | ~$8 |
 
 Roughly **150 free accelerator-hours** and **one paid 6-hour GPU session**.
 
@@ -121,9 +158,13 @@ against A100's 80 GB, so per-device population must be matched deliberately rath
 **E9's honest framing**: being *within* EGGROLL's own throughput while offering a general
 API is a good result. Report it that way. Faster is a bonus, not the claim.
 
-**E12 is the one that can't be shortcut.** Estimator MSE is not task performance (see the
-smoothing caveat in `docs/00-context.md`). If C5 survives E1, it has to survive E12 too, on
-≥3 seeds with variance reported, or it doesn't go in as a positive claim.
+**E12 no longer carries C5.** It was going to be the check that estimator MSE is not task
+performance (the smoothing caveat in `docs/00-context.md`), on the rule that C5 had to survive
+both E1 and E12 to go in as a positive claim. C5 did not survive E1, so E12 shrinks to its C2
+half: both published algorithms running end to end from one API. That halves its budget.
+
+The rule was right and is worth keeping for whatever claim comes next — a positive result that
+only exists in estimator space does not go in the paper as a positive result.
 
 ---
 
@@ -135,8 +176,8 @@ smoothing caveat in `docs/00-context.md`). If C5 survives E1, it has to survive 
 | F2 | **Contraction crossover phase diagram** in `(N, d)` at `D=8`, one panel per platform | E4, E7 | **The money figure** |
 | F3 | Scaling to 64 devices, TPU | E5 | Shows the design actually distributes |
 | F4 | Low-rank vs dense cost surface, TPU vs GPU | E8 | C4; the cross-platform inversion |
-| F5 | Estimator quality vs `N/d_eff`, rank-1 and full-rank panels | E1 | C5, conditional |
-| F6 | End-to-end task curves, seed-variance bands | E12 | C5 validation |
+| F5 | Estimator quality vs `N/d_eff`, full-rank / rank-1 / rank-4 panels | E1 | C5. **Exists**: `experiments/phase0/figures/` |
+| F6 | End-to-end task curves, seed-variance bands | E12 | C2: both algorithms run end to end. *Was also C5 validation; dropped with C5.* |
 | TB1 | Baseline throughput table, matched shapes | E9 | C2 |
 | TB2 | Communication accounting: analytic vs measured | E0, E4 | Rigor; catches bugs |
 | TB3 | Ablation table | E11 | Reviewer defence |
@@ -180,7 +221,23 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 - Kaggle T4s are Turing-class and appear only in correctness runs, never in a throughput
   claim.
 - E12's tasks are small relative to a 14B RWKV. Say which conclusions are extrapolation.
-- If G0 was ambiguous, say so plainly rather than picking the reading that helps.
+- **C5's negative is about the estimator, not the optimizer.** Parameter-space noise acts as
+  a Gaussian smoothing of a jagged reward landscape, so it is doing optimization work rather
+  than only adding error, and a better-conditioned estimate can be a worse smoother. The
+  classical QMC-for-ES wins are on multimodal control problems; a single transformer block is
+  not one. State this as the boundary of the claim. Do not soften the negative with it — the
+  measurement is clean within its scope, and the scope is the estimator.
+- **C5 is one objective, one block, one hardware generation.** `N/d_eff` transfers; the loss
+  landscape does not.
+- **The scrambled-Sobol arm is reported as unresolved, not as a result.** It was the only
+  scheme that separated from its baseline, and it separated the *wrong* way (cosine ratio
+  0.892 at `N = 2¹⁸`, rank 1, IQRs disjoint, degrading monotonically in `N`). Lost design
+  diversity and marginal-moment error are both ruled out with numbers; the cause is not
+  established and may be the digital-shift construction rather than the method. Say that, and
+  do not write "QMC hurts ES". `docs/BACKLOG.md` B1.
+- **`σ = 0.1` and `shaping = none` are dead arms on this block**, measured, not assumed: they
+  give `cos ~ 1e-3` and occasionally negative. Reported so a successor sweep does not spend a
+  third of its grid on them.
 
 ---
 
