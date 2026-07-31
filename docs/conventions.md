@@ -122,6 +122,12 @@ and say so.
 
   Record equivalent mutants in the harness rather than deleting them, so nobody retries one.
 
+  **Every gap it has found so far was a duplicated fact**, and that is more useful than any
+  individual fix. A test that restated the Sobol block arithmetic instead of calling it; the
+  `1/(n·sigma)` factor living in both `estimator.estimate` and `core.tell`, with only the
+  first defended. When one fact has two homes, expect the test to be guarding whichever copy
+  it is nearer to. Look for the second copy.
+
   Cut tests when they are redundant, not when the clock is inconvenient. Move a test to the
   slow tier when it is *behavioural* rather than structural — `test_tell_descends_on_the
   _objective` runs five generations to check a sign convention, and that is exactly the shape

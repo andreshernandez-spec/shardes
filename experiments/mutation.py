@@ -172,6 +172,75 @@ MUTATIONS = [
         "a per-coordinate diagonal collapses to one leaf's value: the feature silently "
         "does nothing while a scalar sigma still works, so only a diagonal test can see it",
     ),
+    # --- phase 1: sharding ---------------------------------------------------------------
+    Mutation(
+        "sharding/local-ids-not-global", "sharding.py",
+        "    return jax.device_put(jnp.arange(n, dtype=jnp.int32), members(mesh))",
+        "    per = n // n_devices(mesh)\n"
+        "    local = jnp.tile(jnp.arange(per, dtype=jnp.int32), n_devices(mesh))\n"
+        "    return jax.device_put(local, members(mesh))",
+        "tests/test_sharding.py tests/test_core.py",
+        "each device numbers its members from 0: the seed contract breaks and every device "
+        "draws the same perturbations. This is THE bug the whole design exists to prevent",
+    ),
+    Mutation(
+        "sharding/skip-even-split-check", "sharding.py",
+        "    if n % d:\n        raise ValueError(",
+        "    if False:\n        raise ValueError(",
+        "tests/test_sharding.py tests/test_core.py",
+        "an uneven population reaches shard_map, where it changes the update rather than "
+        "failing",
+    ),
+    Mutation(
+        "sharding/skip-pair-check", "sharding.py",
+        "    if paired and (n // d) % 2:",
+        "    if False and (n // d) % 2:",
+        "tests/test_sharding.py tests/test_core.py",
+        "a mirrored pair straddles a device boundary and the antithetic cancellation is lost "
+        "silently: the run still produces an update, just a worse one",
+    ),
+    # --- phase 1: contraction ------------------------------------------------------------
+    Mutation(
+        "contraction/drop-psum", "contraction.py",
+        "        return jax.tree.map(lambda leaf: jax.lax.psum(leaf, POP), partial)",
+        "        return jax.tree.map(lambda leaf: jax.lax.pmean(leaf, POP), partial)",
+        "tests/test_contraction.py tests/test_core.py",
+        "Strategy B scales its local partial instead of summing across devices. Correct at "
+        "D=1 and at every D if the shards happened to be equal, so only a real multi-device "
+        "comparison can see it",
+    ),
+    Mutation(
+        "contraction/A-forgets-to-gather-ids", "contraction.py",
+        "    ids = jax.lax.with_sharding_constraint(member_ids, rep)",
+        "    ids = member_ids",
+        "tests/test_contraction.py tests/test_core.py",
+        "Strategy A regenerates from un-gathered ids: each device contracts only its own "
+        "members but does not psum, so the update is a fraction of the truth",
+    ),
+    # --- phase 1: the core ---------------------------------------------------------------
+    Mutation(
+        "core/reuse-the-generation-key", "core.py",
+        "        base_key = jax.random.fold_in(state.key, state.generation)",
+        "        base_key = state.key",
+        "tests/test_core.py",
+        "every generation samples the same population: training stalls in a way that looks "
+        "like a bad learning rate",
+    ),
+    Mutation(
+        "core/tell-ascends", "core.py",
+        "                lambda p, s, u: p - (self.lr / (self.n * s)) * u,",
+        "                lambda p, s, u: p + (self.lr / (self.n * s)) * u,",
+        "tests/test_core.py",
+        "tell ascends on the objective: trains smoothly in the wrong direction",
+    ),
+    Mutation(
+        "core/drop-sigma-from-tell", "core.py",
+        "                lambda p, s, u: p - (self.lr / (self.n * s)) * u,",
+        "                lambda p, s, u: p - (self.lr / self.n) * u,",
+        "tests/test_core.py",
+        "the 1/sigma normalisation goes: g_hat estimates sigma*grad f, so the step size "
+        "silently scales with the exploration radius",
+    ),
     # --- dimensions --------------------------------------------------------------------
     Mutation(
         "dimensions/full-for-lowrank", "dimensions.py",
@@ -208,6 +277,13 @@ def run(mutation: Mutation, timeout: float) -> tuple[bool, str]:
 
     if proc.returncode != 0:
         first = next((l for l in proc.stdout.splitlines() if l.startswith("FAILED")), "")
+        # A crash is not a catch. NameError/TypeError/AttributeError/SyntaxError almost always
+        # mean the *mutation* was malformed -- an unimported symbol, a shape that no longer
+        # lines up -- so the suite's real defence went untested and a genuine gap can hide
+        # underneath. Twice already: sobol/undo-b1-blocks was concealing a test that
+        # reimplemented its own subject. Flagged rather than counted silently.
+        if any(e in first for e in ("NameError", "SyntaxError", "AttributeError", "TypeError")):
+            return True, f"SUSPECT (crash, not assertion): {first[:70]}"
         return True, first[:88] or "caught"
     return False, "SURVIVED"
 
@@ -221,19 +297,28 @@ def main(argv=None) -> int:
 
     chosen = [m for m in MUTATIONS if args.k in m.id]
     print(f"{len(chosen)} mutations\n")
-    survivors = []
+    survivors, suspect = [], []
     for m in chosen:
         t = time.time()
         caught, detail = run(m, args.timeout)
-        mark = "caught " if caught else "SURVIVED"
+        mark = ("SUSPECT " if detail.startswith("SUSPECT") else "caught ") if caught else "SURVIVED"
         print(f"  [{mark}] {m.id:<28} {time.time() - t:5.1f}s  {detail}")
         if not caught:
             survivors.append((m, detail))
+        elif detail.startswith("SUSPECT"):
+            suspect.append((m, detail))
 
     print()
+    if suspect:
+        print(f"{len(suspect)} mutation(s) caught by a CRASH rather than an assertion. Each is "
+              "probably malformed;\nfix it and re-run, because a crash proves the harness ran "
+              "and nothing more:\n")
+        for m, detail in suspect:
+            print(f"  {m.id}\n    {detail}\n")
     if not survivors:
-        print(f"all {len(chosen)} mutations caught.")
-        return 0
+        print(f"all {len(chosen)} mutations caught"
+              + (f", but {len(suspect)} by crashing." if suspect else "."))
+        return 1 if suspect else 0
     print(f"{len(survivors)} SURVIVOR(S) — each is a real gap:\n")
     for m, detail in survivors:
         print(f"  {m.id}\n    {m.path}: {m.why}\n    {detail}\n")

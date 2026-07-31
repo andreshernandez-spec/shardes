@@ -479,3 +479,35 @@ def test_group_relative_is_not_dominated_by_the_largest_scale_task():
 
     assert drift(grouped) < 1e-3, "group_relative should be immune to a per-task rescale"
     assert drift(summed) > 0.1, "the summed baseline should be sensitive to it"
+
+
+def test_the_step_does_not_depend_on_sigma():
+    """`tell`'s 1/(n*sigma) is what makes g_hat estimate grad f rather than sigma*grad f.
+
+    The sharp form of that: since the perturbation is unit-scale and `apply` multiplies by
+    sigma, the sigma in the numerator and the one in the denominator cancel, so **the same
+    seed at two different sigmas must take the same step**. Drop the 1/sigma and the step
+    becomes proportional to sigma instead — at sigma=0.01 that is a 100x smaller update, which
+    still descends and still shards identically, so every other test in this file passes.
+
+    Found by experiments/mutation.py: core/drop-sigma-from-tell survived the whole suite.
+    Phase 0 pins the same factor inside `estimator.estimate`, but `tell` carries its own copy
+    and a duplicated constant needs its own test.
+    """
+    mesh = sharding.make_mesh(4)
+    p0 = params0()
+
+    def step(sigma):
+        es = ShardedES(Mirrored(IIDGaussian()), n=256, sigma=sigma, lr=0.05, mesh=mesh,
+                       shaping=lambda f: f - jnp.mean(f))
+        state = es.init(jax.random.key(0), p0)
+        pert, state = es.ask(state)
+        fitness = es.apply(sphere, state, pert)(jnp.zeros(()))
+        out = es.tell(state, pert, fitness).params
+        return flat(out) - flat(p0)
+
+    small, large = step(0.005), step(0.05)
+    # A tenfold change in sigma must not change the step. Compared as a ratio of norms so the
+    # assertion is about magnitude, which is exactly what the missing 1/sigma would scale.
+    ratio = float(np.linalg.norm(large) / np.linalg.norm(small))
+    assert abs(ratio - 1.0) < 0.15, f"step scaled with sigma by {ratio:.2f}x"
