@@ -497,8 +497,15 @@ play, and on this objective it pays nothing.
   Gaussian smoothing, so a better-conditioned estimate can be a worse smoother. Task-level
   validation on a multimodal objective is `docs/BACKLOG.md` B3 and is open.
 - It does not say scrambled Sobol hurts. Sobol *was* the one scheme that separated, and the
-  wrong way (0.892 at `N = 2¹⁸`, rank 1), but the cause is unidentified and may be this
-  implementation rather than the method. `docs/BACKLOG.md` B1.
+  wrong way (0.892 at `N = 2¹⁸`, rank 1) — and **the cause was found and fixed on 2026-07-31**:
+  a digital shift alone does not decorrelate streams, so every stream reused one inter-member
+  arrangement and its deficiency added coherently. `ScrambledSobol` now draws a different block
+  of direction numbers per stream, which recovers the loss (`docs/BACKLOG.md` B1, closed).
+
+  **E1's sobol arm therefore measures a construction that no longer ships.** Its numbers stand
+  as a measurement of `blocks=1` and are correct as such; they are not a property of scrambled
+  Sobol and must not be quoted as one. The arm has not been re-run: it would cost ~2 h to
+  change one curve in a figure whose gate already came back negative for a different scheme.
 - It is one transformer block, not an LLM. The `N/d_eff` regime transfers; the loss landscape
   does not.
 

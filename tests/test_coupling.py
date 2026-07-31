@@ -458,3 +458,61 @@ def test_lowrank_columns_are_separate_design_families():
     for j in range(r):
         col = a[:, :, j]
         assert float(jnp.max(jnp.abs(col @ col.T / m - jnp.eye(m)))) < 1e-4
+
+
+def test_sobol_streams_get_different_direction_numbers():
+    """BACKLOG B1's fix, asserted at the mechanism rather than through the estimator.
+
+    A digital shift cancels between two members of the same stream:
+
+        (x_i XOR s) XOR (x_j XOR s) = x_i XOR x_j
+
+    so with one shared block of direction numbers the inter-member XOR geometry is identical
+    in *every* stream, and a deficiency in that one arrangement adds coherently across leaves
+    instead of averaging over independent draws. Measured cost was 5% of i.i.d. cosine at 16
+    streams (experiments/phase1/sobol_b1.py).
+
+    The property that fixes it is that different streams draw *different* direction numbers,
+    so their XOR geometries genuinely differ. Checked here on the raw uniform points, before
+    ndtri, because that is where the claim lives.
+    """
+    from shardes.coupling import _SOBOL_BITS, _direction_numbers, sobol_point
+
+    d, ids = 32, jnp.arange(8)
+
+    def geometry(coupling, stream):
+        """x_i XOR x_j for the first two members, which the shift cannot change."""
+        k_shift, k_block = jax.random.split(stream)
+        v = jnp.asarray(_direction_numbers(coupling._span(d)))
+        if coupling.blocks > 1:
+            b = jax.random.randint(k_block, (), 0, coupling._blocks(d))
+            v = jax.lax.dynamic_slice_in_dim(v, b * d, d, axis=1)
+        shift = jax.random.bits(k_shift, (d,), jnp.uint32) >> (32 - _SOBOL_BITS)
+        pts = jnp.stack([sobol_point(v, i, shift) for i in ids])
+        # Every member against member 0, not just members 0 and 1. Members 0 and 1 differ by
+        # exactly v[0], and Sobol's first direction vector is 2^29 in *every* dimension, so
+        # that one pair is identical across blocks by construction and detects nothing. The
+        # first version of this test used it and failed for that reason.
+        return pts[1:] ^ pts[0]
+
+    s1, s2 = jax.random.split(jax.random.key(0))
+
+    shared = ScrambledSobol(blocks=1)
+    assert jnp.array_equal(geometry(shared, s1), geometry(shared, s2)), (
+        "with one block the inter-member geometry must be identical across streams; "
+        "if this fails the premise of the B1 finding is wrong"
+    )
+
+    blocked = ScrambledSobol(blocks=16)
+    assert not jnp.array_equal(geometry(blocked, s1), geometry(blocked, s2)), (
+        "with per-stream blocks the geometry must differ across streams"
+    )
+
+
+def test_sobol_blocks_do_not_break_the_seed_contract():
+    """The block index comes from `stream`, never from the member, so member i is still
+    member i however the population is batched."""
+    c = ScrambledSobol(blocks=16)
+    a = rows(c, jnp.array([5, 9]), 32)
+    b = rows(c, jnp.arange(64), 32)
+    assert jnp.allclose(a[0], b[5], atol=1e-6) and jnp.allclose(a[1], b[9], atol=1e-6)

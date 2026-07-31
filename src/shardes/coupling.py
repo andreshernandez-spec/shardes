@@ -246,20 +246,56 @@ class ScrambledSobol:
       part of why docs/01 C0.5 puts it in both rank panels and makes it carry the comparison.
 
     Neither is a reason not to measure it. They are reasons the measurement is the point.
+
+    **`blocks`: each stream draws a different block of Sobol dimensions, and this is a fix for
+    a measured defect rather than a tuning knob.** E1 found this scheme systematically worse
+    than uncoupled sampling, degrading with N to -11% at N = 2^18. `experiments/phase1/
+    sobol_b1.py` identified the cause and `docs/BACKLOG.md` B1 records it.
+
+    A digital shift *translates* a point set without changing its geometry: for two members
+    within a stream, `(x_i XOR s) XOR (x_j XOR s) = x_i XOR x_j`, so the shift cancels and the
+    inter-member arrangement is identical in **every** stream, where i.i.d. gives each an
+    independent one. A deficiency in that single shared arrangement is then added coherently
+    across every leaf and factor axis instead of being averaged over independent draws.
+
+    Measured: the penalty grows with the number of streams (0.984 of i.i.d. at 2 streams,
+    0.950 at 16), giving each stream its own block of dimensions recovers it to 0.99, and a
+    control that permutes *coordinates* rather than dimensions does **not** help — which
+    confirms the mechanism rather than contradicting it, since a consistent permutation
+    preserves `x_i XOR x_j` and only relabels it.
+
+    The residual ~1% is not a defect to chase: it is the two a-priori reasons above.
+
+    `blocks=1` restores the old single-block behaviour, which is what E1's sobol arm measured.
     """
 
-    def __init__(self, scramble: bool = True):
+    def __init__(self, scramble: bool = True, blocks: int = 16):
         self.scramble = bool(scramble)
+        self.blocks = max(int(blocks), 1)
 
     def __call__(self, stream: Key, member_id: Array, d: int, dtype) -> Array:
+        k_shift, k_block = jax.random.split(stream)
         shift = (
-            jax.random.bits(stream, (d,), jnp.uint32) >> (32 - _SOBOL_BITS)
+            jax.random.bits(k_shift, (d,), jnp.uint32) >> (32 - _SOBOL_BITS)
             if self.scramble
             else jnp.zeros((d,), jnp.uint32)
         )
-        x = sobol_point(jnp.asarray(_direction_numbers(d)), member_id, shift)
+        v = jnp.asarray(_direction_numbers(self._span(d)))
+        if self.scramble and self.blocks > 1:
+            b = jax.random.randint(k_block, (), 0, self._blocks(d))
+            v = jax.lax.dynamic_slice_in_dim(v, b * d, d, axis=1)
+        x = sobol_point(v, member_id, shift)
         u = (x >> (_SOBOL_BITS - _UNIFORM_BITS)).astype(jnp.float32)
         return jax.scipy.special.ndtri((u + 0.5) * 2.0**-_UNIFORM_BITS).astype(dtype)
+
+    def _blocks(self, d: int) -> int:
+        """How many disjoint d-dimension blocks the Joe-Kuo table affords."""
+        from scipy.stats import qmc  # noqa: PLC0415
+
+        return max(min(self.blocks, qmc.Sobol.MAXDIM // max(d, 1)), 1)
+
+    def _span(self, d: int) -> int:
+        return d * (self._blocks(d) if self.scramble and self.blocks > 1 else 1)
 
 
 GAUSSIAN = Gaussian()

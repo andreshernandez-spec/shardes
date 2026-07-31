@@ -9,61 +9,6 @@ question was.
 
 ---
 
-## B1 — Why scrambled Sobol degrades with N
-
-**Status**: open. Measured in E1, cause unidentified.
-**Blocks**: describing `ScrambledSobol`'s behaviour, in either direction.
-
-This is **not** a live coupling question — coupling is settled and closed (B3). This is a
-correctness question about a component that ships: `ScrambledSobol` is in the library, passes
-the property suite, and demonstrably underperforms for a reason nobody has identified. Either
-it has a defect worth fixing or it has a documented weakness worth stating. Right now it has
-neither, and that is the problem.
-
-`mirrored_sobol_lr1` is systematically worse than uncoupled `mirrored_lr1`, and the gap
-**grows monotonically with N**:
-
-| N | N/d_eff | cos ratio vs uncoupled | IQRs |
-|---|---|---|---|
-| 2¹⁴ | 2.67 | 0.988 | disjoint |
-| 2¹⁶ | 10.67 | 0.966 | disjoint |
-| 2¹⁸ | 42.67 | **0.892** | disjoint |
-
-Rank 4 shows the same shape. This is the *only* scheme in E1 that separated from its
-uncoupled baseline at all, and it separated the wrong way.
-
-**Ruled out already** (scripts in `experiments/phase0/`, numbers reproducible):
-
-- *Lost design diversity.* No. At N ∈ {512, 2048, 8192, 32768} in d = 512 the Sobol draws
-  have full numerical rank 512, zero pairs with |cos| > 0.99, and **lower** mean pairwise
-  |cos| than i.i.d. (0.0296 vs 0.0352 at N = 512). The design is better spread, as QMC
-  should be.
-- *Marginal scale or shape error.* No. `E[x²] = 1.00000` against i.i.d.'s 0.99978,
-  `mean = -0.00000`, `E[x⁴]/3 = 0.99999`. Marginals are exact, and better than i.i.d.'s.
-
-**Leading hypothesis, untested.** A digital shift *translates* a point set without changing
-its geometry: `{xᵢ ⊕ s}` has the same pairwise XOR structure as `{xᵢ}` for any shift `s`. So
-every one of the 12 streams (6 leaves × {a, b}) carries the **same inter-member design
-pattern**, merely relabelled, where i.i.d. gets an independent configuration per stream. Any
-deficiency in that one pattern would then add coherently across the whole params tree instead
-of averaging out — and coherent addition across a growing population is the shape of a defect
-that worsens with N.
-
-**What would settle it**: run the sobol arm on a **single-leaf** model. If the harm largely
-disappears with one stream, the cause is cross-stream coherence and therefore *my
-construction*, not QMC. If it persists, it is a property of Sobol in d = 512 at these N and
-the a-priori reasons in `docs/01` C0.5 (high effective dimension, degraded 2-D projections
-past a few hundred dimensions) are the explanation.
-
-**Fix if the hypothesis holds**: give each stream an independent scramble rather than only an
-independent digital shift — a linear matrix scramble, or Owen nesting, or simply a distinct
-direction-number offset per stream.
-
-**Until then**: do not write "scrambled Sobol hurts ES" anywhere. The honest statement is that
-one implementation of it did, on one objective, for reasons not yet established.
-
----
-
 ## B2 — A real FWHT for JAX
 
 **Status**: deferred, out of scope. **Blocks**: nothing here.
@@ -154,8 +99,62 @@ is about half a day, against a real need rather than a guess.
 
 # Closed
 
-Decisions, kept because the reasoning is the useful part. Reopening one needs a reason that
-did not exist when it was closed — not just renewed interest.
+Decisions and resolved questions, kept because the reasoning is the useful part. Reopening
+one needs a reason that did not exist when it was closed — not just renewed interest.
+
+## B1 — Why scrambled Sobol degraded with N — **CLOSED 2026-07-31: it was the construction**
+
+**Answer: a digital shift alone does not decorrelate streams, and the penalty was the same
+inter-member arrangement being reused by every one of them. Fixed.**
+
+E1 measured `mirrored_sobol_lr1` as systematically worse than uncoupled, degrading with N to
+0.892 of i.i.d. cosine at `N = 2^18`. Lost design diversity and marginal-moment error had
+already been ruled out with numbers. `experiments/phase1/sobol_b1.py` settled the rest.
+
+**The mechanism.** For two members of one stream the shift cancels:
+
+    (x_i XOR s) XOR (x_j XOR s) = x_i XOR x_j
+
+so with one shared block of direction numbers the inter-member XOR geometry is **identical in
+every stream** — 12 of them for a 6-leaf rank-1 model — and a deficiency in that single
+arrangement adds coherently across the params tree instead of averaging over independent
+draws.
+
+**The discriminating measurement**, cos(g_hat, grad f) as a ratio to i.i.d., R = 64:
+
+| leaves | streams | shared | per-stream blocks | coordinate permutation |
+|---|---|---|---|---|
+| 1 | 2 | 0.984 ± .005 | **0.997** ± .004 | 0.986 ± .005 |
+| 2 | 4 | 0.960 ± .004 | **0.995** ± .004 | 0.964 ± .004 |
+| 4 | 8 | 0.955 ± .004 | **0.989** ± .004 | 0.952 ± .004 |
+| 8 | 16 | 0.950 ± .004 | **0.989** ± .004 | 0.948 ± .005 |
+
+The penalty scales with the number of streams, as predicted, and giving each stream its own
+block of Sobol dimensions recovers it.
+
+**The control is the strongest part, because it failed.** Permuting *coordinates* per stream
+was meant to decorrelate and does nothing. That confirms the mechanism rather than denying it:
+a consistently applied permutation preserves `x_i XOR x_j` and merely relabels it, so it
+leaves exactly the thing the hypothesis says matters. Had `permute` worked, the explanation
+would have been coordinate-level correlation instead, and it is not.
+
+**The fix**: `ScrambledSobol(blocks=16)`, now the default. Each stream draws a different block
+of direction numbers, so the geometries genuinely differ. Verified in the library, not only in
+the experiment: 0.960 → 0.993 at 2 leaves, 0.950 → 0.991 at 8.
+
+**What is left is the method, not the code.** The residual ~1% is the two a-priori reasons
+recorded in `docs/01` C0.5 before the run — high effective dimension, and Sobol's degraded 2-D
+projections past a few hundred dimensions. That is a documented limitation and there is
+nothing further to chase.
+
+**Consequence for the record.** E1's sobol arm measured `blocks=1`, which no longer ships.
+Its numbers stand as a measurement of the old construction and are labelled as such in
+`docs/01`. Re-running the arm would cost ~2 h and change one curve in a figure whose gate
+already came back negative for a different scheme, so it has not been redone. Do not quote
+E1's sobol degradation as a property of scrambled Sobol.
+
+---
+
 
 ## B3 — Does coupling help an optimizer on a multimodal objective? — **CLOSED 2026-07-30**
 

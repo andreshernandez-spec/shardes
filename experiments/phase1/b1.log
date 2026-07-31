@@ -1,0 +1,18 @@
+leaves x (64,64) each, N=2048, sigma=0.01, R=64, rank 1, mirrored
+cos(g_hat, grad f), and each sobol variant as a ratio to iid
+
+ leaves  streams          iid cos   shared ratio   offset ratio  permute ratio
+------------------------------------------------------------------------------
+      1        2   0.4345+-0.0013   0.984+-0.005   0.997+-0.004   0.986+-0.005
+      2        4   0.3296+-0.0008   0.960+-0.004   0.995+-0.004   0.964+-0.004
+      4        8   0.2418+-0.0006   0.955+-0.004   0.989+-0.004   0.952+-0.004
+      8       16   0.1741+-0.0005   0.950+-0.004   0.989+-0.004   0.948+-0.005
+
+Read the *trend down the columns*, not the absolute numbers.
+
+  sobol/shared ratio falling as leaves grow  -> the penalty scales with the number of
+      streams, which is what the shared XOR geometry predicts. The construction is at fault
+      and `offset`/`permute` should recover it.
+  sobol/shared ratio flat in leaves          -> not coherence. The cause is Sobol itself at
+      this dimension, and B1 closes as a documented limitation rather than a bug.
+  offset or permute recovering the ratio     -> the fix, directly demonstrated.
