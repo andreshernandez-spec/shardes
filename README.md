@@ -71,6 +71,67 @@ flips with sigma) are in `docs/01-phase0-estimator-harness.md`. Reproduce with
 
 ---
 
+## Both published algorithms, one argument apart
+
+The architectural claim, made concrete. These differ in the `strategy=` line and nothing
+else — same core, same shaping, same sharding, same contraction:
+
+```python
+from jax import make_mesh
+from shardes import sharding
+from shardes.core import ShardedES
+from shardes.strategies.lowrank import LowRank
+from shardes.strategies.mirrored import Mirrored
+from shardes.strategies.seed_regenerated import SeedRegenerated
+
+mesh = sharding.make_mesh()          # every visible device, one "pop" axis
+
+# Qiu et al. 2025 — full-rank perturbations regenerated from seeds, small population
+qiu = ShardedES(strategy=Mirrored(SeedRegenerated()), n=30, sigma=0.01, lr=0.05, mesh=mesh)
+
+# EGGROLL (Sarkar et al. 2025) — rank-1 factored, never materialized, huge population
+eggroll = ShardedES(strategy=Mirrored(LowRank(r=1)), n=262_144, sigma=0.01, lr=0.05, mesh=mesh)
+```
+
+Driving either one is the same three calls. Jit the whole generation rather than stepping
+it eagerly — that is what lets JAX settle device placement at trace time:
+
+```python
+state = eggroll.init(key, params)
+
+@jax.jit
+def generation(state, batch):
+    pert, state = eggroll.ask(state)          # a Perturbation, never materialized params
+    fitness = eggroll.apply(model, state, pert)(batch)
+    return eggroll.tell(state, pert, fitness)
+```
+
+`ask` returning a `Perturbation` rather than a batch of parameter trees is the decision the
+rest follows from: under `LowRank` the thing it returns is a pair of factors whose product
+is never formed, and under `SeedRegenerated` it is a key and a set of member ids and no
+noise at all. A library that hands back materialized trees cannot express either.
+
+`tell` **descends** on what it is given, so a reward gets negated first.
+
+One constraint, and it is the first thing you will hit: **the model's matmuls go through
+`shardes.nn.dense`**, not `x @ W.T`. `LowRank` perturbs by substituting a structured weight
+into the params tree, and a model that does arithmetic on that weight directly raises rather
+than silently computing something else. That single indirection is what makes low-rank
+perturbation expressible without a jaxpr interpreter, and it is the cost of it:
+
+```python
+from shardes.nn import dense
+
+def model(params, x):
+    h = jnp.tanh(dense(x, params["w1"]) + params["b1"])
+    return jnp.sum(dense(h, params["w2"]))          # not h @ params["w2"].T
+```
+
+`IIDGaussian` and `SeedRegenerated` substitute ordinary arrays and take `dense`'s array
+branch, so this only binds if you want the low-rank path.
+
+---
+
 ## Where to start
 
 | File | What's in it |
