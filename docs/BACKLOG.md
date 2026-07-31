@@ -99,6 +99,57 @@ win exactly where the parameters are largest. A real contribution if cracked.
 **Status**: deferred. Zero hits across the JAX ecosystem; cheap to add; orthogonal to
 everything above. Classical NES sample reuse. Revisit after G2.
 
+## B6 — Adapt the per-coordinate sigma
+
+**Status**: deferred with a design and a trigger, not open-ended.
+**Blocks**: nothing. No gate requires it and no claim in `docs/05-paper.md` rests on it.
+
+`sigma` may be a scalar or a params-shaped pytree (`docs/02` C1.4), so per-coordinate step
+sizes are *expressible*. Nothing adapts them: sigma is whatever the caller set at `init`, for
+every generation. Hand-setting per-layer sigmas is a real technique and works today; learning
+them does not.
+
+**The obstacle, which is a fact about the protocol rather than a missing function.** Every
+diagonal adaptation rule needs a **second moment** of the perturbation:
+
+| rule | needs |
+|---|---|
+| SNES | `∇_σ ∝ Σ uᵢ(εᵢ² − 1)` |
+| sep-CMA-ES | global σ from CSA, diagonal `C` from a rank-μ update `Σ wᵢyᵢ²` |
+
+`contract(pert, weights)` computes `Σ wᵢεᵢ` and is **linear in the weights**, so no choice of
+weights yields `Σ wᵢεᵢ²`. **CSA is not a way around it**: it adapts a *scalar* step size by
+comparing `‖p_σ‖` against `E‖N(0,I)‖`, one norm and one number, and there is no published rule
+that produces a per-coordinate sigma from the mean shift alone. Inventing one is not the job.
+
+**The design, if it is ever wanted.** Not a fourth protocol method — a second *reduction over
+the same perturbation*, so `contract(pert, weights, *, moment=1)` keeps the protocol at three
+methods and adds one keyword. Implementable everywhere without breaking invariant 3:
+
+| strategy | `moment=2` |
+|---|---|
+| `IIDGaussian` | the same einsum on `eps**2` |
+| `SeedRegenerated` | square the regenerated noise inside the existing scan |
+| `LowRank` | `ε² = (a²)(b²)ᵀ / r`, so the same einsum on squared factors — **still never materializes** the `(n, m, k)` product |
+| `Mirrored` | `weights[0::2] + weights[1::2]` — the **sum**, where `moment=1` uses the difference |
+
+That last row is worth keeping whatever happens to this entry: antithetic pairs *cancel* in
+the first moment and *reinforce* in the second, which is a clean demonstration that the second
+moment carries genuinely independent information rather than restating the first.
+
+**Why deferred.** PLAN.md ground rule 3 — do not build machinery speculatively. No gate needs
+it, and G0's finding was that the strategy abstraction should stay thin, so widening it for an
+algorithm nothing requires is the same speculative move in a new place. There is also a
+measured reason not to hurry: **sigma cancels out of the mean step**, because the estimator
+divides by `n·σ`. A diagonal changes exploration and conditioning, not step size, so the payoff
+is ill-conditioning robustness specifically — and no measurement yet says this project's
+problems are ill-conditioned.
+
+**Trigger**: a benchmark problem where a single global sigma visibly limits progress. Then this
+is about half a day, against a real need rather than a guess.
+
+---
+
 ---
 
 # Closed

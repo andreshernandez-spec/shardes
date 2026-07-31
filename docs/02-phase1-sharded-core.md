@@ -141,6 +141,18 @@ Not claimed as novel. VD-CMA's absence from evosax was verified; the diagonal fa
 (sep-CMA, SNES) were **not** checked, and the reason to do this is that it fits the protocol
 for free, not that nobody else has it.
 
+**The diagonal is supported, not learned, and that is deliberate.** `sigma` is whatever the
+caller set at `init`, for every generation. Making it *adapt* turns out to need a second
+moment of the perturbation — `Σ uᵢ(εᵢ² − 1)` for SNES, `Σ wᵢyᵢ²` for sep-CMA's rank-μ update —
+and `contract` computes `Σ wᵢεᵢ` and is linear in the weights, so no choice of weights
+produces it. CSA is not a way out: it adapts a *scalar* step size from the evolution path, and
+there is no published rule that gets a per-coordinate sigma from the mean shift alone.
+
+Deferred rather than built, under PLAN.md ground rule 3: no gate needs it, none of the paper's
+claims rest on it, and G0's finding was that this abstraction should stay thin. The design and
+the trigger are in `docs/BACKLOG.md` B6, costed at about half a day when a benchmark turns out
+to be ill-conditioned enough to need it.
+
 **The consequence for the project's headline claim.** "The distribution state is sharded" was
 in `README.md`, `CLAUDE.md` and `PLAN.md`, and it is not supportable for *any* ES that keeps
 parameters replicated — which this one does, on purpose. All three now say what is actually

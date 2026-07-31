@@ -62,8 +62,10 @@ class State(NamedTuple):
     here is ever flattened (invariant 1).
 
     `sigma` lives in the state rather than on the object because it is distribution state,
-    not configuration — an adaptive-sigma rule changes it per generation, and this is where
-    that happens.
+    not configuration — an adaptive rule would change it per generation, and this is where
+    that would happen. **Nothing adapts it today**: it is whatever the caller set at `init`,
+    for every generation. That is a real limitation rather than an oversight, and
+    `docs/BACKLOG.md` B6 records why it was deferred and exactly what it would take.
 
     It is **either a scalar or a params-shaped pytree**. A scalar is isotropic ES, one global
     step size. A pytree is a per-coordinate diagonal, which is what docs/02 C1.4 settled on
