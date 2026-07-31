@@ -15,6 +15,7 @@ import jax.numpy as jnp
 
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
+from shardes.strategies._scale import per_leaf
 from shardes.types import Array, Key, PyTree
 
 
@@ -74,9 +75,11 @@ class IIDGaussian:
         the others are checked against, so keep it obvious rather than clever.
         """
 
+        scale = per_leaf(sigma, params)
+
         def g(x: Array) -> Array:
             def one(eps: PyTree) -> Array:
-                perturbed = jax.tree.map(lambda p, e: p + sigma * e, params, eps)
+                perturbed = jax.tree.map(lambda p, s, e: p + s * e, params, scale, eps)
                 return model(perturbed, x)
 
             return jax.vmap(one)(pert.eps)

@@ -5,13 +5,15 @@
 Evolution strategies got two credible LLM-scale results in late 2025, using **incompatible
 perturbation schemes**, and there is no library that can express both. The incumbent JAX
 library (`evosax`) flattens every solution to a single dense vector, which makes
-shape-aware perturbation, per-matrix low-rank structure, and sharded distribution state all
-impossible without surgery on its base class.
+shape-aware perturbation and per-matrix low-rank structure both impossible without surgery
+on its base class.
 
 The contribution is a modern sharded ES core where **the perturbation scheme is a
 first-class pluggable strategy**, both published algorithms are strategies inside it, and
-the population, the rollouts, and the distribution state are all sharded rather than
-replicated.
+the population and the rollouts are sharded rather than replicated.
+
+The distribution state is replicated. That was originally claimed as sharded; `docs/02` C1.4
+records why it is not, and why replicating it is correct rather than a compromise.
 
 Secondary, conditional: low-rank perturbation may be the first ES regime at LLM scale where
 population size *exceeds* sampling dimension, which is where coupling / quasi-Monte Carlo
@@ -75,7 +77,8 @@ fitness-evaluation loop, which is a vertical slice of the library, written once 
 ### Phase 1 — Sharded core → `docs/02-phase1-sharded-core.md`
 
 The library. `Mesh` / `NamedSharding` / `shard_map`, pytree-native ask/tell, both
-algorithms as strategies, sharded distribution state, seed derivation from member index.
+algorithms as strategies, replicated distribution state with a per-coordinate diagonal
+(C1.4), seed derivation from member index.
 
 **Gate G1**: 8-fake-device CPU run and 1-GPU run produce matching updates for a fixed seed;
 both published algorithms run end-to-end on a small task; communication volume in the
@@ -151,8 +154,10 @@ MuJoCo Playground) which can be done in parallel and are independently mergeable
 2. **Embedding layers under low-rank perturbation.** EGGROLL's reference implementation
    raises `NotImplementedError` for the embedding path. Unsolved; a real contribution if
    cracked; explicitly *not* required for any gate.
-3. **Where the sharded distribution state actually pays.** For isotropic ES the state is
-   tiny and sharding it is theatre. It matters for the CMA family (`d×d` covariance). Decide
-   in Phase 1 whether to carry a CMA-family strategy or state the limitation honestly.
+3. ~~**Where the sharded distribution state actually pays.**~~ **Answered 2026-07-31: it
+   does not, here.** Sharding an `O(d)` state on a population-parallel mesh costs a gather
+   every generation to save memory already spent replicating the model, and a CMA-family
+   strategy would need a protocol change that Gate G0 argues against. Isotropic ships, with a
+   per-coordinate diagonal that needs no protocol change. `docs/02` C1.4.
 4. **Fitness shaping is a synchronization point.** Centered ranks need a global sort over
    all `N` fitnesses. Cheap in bytes, but it's a barrier. Measure its cost in Phase 2.

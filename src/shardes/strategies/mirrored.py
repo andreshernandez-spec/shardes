@@ -25,6 +25,7 @@ Consequences worth knowing before they bite:
 
 from typing import Callable, NamedTuple
 
+import jax
 import jax.numpy as jnp
 
 from shardes.strategies.protocol import PerturbationStrategy
@@ -72,8 +73,12 @@ class Mirrored:
         inner perturbation stays opaque, and every strategy already handles a signed
         sigma because it only ever multiplies.
         """
+        # Negated per leaf, so a per-coordinate diagonal mirrors the same way a scalar
+        # does. `jax.tree.map` over a bare scalar is the identity path, so this is not a
+        # special case for the isotropic caller.
         positive = self.inner.apply(model, params, pert.inner, sigma)
-        negative = self.inner.apply(model, params, pert.inner, -sigma)
+        negative = self.inner.apply(model, params, pert.inner,
+                                    jax.tree.map(lambda s: -s, sigma))
 
         def g(x: Array) -> Array:
             plus, minus = positive(x), negative(x)

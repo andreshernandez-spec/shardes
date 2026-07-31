@@ -294,3 +294,104 @@ def test_state_is_a_pytree_and_survives_a_roundtrip():
     state = es.init(jax.random.key(0), params0())
     leaves, treedef = jax.tree.flatten(state)
     assert isinstance(jax.tree.unflatten(treedef, leaves), State)
+
+
+# --------------------------------------------------------------------------------------
+# Per-coordinate sigma. docs/02 C1.4: the diagonal that shipped instead of sharded state.
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_a_uniform_diagonal_equals_a_scalar_sigma(strategy):
+    """The widening must be exactly that: a superset, with the scalar path unchanged.
+
+    A params-shaped sigma whose entries are all `s` has to give bitwise what the scalar `s`
+    gives. If it does not, the diagonal is not a generalization of isotropic ES but a
+    different algorithm wearing its name.
+    """
+    mesh = sharding.make_mesh(4)
+    p0 = params0()
+    scalar = 0.01
+    diagonal = jax.tree.map(lambda leaf: jnp.full(leaf.shape, scalar, jnp.float32), p0)
+
+    outs = []
+    for sig in (scalar, diagonal):
+        es = ShardedES(strategy(), n=N, sigma=sig, lr=0.05, mesh=mesh)
+        state = es.init(jax.random.key(0), p0)
+        pert, state = es.ask(state)
+        fitness = es.apply(sphere, state, pert)(jnp.zeros(()))
+        outs.append(es.tell(state, pert, fitness).params)
+
+    assert rel_err(outs[1], outs[0]) == 0.0
+
+
+def test_a_diagonal_sigma_scales_each_coordinate_separately():
+    """The claim the diagonal actually makes: leaf `w` is explored at sigma_w, `b` at sigma_b.
+
+    Asserted at `apply`, which is where sigma enters, and **not** on the size of the step
+    `tell` takes. Sigma cancels out of the mean step by construction: the estimator divides
+    by `n*sigma`, which is exactly what makes `g_hat` an estimate of `grad f` rather than of
+    `sigma * grad f`. A first version of this test asserted that a 100x larger sigma moves a
+    leaf further, and it failed in the opposite direction — the small-sigma leaf moved *more*,
+    because its update inherits noise from the large-sigma leaf and then divides it by a tiny
+    sigma. That is correct behaviour and a good argument for per-coordinate sigmas being about
+    conditioning rather than step size.
+
+    Here the model reads one leaf, so the spread of `apply`'s per-member outputs is exactly
+    that leaf's sigma times the spread of its perturbation. Doubling the leaf's sigma must
+    double the spread, and changing the *other* leaf's sigma must not move it at all.
+    """
+    mesh = sharding.make_mesh(4)
+    p0 = params0()
+
+    def only_w(p, _x):
+        return jnp.sum(p["w"])
+
+    def spread(sigma_w, sigma_b):
+        sig = {"w": jnp.full(p0["w"].shape, sigma_w, jnp.float32),
+               "b": jnp.full(p0["b"].shape, sigma_b, jnp.float32)}
+        es = ShardedES(IIDGaussian(), n=512, sigma=sig, lr=0.05, mesh=mesh)
+        state = es.init(jax.random.key(0), p0)
+        pert, state = es.ask(state)
+        return float(jnp.std(es.apply(only_w, state, pert)(jnp.zeros(()))))
+
+    base = spread(0.01, 0.001)
+    doubled_w = spread(0.02, 0.001)
+    changed_b = spread(0.01, 0.5)
+
+    assert abs(doubled_w / base - 2.0) < 1e-4, (doubled_w, base)
+    assert abs(changed_b / base - 1.0) < 1e-4, "sigma_b leaked into leaf w"
+
+
+def test_the_diagonal_survives_a_sharded_contraction():
+    """A per-coordinate sigma must not disturb device invariance.
+
+    `sigma` is replicated state, so it does not interact with the member axis — but it is
+    now params-shaped, which is exactly the shape that would be sharded by mistake.
+    """
+    p0 = params0()
+    diagonal = jax.tree.map(lambda leaf: 0.01 * jnp.ones(leaf.shape, jnp.float32), p0)
+
+    def run(d):
+        mesh = sharding.make_mesh(d)
+        es = ShardedES(IIDGaussian(), n=N, sigma=diagonal, lr=0.05, mesh=mesh)
+        state = es.init(jax.random.key(0), p0)
+        pert, state = es.ask(state)
+        fitness = es.apply(sphere, state, pert)(jnp.zeros(()))
+        return es.tell(state, pert, fitness).params
+
+    ref = run(1)
+    for d in (2, 8):
+        assert rel_err(run(d), ref) < 1e-6, f"diagonal sigma broke invariance at D={d}"
+
+
+def test_per_leaf_normalizes_scalars_and_passes_trees_through():
+    from shardes.strategies._scale import per_leaf
+
+    tree = {"w": jnp.zeros((2, 3)), "b": jnp.zeros((3,))}
+    out = per_leaf(0.5, tree)
+    assert jax.tree.structure(out) == jax.tree.structure(tree)
+    assert all(float(x) == 0.5 for x in jax.tree.leaves(out))
+
+    given = {"w": jnp.ones((2, 3)), "b": 2 * jnp.ones((3,))}
+    assert per_leaf(given, tree) is given

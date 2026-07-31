@@ -12,7 +12,8 @@ An `ask` / `eval` / `tell` ES core where:
 
 - the population is sharded across devices,
 - rollouts are sharded across devices,
-- **the distribution state is sharded, not replicated**,
+- the distribution state is *replicated*, and C1.4 explains why that is the
+  right answer rather than a shortfall,
 - solutions are **never globally flattened** — leaves keep their `(m, n)` shape,
 - the perturbation scheme is a pluggable strategy, so both published algorithms are two
   lines of config apart.
@@ -85,21 +86,67 @@ Crossover depends on `N`, `d`, `D`, and interconnect. Both get implemented; Phas
 measures the crossover and produces the plot. **Nothing public claims "scalar all-reduce"
 until that measurement exists.**
 
-### C1.4 — Sharded distribution state
+### C1.4 — Distribution state — **DECIDED 2026-07-31: isotropic, plus a diagonal**
 
 For isotropic ES the state is `(μ, σ)` and sharding it is theatre — say so honestly rather
 than dressing it up.
 
 Where it matters is the CMA family, where the `d×d` covariance is replicated on every
-device in every existing JAX implementation. Decide in this phase:
+device in every existing JAX implementation. The options were:
 
 - **Option 1**: carry one CMA-family strategy with genuinely sharded state (VD-CMA is the
   best candidate — diagonal-plus-rank-one, so the state shards naturally and it's verified
   absent from evosax).
 - **Option 2**: ship isotropic only, and state the limitation in the README.
 
-Option 1 is the stronger claim and roughly two extra weeks. Option 2 is defensible. Pick
-deliberately, write down why.
+**Decision: Option 2, widened to a per-coordinate diagonal. Option 1 is dropped.**
+
+Three findings drove it, and the third is the one that settles it.
+
+**1. The memory argument for Option 1 is weaker than this document assumed.** Parameters are
+`O(d)` and *deliberately replicated* — see the traps below: every device holding the model is
+ES's whole advantage. VD-CMA's state is diagonal-plus-rank-one, also `O(d)`. If a device can
+hold the params it can hold the state, so sharding it saves a small constant multiple of
+something already chosen to be replicated. The memory case is strong only for full CMA's
+`O(d²)`, and full CMA is a non-starter at this scale regardless: `d = 10⁹` means `10¹⁸`
+covariance entries.
+
+**2. Sharding an `O(d)` state on a population-parallel mesh costs a gather.** The mesh has
+one axis. To sample, device `k` needs the distribution parameters for every leaf it perturbs,
+which is all of them. Sharding `D` and `v` across `pop` therefore forces an all-gather every
+generation — precisely the `O(d)` cost Strategy B pays. It trades replicated memory for
+recurring communication rather than removing a cost.
+
+**3. Option 1 requires a protocol change, which cuts against what Gate G0 concluded.**
+`sample(base_key, params, member_ids)` has nowhere to put covariance state; the only
+distribution parameter the protocol carries is `sigma`, at `apply`. VD-CMA's rank-one term
+couples coordinates, so it cannot be expressed as a per-leaf scale — it would need a fourth
+protocol method or state threaded through `sample`. G0's finding was that the strategy
+abstraction is **not** load-bearing for sample design and should stay thin; widening it for a
+covariance family is the opposite move, made for a claim whose memory justification is
+already the weakest of the three.
+
+There is also a composition problem: EGGROLL's factored perturbation already determines the
+sampling distribution, and so does VD-CMA. Two components owning one decision is a design
+conflict, not an integration task.
+
+**What ships instead.** `sample` produces **unit-scale** perturbations and `apply` scales
+them, so widening `sigma` from a scalar to a params-shaped pytree gives per-coordinate step
+sizes with **no protocol change**: it is a type widening on an argument that already exists.
+The diagonal shards exactly as params do, it composes with `LowRank` because it is a scale
+rather than a distribution, and it buys the thing isotropic ES is genuinely bad at, which is
+ill-conditioning.
+
+Not claimed as novel. VD-CMA's absence from evosax was verified; the diagonal families
+(sep-CMA, SNES) were **not** checked, and the reason to do this is that it fits the protocol
+for free, not that nobody else has it.
+
+**The consequence for the project's headline claim.** "The distribution state is sharded" was
+in `README.md`, `CLAUDE.md` and `PLAN.md`, and it is not supportable for *any* ES that keeps
+parameters replicated — which this one does, on purpose. All three now say what is actually
+true: the population and the rollouts sharded, the distribution state replicated because it
+is the same size as the model and the model is replicated by design. Retracting a claim is
+cheaper than defending one that does not hold.
 
 ### C1.5 — Both algorithms as strategies
 

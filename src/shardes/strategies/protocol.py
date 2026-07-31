@@ -53,9 +53,13 @@ class PerturbationStrategy(Protocol):
         model: Callable[[PyTree, Array], Array],
         params: PyTree,
         pert: Perturbation,
-        sigma: float,
+        sigma: float | PyTree,
     ) -> Callable[[Array], Array]:
         """Given model(params, x) -> y, return g(x) -> (n_local, ...) over all members.
+
+        `sigma` is a scalar (isotropic) or a pytree matching `params` (a per-coordinate
+        diagonal). `strategies._scale.per_leaf` normalizes the two, and every implementation
+        should use it rather than branching: the multiplication is elementwise either way.
 
         Full rank materializes per member, or regenerates from seed. Low rank rewrites
         x @ W.T into x @ W.T + (x @ B) @ A.T and never materializes.

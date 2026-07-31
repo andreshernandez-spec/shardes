@@ -8,9 +8,13 @@ loads into every session. Detail lives in `docs/`.
 ## What this project is
 
 `shardes` is a JAX library for **sharded evolution strategies**: an `ask`/`eval`/`tell`
-core that shards the population *and* the distribution state across devices, with the
-perturbation scheme as a pluggable, shape-aware strategy rather than a hardcoded
-`randn(num_dims)`.
+core that shards the population and the rollouts across devices, with the perturbation
+scheme as a pluggable, shape-aware strategy rather than a hardcoded `randn(num_dims)`.
+
+The distribution state is replicated, not sharded (decided in `docs/02` C1.4 and corrected
+here on 2026-07-31). Sharding it is theatre for isotropic ES and, for the CMA family, would
+cost a per-generation gather to save memory the design already spends on replicating the
+model.
 
 It exists because the two 2025 papers that made ES work at LLM scale
 ([Qiu et al.](https://arxiv.org/abs/2509.24372), full-rank + seed regeneration;

@@ -24,10 +24,15 @@ to one dense vector via `ravel_pytree`, which forecloses per-matrix structured
 perturbation, parameter sharding, and pytree-native ES simultaneously — and it contains no
 sharding code at all.
 
-`shardes` is an `ask`/`eval`/`tell` core where the population, the rollouts, **and the
-distribution state** are sharded, solutions are never globally flattened, and the
-perturbation scheme is a pluggable strategy — so both published algorithms are a
-two-line diff apart.
+`shardes` is an `ask`/`eval`/`tell` core where the population and the rollouts are sharded,
+solutions are **never globally flattened**, and the perturbation scheme is a pluggable
+strategy — so both published algorithms are a two-line diff apart.
+
+The distribution state is *replicated*, deliberately. An earlier version of this claimed it
+was sharded; that is not supportable for any ES that keeps parameters replicated, which this
+one does on purpose, because every device holding the model is the advantage ES has over
+gradient training. `docs/02-phase1-sharded-core.md` C1.4 has the full reasoning and what
+shipped instead.
 
 ---
 

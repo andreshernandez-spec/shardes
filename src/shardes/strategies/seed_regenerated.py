@@ -23,6 +23,7 @@ import jax.numpy as jnp
 
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
+from shardes.strategies._scale import per_leaf
 from shardes.types import Array, Key, PyTree
 
 
@@ -71,10 +72,12 @@ class SeedRegenerated:
         from holding them all at once.
         """
 
+        scale = per_leaf(sigma, params)
+
         def g(x: Array) -> Array:
             def step(carry, i):
                 eps = member_noise(pert.base_key, pert.like, i, self.coupling)
-                perturbed = jax.tree.map(lambda p, e: p + sigma * e, params, eps)
+                perturbed = jax.tree.map(lambda p, s, e: p + s * e, params, scale, eps)
                 return carry, model(perturbed, x)
 
             _, out = jax.lax.scan(step, None, pert.member_ids)

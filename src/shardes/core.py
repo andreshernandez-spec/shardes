@@ -49,6 +49,7 @@ from jax.sharding import Mesh
 
 from shardes import contraction, sharding
 from shardes.shaping import centered_ranks
+from shardes.strategies._scale import per_leaf
 from shardes.strategies.mirrored import Mirrored
 from shardes.strategies.protocol import Perturbation, PerturbationStrategy
 from shardes.types import Array, Key, PyTree
@@ -61,9 +62,17 @@ class State(NamedTuple):
     here is ever flattened (invariant 1).
 
     `sigma` lives in the state rather than on the object because it is distribution state,
-    not configuration — an adaptive-sigma strategy changes it per generation, and this is
-    where that would happen. It is constant today, which docs/02 C1.4 calls out honestly:
-    for isotropic ES, "sharding the distribution state is theatre".
+    not configuration — an adaptive-sigma rule changes it per generation, and this is where
+    that happens.
+
+    It is **either a scalar or a params-shaped pytree**. A scalar is isotropic ES, one global
+    step size. A pytree is a per-coordinate diagonal, which is what docs/02 C1.4 settled on
+    instead of a sharded CMA state: `sample` produces unit-scale perturbations and `apply`
+    scales them, so a diagonal is a type widening on an argument that already existed rather
+    than a change to the strategy protocol.
+
+    Stored as given rather than normalized to a tree, so the isotropic case does not pay
+    |params| of memory to hold the same number repeated.
 
     `generation` is the counter the per-generation key derives from, so a resumed run at
     the same generation samples the same population.
@@ -93,7 +102,7 @@ class ShardedES:
         strategy: PerturbationStrategy,
         *,
         n: int,
-        sigma: float,
+        sigma: float | PyTree,
         lr: float,
         mesh: Mesh,
         shaping: Callable[[Array], Array] = centered_ranks,
@@ -110,7 +119,7 @@ class ShardedES:
 
         self.strategy = strategy
         self.n = int(n)
-        self.sigma = float(sigma)
+        self.sigma = sigma
         self.lr = float(lr)
         self.mesh = mesh
         self.shaping = shaping
@@ -122,7 +131,7 @@ class ShardedES:
         """Params replicated, everything else scalar. No solution is ever flattened."""
         return State(
             params=jax.device_put(params, sharding.replicated(self.mesh)),
-            sigma=jnp.float32(self.sigma),
+            sigma=jax.tree.map(jnp.float32, self.sigma),
             key=key,
             generation=jnp.int32(0),
         )
@@ -180,7 +189,12 @@ class ShardedES:
             self.mesh,
             how=self.how,
         )
-        scale = self.lr / (self.n * state.sigma)
+        # Per leaf, because sigma may be a params-shaped diagonal. The estimator divides by
+        # the sigma it perturbed with, so a per-coordinate sigma divides per coordinate.
+        sigmas = per_leaf(state.sigma, state.params)
         return state._replace(
-            params=jax.tree.map(lambda p, u: p - scale * u, state.params, update)
+            params=jax.tree.map(
+                lambda p, s, u: p - (self.lr / (self.n * s)) * u,
+                state.params, sigmas, update,
+            )
         )

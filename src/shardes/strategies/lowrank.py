@@ -31,6 +31,7 @@ import jax.numpy as jnp
 
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import leaf_streams
+from shardes.strategies._scale import per_leaf
 from shardes.types import Array, Key, PyTree
 
 
@@ -123,16 +124,20 @@ class LowRank:
         sigma: float,
     ) -> Callable[[Array], Array]:
         """The perturbed weights are never formed. See the module docstring."""
-        scale = sigma / math.sqrt(self.r)
+        # Per leaf, so a params-shaped diagonal works exactly as a scalar does. The
+        # 1/sqrt(r) is folded in here rather than at sample time because it belongs to the
+        # scale, not to the factors (docs/02 C1.4).
+        sigmas = per_leaf(sigma, params)
 
         def g(x: Array) -> Array:
             def one(factors: PyTree) -> Array:
-                def substitute(leaf, lf):
+                def substitute(leaf, s, lf):
                     if lf.b is None:
-                        return leaf + sigma * lf.a
-                    return LowRankWeight(leaf, lf.a, lf.b, jnp.asarray(scale, leaf.dtype))
+                        return leaf + s * lf.a
+                    return LowRankWeight(leaf, lf.a, lf.b,
+                                         jnp.asarray(s / math.sqrt(self.r), leaf.dtype))
 
-                return model(jax.tree.map(substitute, params, factors), x)
+                return model(jax.tree.map(substitute, params, sigmas, factors), x)
 
             return jax.vmap(one)(pert.factors)
 
