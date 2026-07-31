@@ -1,20 +1,29 @@
-"""Fitness shaping: fitness (n,) -> weights (n,).
+"""Fitness shaping. Leading axis is members; every shaping returns `(n,)` weights.
+
+Most take `(n,)`. `group_relative` takes `(n, g)` — n members scored on g tasks — which is
+why the contract is stated as "leading axis is members" rather than "takes (n,)". A shaping
+is free to consume trailing axes; it must not change the leading one.
 
 Group-relative (GRPO-style) shaping is the thing that makes ES competitive with GRPO on
 reasoning and is verified absent from evosax's shaping module. Small surface, high leverage
-(docs/02-phase1-sharded-core.md C1.6). Not written yet.
+(docs/02-phase1-sharded-core.md C1.6).
 
-Centered ranks need a global sort over all N fitnesses, so once this is sharded it is a
-synchronization barrier: an all_gather of N scalars plus a wait, every generation. Cheap in
-bytes, not free in latency. Phase 2 measures what it costs (E10).
+**Every shaping here is a synchronization barrier once sharded**, and it is worth being
+precise about why, because the reasons differ. `centered_ranks` needs a global sort over all
+N fitnesses. `centered` needs the global mean. `group_relative` needs a per-task mean and
+standard deviation *across members*, so it reduces over the sharded axis too. All three are
+an all-gather of N scalars (or N*g) plus a wait, every generation. Cheap in bytes, not free
+in latency. Phase 2 measures what it costs (E10). `none` is the only one that is not a
+barrier, which is one reason to keep it.
 
 Shaping is also discontinuous in epsilon, which is why Phase 0 sweeps with and without it.
 QMC's advantage rests on bounded Hardy-Krause variation and rank transforms destroy it
 (docs/00-context.md, obstacle 2).
 
-**Only `none` and `centered` leave the estimator unbiased.** `centered_ranks` is not
-estimating grad f at all: it is a deliberately different update direction, so its bias
-against grad f will not go to zero and should not be read as a failure.
+**Only `none` and `centered` leave the estimator unbiased.** `centered_ranks` and
+`group_relative` are not estimating grad f at all: they are deliberately different update
+directions, so their bias against grad f will not go to zero and should not be read as a
+failure.
 """
 
 import jax.numpy as jnp
@@ -68,4 +77,63 @@ def centered_ranks(fitness: Array) -> Array:
     return ranks / (n - 1) - 0.5
 
 
-BY_NAME = {"none": none, "centered": centered, "centered_ranks": centered_ranks}
+def group_relative(fitness: Array) -> Array:
+    """GRPO-style shaping. `fitness` is `(n, g)`: n members, g tasks. Returns `(n,)`.
+
+    Each task is normalized **across members** before the tasks are averaged, so a task
+    contributes to the update through the *ordering it induces over the population*, not
+    through its reward scale. Without that, one task with rewards in the thousands and
+    another with rewards in [0, 1] are not two tasks: they are one task and a rounding error.
+
+    This is the piece that makes ES competitive with GRPO on reasoning, and it is verified
+    absent from evosax's shaping module (docs/02 C1.6). It is a small surface for what it
+    buys: the whole idea is that a group baseline replaces a learned value function, and ES
+    already has the group.
+
+    **A task nobody varies on contributes exactly zero, not a NaN.** If every member scores
+    identically on a task — all solve it, or none do — its standard deviation is zero and
+    there is no signal in it. That case is common rather than exotic on reasoning benchmarks,
+    where a fraction of problems are saturated in both directions from the first generation.
+    Dividing by `sd + eps` would instead turn a dead task into a large arbitrary weight, so
+    the zero is selected explicitly.
+
+    **Not an estimator of grad f**, for the same reason `centered_ranks` is not: dividing by
+    a per-task standard deviation is a data-dependent rescaling, so the bias check in
+    docs/01 C0.5 is descriptive here rather than a gate. The mean subtraction also carries
+    the `(1 - 1/n)` shrinkage measured in Phase 0, and it is *not* corrected here — the
+    correction would be a scale factor on something already rescaled by an estimated
+    standard deviation, which is arithmetic without meaning. Read this as a different update
+    direction, not as a noisier `centered`.
+
+    Known sharp edge, inherited from GRPO rather than introduced here: normalizing by the
+    per-group standard deviation upweights low-variance groups, because a group where the
+    population barely differs gets its small differences divided by a small number. The
+    fix in the literature is to drop the `sd` divisor and keep only the centering. That is
+    one line away and deliberately not the default, because the default should be the thing
+    the papers ran.
+    """
+    if fitness.ndim != 2:
+        raise ValueError(
+            f"group_relative needs (n_members, n_groups), got shape {fitness.shape}. A 1-D "
+            "fitness has one group and no group structure to be relative to; use `centered` "
+            "or `centered_ranks` for that."
+        )
+    n = fitness.shape[0]
+    if n < 2:
+        return jnp.zeros(fitness.shape[:1], fitness.dtype)
+
+    mu = jnp.mean(fitness, axis=0, keepdims=True)
+    sd = jnp.std(fitness, axis=0, keepdims=True)
+    advantage = jnp.where(sd > 0, (fitness - mu) / jnp.where(sd > 0, sd, 1.0), 0.0)
+    return jnp.mean(advantage, axis=1)
+
+
+#: Shaping by name. Every entry takes a leading member axis and returns `(n,)` weights;
+#: `group_relative` is the one that consumes a second axis, which is why the contract is
+#: stated as "leading axis is members" rather than "takes (n,)".
+BY_NAME = {
+    "none": none,
+    "centered": centered,
+    "centered_ranks": centered_ranks,
+    "group_relative": group_relative,
+}

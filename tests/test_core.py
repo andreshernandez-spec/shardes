@@ -395,3 +395,87 @@ def test_per_leaf_normalizes_scalars_and_passes_trees_through():
 
     given = {"w": jnp.ones((2, 3)), "b": 2 * jnp.ones((3,))}
     assert per_leaf(given, tree) is given
+
+
+# --------------------------------------------------------------------------------------
+# Group-relative shaping end to end. Phase 1 C1.6.
+# --------------------------------------------------------------------------------------
+
+
+def multi_task(p, _x):
+    """Three tasks on wildly different reward scales, which is the case C1.6 is about.
+
+    Task 0 is the objective; tasks 1 and 2 are the same objective rescaled and offset. Any
+    shaping that does not normalize per task will be driven almost entirely by task 2.
+    """
+    base = sum(jnp.sum(jnp.square(leaf)) for leaf in jax.tree.leaves(p))
+    return jnp.stack([base, 10.0 * base + 5.0, 5000.0 * base + 12345.0])
+
+
+@pytest.mark.parametrize("d", OTHER_THAN_ONE)
+def test_group_relative_survives_the_sharded_path(d):
+    """A 2-D fitness has to reach `tell` intact: the shaping reduces over the *member* axis,
+    which is the sharded one, so it is a barrier exactly like centered ranks."""
+    from shardes import shaping as shp
+
+    mesh = sharding.make_mesh(d)
+    es = ShardedES(IIDGaussian(), n=N, sigma=0.01, lr=0.05, mesh=mesh,
+                   shaping=shp.group_relative)
+    state = es.init(jax.random.key(0), params0())
+    pert, state = es.ask(state)
+    fitness = es.apply(multi_task, state, pert)(jnp.zeros(()))
+    assert fitness.shape == (N, 3)
+
+    out = es.tell(state, pert, fitness)
+    assert jax.tree.structure(out.params) == jax.tree.structure(params0())
+    assert all(bool(jnp.all(jnp.isfinite(x))) for x in jax.tree.leaves(out.params))
+
+
+def test_group_relative_is_device_count_invariant():
+    """It reduces across the sharded axis, so it is the shaping most able to break
+    invariance. Checked separately from the scalar-fitness shapings for that reason."""
+    from shardes import shaping as shp
+
+    def run(d):
+        mesh = sharding.make_mesh(d)
+        es = ShardedES(IIDGaussian(), n=N, sigma=0.01, lr=0.05, mesh=mesh,
+                       shaping=shp.group_relative)
+        state = es.init(jax.random.key(0), params0())
+        pert, state = es.ask(state)
+        fitness = es.apply(multi_task, state, pert)(jnp.zeros(()))
+        return es.tell(state, pert, fitness).params
+
+    ref = run(1)
+    for d in (2, 8):
+        assert rel_err(run(d), ref) < 1e-6, f"group_relative broke invariance at D={d}"
+
+
+@pytest.mark.slow
+def test_group_relative_is_not_dominated_by_the_largest_scale_task():
+    """The end-to-end version of the scale-invariance claim, against a shaping that lacks it.
+
+    `centered` on the summed fitness is driven by task 2, whose rewards are 5000x the others.
+    `group_relative` gives the three tasks equal say. Since all three encode the *same*
+    objective here, both descend — what differs is that only one of them would still work if
+    the tasks disagreed, so this asserts the mechanism rather than the outcome: the
+    group-relative weights must be nearly unchanged when task 2 is rescaled again, and the
+    summed-fitness weights must not be.
+    """
+    from shardes import shaping as shp
+
+    mesh = sharding.make_mesh(4)
+    es = ShardedES(IIDGaussian(), n=64, sigma=0.01, lr=0.05, mesh=mesh)
+    state = es.init(jax.random.key(0), params0())
+    pert, state = es.ask(state)
+    f = es.apply(multi_task, state, pert)(jnp.zeros(()))
+    rescaled = f * jnp.array([1.0, 1.0, 1e6])
+
+    grouped = (shp.group_relative(f), shp.group_relative(rescaled))
+    summed = (shp.centered(jnp.sum(f, axis=1)), shp.centered(jnp.sum(rescaled, axis=1)))
+
+    def drift(pair):
+        a, b = pair
+        return float(jnp.linalg.norm(a - b) / jnp.linalg.norm(a))
+
+    assert drift(grouped) < 1e-3, "group_relative should be immune to a per-task rescale"
+    assert drift(summed) > 0.1, "the summed baseline should be sensitive to it"

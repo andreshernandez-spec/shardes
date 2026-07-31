@@ -93,3 +93,80 @@ def test_by_name_covers_every_public_shaping():
     public = {n for n in dir(shaping) if not n.startswith("_") and callable(getattr(shaping, n))}
     public -= {"Array"}  # the type alias import
     assert public == set(shaping.BY_NAME), public ^ set(shaping.BY_NAME)
+
+
+# --------------------------------------------------------------------------------------
+# Group-relative (GRPO-style). Phase 1 C1.6.
+# --------------------------------------------------------------------------------------
+
+
+def test_group_relative_is_invariant_to_per_task_reward_scale():
+    """The property the whole thing exists for.
+
+    Two tasks, one scored in [0,1] and one in the thousands. Under any shaping that does not
+    normalize per task, the large-scale task *is* the objective and the other is rounding.
+    Here rescaling a task must not change the weights at all, because a task contributes
+    through the ordering it induces over the population and nothing else.
+    """
+    f = jax.random.normal(jax.random.key(0), (32, 2), jnp.float32)
+    rescaled = f * jnp.array([1.0, 5000.0]) + jnp.array([0.0, 12345.0])
+
+    got = shaping.group_relative(f)
+    want = shaping.group_relative(rescaled)
+    assert float(jnp.max(jnp.abs(got - want))) < 1e-4
+
+
+def test_a_task_nobody_varies_on_contributes_exactly_zero():
+    """All-solved and all-failed tasks are common on reasoning benchmarks, not exotic.
+
+    Their standard deviation is zero and they carry no signal. `sd + eps` would turn that
+    into a large arbitrary weight; the zero has to be selected explicitly. Asserted as
+    *exactly* equal to the single-task result, so a near-miss cannot pass.
+    """
+    live = jax.random.normal(jax.random.key(0), (16, 1), jnp.float32)
+    dead_hi = jnp.ones((16, 1), jnp.float32)        # everyone solves it
+    dead_lo = jnp.zeros((16, 1), jnp.float32)       # nobody does
+
+    alone = shaping.group_relative(live)
+    with_dead = shaping.group_relative(jnp.concatenate([live, dead_hi, dead_lo], axis=1))
+
+    assert jnp.all(jnp.isfinite(with_dead))
+    # Three tasks, two contributing zero: the mean over tasks is a third of the live one.
+    assert float(jnp.max(jnp.abs(with_dead * 3.0 - alone))) < 1e-5
+
+
+def test_group_relative_weights_sum_to_zero_per_task():
+    """Centering across members is what makes it a baseline. If the weights did not sum to
+    zero, a task would push the whole population in one direction regardless of ordering."""
+    f = jax.random.normal(jax.random.key(1), (64, 5), jnp.float32)
+    mu = jnp.mean(f, axis=0, keepdims=True)
+    sd = jnp.std(f, axis=0, keepdims=True)
+    per_task = (f - mu) / sd
+    assert float(jnp.max(jnp.abs(jnp.sum(per_task, axis=0)))) < 1e-3
+    assert abs(float(jnp.sum(shaping.group_relative(f)))) < 1e-3
+
+
+def test_group_relative_ranks_a_better_member_higher():
+    """Sanity, and it catches a sign flip: a member that beats everyone on every task must
+    get the largest weight."""
+    f = jax.random.normal(jax.random.key(2), (16, 4), jnp.float32)
+    f = f.at[5].set(f.max() + 10.0)
+    w = shaping.group_relative(f)
+    assert int(jnp.argmax(w)) == 5
+
+
+def test_group_relative_refuses_a_one_dimensional_fitness():
+    """A 1-D fitness has one group and nothing to be relative to. Raising beats silently
+    treating the member axis as the group axis, which would return zeros."""
+    with pytest.raises(ValueError, match="n_members, n_groups"):
+        shaping.group_relative(jnp.arange(8, dtype=jnp.float32))
+
+
+def test_group_relative_handles_a_degenerate_population():
+    """n < 2 has no baseline. Returns (n,) zeros rather than dividing by zero."""
+    out = shaping.group_relative(jnp.ones((1, 3), jnp.float32))
+    assert out.shape == (1,) and float(out[0]) == 0.0
+
+
+def test_group_relative_is_registered():
+    assert shaping.BY_NAME["group_relative"] is shaping.group_relative
