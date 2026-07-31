@@ -83,18 +83,31 @@ and say so.
 
   | command | what | budget |
   |---|---|---|
-  | `pytest --fast` | structural only: protocols, invariants, shapes, chunk equality, dispatch, config validation | **120 s** |
-  | `pytest` | everything except `gpu`, including the statistical tier | **5 min** |
+  | `pytest --fast` | structural only: protocols, invariants, shapes, chunk equality, dispatch, sharding, config validation | **~2 min** |
+  | `pytest` | everything except `gpu`, including the statistical and behavioural tiers | **~6 min** |
 
-  Measured after coupling landed: 95 s fast (317 tests), 243 s full (483 tests), on CPU with
-  8 simulated devices. Both figures are contended-sensitive — a concurrent GPU job pushed the
-  fast tier to 146 s once, which is not a regression.
+  Measured after the sharded core landed: **122 s fast** (403 tests), **310 s full** (604
+  tests), CPU, 8 simulated devices, machine otherwise idle. Both are contention-sensitive: a
+  concurrent job pushed the fast tier to 159 s once, which is not a regression. Re-measure
+  before concluding anything from a timing.
 
-  The fast budget was 90 s, set when the registry held 6 strategies and there was no
-  `coupling.py`. It now holds 12 and there are three noise sources. Raised rather than met,
-  because meeting it meant deleting a real test to hit a number chosen for a smaller suite,
-  which is the same mistake as the original two-minute rule below. Cut tests when they are
-  redundant, not when the clock is inconvenient.
+  **The budgets are the human constraint, not a number.** Fast has to stay usable as an inner
+  loop while editing; full has to stay runnable before a commit without the urge to skip it.
+  Two and six minutes are what those mean. The history is worth knowing: 90 s when the
+  registry held 6 strategies, 120 s after `coupling.py`, and now this, because Phase 1 added a
+  sharded core where every (strategy x device count x contraction strategy) combination
+  compiles a *separate* XLA program.
+
+  **What drives the cost is compilation, not arithmetic**, so the lever that works is running
+  fewer distinct program shapes, not smaller ones. Two that paid: tiering device counts so the
+  fast tier sees only 1 and 8 (the ends that matter — no collective, and full fan-out), and
+  caching the D=1 reference that every invariance comparison shares. Two that did not and
+  should not be retried: shrinking `n`, and dropping strategies from a parametrization.
+
+  Cut tests when they are redundant, not when the clock is inconvenient. Move a test to the
+  slow tier when it is *behavioural* rather than structural — `test_tell_descends_on_the
+  _objective` runs five generations to check a sign convention, and that is exactly the shape
+  of thing the full tier is for.
 
   The default is the complete suite. Making speed the default would mean the statistical
   tests only run when someone remembers a flag, which is the failure the old rule guarded
