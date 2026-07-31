@@ -1,4 +1,21 @@
-# Phase 3 — Coupling at scale
+# Phase 3 — Coupling at scale — **DROPPED**
+
+> **Gate G0 came back "no" on 2026-07-30, so this phase does not happen.** The condition
+> below is met in the negative: skip it, reclaim the month, say so in the README.
+>
+> `orthogonal_hd` showed no estimator-quality separation at any rank, sigma or population,
+> out to `N/d_eff = 42.7`, with the treatment verified maximal. The full answer and the
+> reasoning are in `docs/01-phase0-estimator-harness.md`, "The answer: no".
+>
+> **The rest of this file is kept as written, not rewritten.** It is the record of what was
+> predicted and why, which is the only thing that makes the negative result legible. Two
+> parts of it did land and are live in the library: C3.1 (settled in Phase 0 — coupling is a
+> noise source, not a wrapper) and the C3.3 cost table (measured in E1). C3.2, the sharded
+> coupling work, is what got dropped, and it was the bulk of the three weeks.
+>
+> What survives as open questions is in `docs/BACKLOG.md`: B1 (why Sobol degrades), B2 (a
+> real FWHT kernel), B3 (does coupling help an optimizer on a multimodal objective — which
+> G0 did **not** answer).
 
 **Conditional on Gate G0.** If Phase 0 said "no", skip this and reclaim the month — say so
 in the README and move on. If it said "ambiguous", revisit after G2 with real tasks rather

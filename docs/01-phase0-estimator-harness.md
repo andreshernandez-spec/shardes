@@ -445,6 +445,79 @@ saves a month.
 
 ---
 
+## The answer: **no**
+
+> *Drafted by Claude Code on 2026-07-30 at Andres's request, because he was away from the
+> machine. Ground rule 1 says this paragraph is his. The numbers and the reasoning are
+> checked and reproducible; the wording is a placeholder to be rewritten in his voice.*
+
+**Rank-1 curves do not separate across sampling schemes, at any `N/d_eff` this hardware
+reaches.** `orthogonal_hd` lies on top of the uncoupled baseline everywhere: cosine ratios
+0.99–1.01 with overlapping IQRs at every population, sigma and rank, out to `N/d_eff = 42.7`.
+The full-rank panel does not separate either, so the control behaves as predicted; the
+difference the gate was looking for is absent on both sides.
+
+Evidence: `experiments/phase0/`, 456 configs, `R = 30` each, one uniform environment (commit
+`1fb6743`, RTX 3080, jaxlib 0.11.0), 13.07 h. Figure `figures/f5-estimator-quality.png`,
+comparison `gate.py`.
+
+**The null is not a failure to apply the treatment, and that was checked rather than
+assumed.** A 512-member `orthogonal_hd` block is an *exactly* orthonormal basis of `ℝ⁵¹²`
+(max off-diagonal Gram entry `0.0e+00`) where the i.i.d. block reaches `0.215`, and the two
+strategies' contractions differ by 1.4 relative. The designs are as different as two designs
+can be, and the estimator cannot tell them apart.
+
+**Why, in one line.** Measured cosine tracks `√(N/d_ambient)`: at full rank, `N = 16384`,
+predicted `0.1021` against measured `0.1013`, and every curve in F5 is slope ½ on log–log. If
+estimator quality is set by how many members you have and how large the model is, there is
+nothing left for *how you choose them* to influence. The null and the power law are one fact.
+
+**Where the original reasoning went wrong.** The `N/d_eff` argument established that low rank
+creates *room* for sample design, and it does — rank 1 genuinely reaches `N/d_eff = 42.7`.
+That was taken as evidence a *mechanism* would appear. It is not the same claim. The tell was
+available before any GPU time: coupling leaves `E[εεᵀ]` and the pairwise cross-moments
+unchanged (`tests/test_coupling.py::test_hd_is_uncorrelated_across_members_within_a_block`),
+so it cannot move the variance of a linear functional. Only higher-order structure was ever in
+play, and on this objective it pays nothing.
+
+### Consequences
+
+- The strategy abstraction **stays**, justified by there being two real algorithms and two
+  ranks, not by coupling. It stays *thin*: coupling is a constructor argument and the sharded
+  core never learns about it.
+- **Phase 3 is dropped.** See `docs/04-phase3-coupling.md`.
+- `OrthogonalHD` and `ScrambledSobol` stay in the library. They cost nothing to keep, the
+  property suite covers them, and `docs/BACKLOG.md` B3 is the question they would be needed
+  for.
+
+### What this result does *not* say
+
+- It does not say coupling cannot help **an optimizer**. E1 measured estimator quality, and
+  `docs/04` C3.3's caveat cuts both ways: parameter-space noise does optimization work as
+  Gaussian smoothing, so a better-conditioned estimate can be a worse smoother. Task-level
+  validation on a multimodal objective is `docs/BACKLOG.md` B3 and is open.
+- It does not say scrambled Sobol hurts. Sobol *was* the one scheme that separated, and the
+  wrong way (0.892 at `N = 2¹⁸`, rank 1), but the cause is unidentified and may be this
+  implementation rather than the method. `docs/BACKLOG.md` B1.
+- It is one transformer block, not an LLM. The `N/d_eff` regime transfers; the loss landscape
+  does not.
+
+### Findings worth keeping that G0 did not ask for
+
+- **Mirroring is not a free win and its sign depends on sigma.** At rank 1 it is 1.67×
+  *better* than i.i.d. at `σ = 1e-2` and ~1.4× *worse* at `σ = 1e-3`. It cancels the even part
+  of `f`, which matters only once sigma is large enough to sample curvature; below that,
+  centering already removes the constant and mirroring merely spends the population on half as
+  many distinct directions.
+- **The rank-1 restriction is priced.** At equal `N`, full rank reaches `cos ≈ 0.10` where
+  rank 1 reaches `0.045`: about 2.2× in estimator quality per member.
+- **Coupling's cost is two numbers**, +4.2% at rank 1 and +770% at full rank, because the
+  design dimension differs by 512×. `docs/04` C3.3.
+- **`σ = 0.1` is a dead arm on this block** (cos ~1e-3, occasionally negative), the same shape
+  of finding as `shaping = none`. Drop it from any successor sweep.
+
+---
+
 ## Known limitations to state up front
 
 - Estimator MSE is **not** a proxy for task performance. See the smoothing caveat in

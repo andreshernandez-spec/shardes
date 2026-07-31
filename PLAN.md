@@ -61,6 +61,15 @@ fitness-evaluation loop, which is a vertical slice of the library, written once 
   drop Phase 3, reclaim a month.
 - **Ambiguous** → record it, proceed to Phase 1, revisit after Phase 2 with real tasks.
 
+> **ANSWERED 2026-07-30: no.** No separation at any rank, sigma or population, out to
+> `N/d_eff = 42.7`, with the treatment verified maximal (an exactly orthonormal 512-member
+> design against i.i.d.). Measured cosine tracks `√(N/d_ambient)` and is blind to sample
+> design. 456 configs, `R = 30`, 13.07 h on the RTX 3080.
+>
+> **Phase 3 is dropped and the month is reclaimed.** The abstraction stays and stays thin.
+> Full answer: `docs/01-phase0-estimator-harness.md` → "The answer: no".
+> Open questions that survive: `docs/BACKLOG.md`.
+
 ---
 
 ### Phase 1 — Sharded core → `docs/02-phase1-sharded-core.md`
@@ -85,7 +94,7 @@ and find the crossover.
 
 ---
 
-### Phase 3 — Coupling at scale → `docs/04-phase3-coupling.md`
+### Phase 3 — Coupling at scale → `docs/04-phase3-coupling.md` — **DROPPED (G0 = no)**
 
 **Conditional on G0.** Coupled/low-discrepancy sampling, validated end-to-end on task
 performance rather than estimator MSE — because lower variance does not straightforwardly mean
@@ -126,7 +135,7 @@ MuJoCo Playground) which can be done in parallel and are independently mergeable
 | Someone publishes sharded ES first | medium | The architectural claim (strategy-pluggable, unflattened) survives even if a scaling result doesn't. Check monthly. |
 | evosax maintainer objects to the framing | low-med | This is a standalone library, not a fork. Be complimentary and specific about the flattening issue; offer the modernization PRs regardless. |
 | Phase 2 burns budget on a config bug | medium | Full dress rehearsal on 1–2 GPUs with tiny `N` and a hard wall-clock cap. Checkpoint every generation. See `docs/compute.md` §"Not wasting the 6 hours". |
-| Estimator MSE turns out to be a bad proxy for task performance | **high — expected** | This is stated up front in Phase 0's limitations. G0 gates the *abstraction*, not the algorithmic claim. Task-level validation is Phase 3's job. |
+| Estimator MSE turns out to be a bad proxy for task performance | **high — expected** | Stated up front in Phase 0's limitations. G0 gates the *abstraction*, not the algorithmic claim. **Task-level validation was Phase 3's job and Phase 3 is dropped, so it is now `docs/BACKLOG.md` B3 and nothing in this plan closes it.** Say so in the writeup rather than letting the negative read as broader than it is. |
 | Scope creep into CMA-ES variants (VD-CMA, LM-CMA) | medium | Out of scope until after G2. They're a good follow-up, not part of the core claim. |
 | Scope creep into the ZO variance-reduction literature | medium | Full-rank variance reduction beyond mirrored and `orthogonal_hd` is deferred, deliberately. Control variates, subspace projection, preconditioning and importance mixing are all plausible and none is what this project is asking. Sample design under low rank is the question; revisit the rest only after G2. |
 
