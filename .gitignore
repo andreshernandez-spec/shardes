@@ -7,3 +7,4 @@ dist/
 .ipynb_checkpoints/
 .venv/
 experiments/phase0/e1.log
+experiments/phase0/gate-output.txt
