@@ -38,6 +38,42 @@ interconnects.
 **This is the strongest single result in the paper** and the one that reads as distributed
 systems rather than algorithm implementation.
 
+**Phase 1 has the volume half, exactly.** `experiments/phase1/comms.py` reads every collective
+out of the *optimized* HLO and puts it next to the analytic prediction, across 3 strategies ×
+3 populations × 3 device counts. All 27 rows agree **to the byte**:
+
+    A -> one all-gather,  8N bytes   (the shaped weights *and* the member ids)
+    B -> one all-reduce,  4d bytes   (a tuple-valued psum over the whole params tree)
+
+so A is independent of `D` and of the model, B is independent of `N`, and the crossover sits
+at **`N = d/2`** — it moves with the *model size*, not with the device count. That is the
+phase diagram in miniature, at one model size and in bytes.
+
+Two things this found are worth carrying into the paper's methods section, because both are
+mistakes the reader might otherwise repeat. The prediction was originally `4N` for A: it
+gathers the member ids as well as the weights, since a device regenerating all `N`
+perturbations has to know *which* members it is regenerating. And a first parser read only the
+first array of each collective's result shape, which measured B at 64 B against 2112 because
+XLA merges the per-leaf psums into one **tuple-valued** all-reduce. Prediction wrong once,
+instrument wrong once; the table is only worth printing because it caught both.
+
+**What Phase 1 cannot supply is the half that matters most.** Bytes are not time. Simulated
+devices model volume faithfully and interconnect not at all, so where the crossover falls in
+*wall-clock* — which is the actual claim — needs E4 and E7 on real hardware. Nothing above is
+a timing result and none of it should be quoted as one.
+
+**A second crossover, not previously anticipated.** `experiments/phase1/memory.py` measures
+peak per-device scratch from the compiled executable. Per-device storage falls as `1/D`
+exactly (128.53 MiB → 16.04 MiB across 8 devices, a factor of 8.0), but that is the least
+interesting row: `SeedRegenerated` is **flat**, because its `contract` is a `lax.scan` that
+never holds more than one member's noise, and `Mirrored(LowRank(r=1))` starts two orders of
+magnitude lower and falls. So the two cross, between `D = 4` and `D = 8` at `N = 1024`.
+
+The quotable form: **`SeedRegenerated` on one device uses 84× less than `IIDGaussian` on
+eight.** Sharding divides; choosing the perturbation strategy changes the exponent. That
+belongs in the paper next to C1's crossover, because it is the same shape of answer — which
+strategy wins depends on the configuration, not on which paper one prefers.
+
 ### C2 — Both LLM-scale ES algorithms are expressible under one abstraction
 
 Qiu et al. (full-rank, seed-regenerated, `N=30`) and EGGROLL (rank-`r` factored, never
@@ -47,6 +83,28 @@ perturbation-strategy abstraction under which the two are a two-line config diff
 global flattening and no loss of throughput versus each paper's own implementation.
 
 Artifact claim. Established by implementation + baselines, not by a curve.
+
+**The implementation half is done (Phase 1, 2026-07-31).** Both algorithms are one constructor
+argument apart and both drive a real MuJoCo Playground environment end to end through the same
+`init`/`ask`/`apply`/`tell`:
+
+```python
+ShardedES(strategy=Mirrored(SeedRegenerated()), n=30,      ...)   # Qiu et al.
+ShardedES(strategy=Mirrored(LowRank(r=1)),      n=262_144, ...)   # EGGROLL
+```
+
+Device-count invariance holds on 1/2/4/8 simulated devices for both contraction strategies and
+all three strategy families, and the portability half is confirmed on a real GPU. The
+`ravel_pytree` ban is a static check. E0 is therefore substantially complete; what is left of
+C2 is **E9, the baselines** — the "no loss of throughput versus each paper's own
+implementation" clause is still unmeasured, and until it is, the claim is *expressible*, not
+*competitive*. Do not let the two blur.
+
+One constraint belongs in the paper rather than the appendix, because it is the first thing a
+reader will hit: **models must route matmuls through `shardes.nn.dense`.** A structured weight
+is substituted into the params tree, so a model doing arithmetic on it directly raises. That is
+what buys low-rank perturbation without a jaxpr interpreter, and it is the honest cost of the
+abstraction (`docs/01` C0.1).
 
 ### C3 — First systematic ES scaling study on TPU, and the interconnect matters
 
@@ -125,7 +183,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 
 | ID | Experiment | Claim | Tier | Est. hrs | Cost |
 |---|---|---|---|---|---|
-| **E0** | Correctness, device-invariance, comm accounting | C2 | T0 | ∞ | $0 |
+| **E0** | Correctness, device-invariance, comm accounting | C2 | T0 | **mostly done** | $0 |
 | **E1** | Estimator quality: `N` × rank × scheme × shaping × σ | C5 | T2 | **done, 13.1** | $0 |
 | **E2** | Strong scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | ~12 | $0 |
 | **E3** | Weak scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | ~8 | $0 |

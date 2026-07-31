@@ -80,9 +80,21 @@ The library. `Mesh` / `NamedSharding` / `shard_map`, pytree-native ask/tell, bot
 algorithms as strategies, replicated distribution state with a per-coordinate diagonal
 (C1.4), seed derivation from member index.
 
-**Gate G1**: 8-fake-device CPU run and 1-GPU run produce matching updates for a fixed seed;
-both published algorithms run end-to-end on a small task; communication volume in the
+**Gate G1**: 8-fake-device CPU run and a **2-GPU** run produce matching updates for a fixed
+seed; both published algorithms run end-to-end on a small task; communication volume in the
 update path is measured and matches the analysis.
+
+> **Said 1-GPU until 2026-07-31, and that was an abbreviation that dropped the point.**
+> `docs/02` asks for a 1-GPU *and* a 2-GPU run. One GPU emits no collectives at all, so it
+> checks numerics and cannot check sharding — which is the entire reason the criterion exists.
+> Corrected here rather than satisfied on the easier reading.
+>
+> **Status 2026-07-31: capabilities C1.1–C1.7 complete, 5 of 6 criteria met.** Outstanding:
+> the 2-GPU run (`docs/06` T2′). The 1-GPU half passes on the RTX 3080.
+>
+> Criterion 1's "under two minutes" also predates the tier split and contradicts
+> `docs/conventions.md`, which measures and budgets ~2 min fast / ~6 min full. One of the two
+> needs to win; the suite currently runs 149 s and 363 s.
 
 ---
 

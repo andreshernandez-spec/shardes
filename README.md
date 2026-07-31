@@ -2,10 +2,18 @@
 
 Sharded evolution strategies for JAX.
 
-> **Status: pre-alpha. Phase 0 complete, Phase 1 next.** The estimator harness, the
-> perturbation strategies, the fitness shaping and the metrics are implemented and tested
-> (497 tests, CPU, ~4 min). The sharded core — the actual point of the library — is not
-> written yet. See `PLAN.md`.
+> **Status: pre-alpha. Phase 0 complete; Phase 1 capabilities complete, Gate G1 not yet
+> closed.** The estimator harness, the perturbation strategies, the couplings, the shaping,
+> the sharded `ask`/`tell` core, both contraction strategies and a MuJoCo Playground task
+> adapter are implemented and tested (630 tests, CPU, ~6 min).
+>
+> Device-count invariance — the property everything else is built to permit — passes on 1, 2,
+> 4 and 8 simulated devices for every strategy and both contraction strategies, and one real
+> GPU reproduces the simulated result. **The two-GPU confirmation is the one thing G1 still
+> wants**, and it is deliberately not fakeable on this hardware: simulated devices share a
+> memory space and never actually communicate. See `docs/06` T2′.
+>
+> Phase 2 (scaling benchmarks) has not started. Nothing here is a timing claim.
 >
 > Rename freely — check PyPI availability before committing to `shardes`.
 
