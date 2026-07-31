@@ -1,5 +1,12 @@
 # PLAN.md
 
+> **The gate criteria in `docs/` are authoritative; the one-liners here are navigation.**
+> Audited 2026-07-31 and that direction is not a formality: `docs/02` states **six** numbered
+> G1 criteria and `docs/03` states **five** for G2, and PLAN summarised each as a sentence.
+> Twice the abbreviation dropped the load-bearing part — G1's summary said "1-GPU run" where
+> the doc asks for 1-GPU *and* 2-GPU, and one GPU emits no collectives so it cannot test
+> sharding at all. Restating a gate is how it drifts. Point at it instead.
+
 ## Thesis
 
 Evolution strategies got two credible LLM-scale results in late 2025, using **incompatible
@@ -15,10 +22,12 @@ the population and the rollouts are sharded rather than replicated.
 The distribution state is replicated. That was originally claimed as sharded; `docs/02` C1.4
 records why it is not, and why replicating it is correct rather than a compromise.
 
-Secondary, conditional: low-rank perturbation may be the first ES regime at LLM scale where
-population size *exceeds* sampling dimension, which is where coupling / quasi-Monte Carlo
-sample design stops being rounding error. Phase 0 tests that cheaply; Phase 3 pursues it
-only if the test says yes.
+~~Secondary, conditional: low-rank perturbation may be the first ES regime at LLM scale
+where population size *exceeds* sampling dimension, which is where coupling / quasi-Monte
+Carlo sample design stops being rounding error.~~ **Tested and answered "no", 2026-07-30.**
+Rank 1 does reach `N/d_eff = 42.7`, so the regime is real; sample design does not help there.
+Measured cosine tracks `√(N/d_ambient)` and is blind to the design. Phase 3 is dropped.
+`docs/01`, "The answer: no".
 
 ---
 
@@ -29,10 +38,11 @@ only if the test says yes.
 | 0 | Estimator harness | Plot + API requirements + go/no-go | 1 GPU, ~1 day | 1–2 wk | G0 |
 | 1 | Sharded core | The library | CPU (8 fake devices) + 1–2 GPU | 6–10 wk | G1 |
 | 2 | Scaling benchmarks | The headline numbers | 8 GPU, 4–6 h | 2–3 wk | G2 |
-| 3 | Coupling at scale | Paper section, if G0 said yes | TRC TPU + 8 GPU | 3–4 wk | — |
+| ~~3~~ | ~~Coupling at scale~~ | **DROPPED, G0 = no** | — | *3–4 wk reclaimed* | — |
 | 4 | Paper | Submission + artifact | — | 4–6 wk | — |
 
-Total: roughly 3–4 months to a usable library, ~6 months to a submission.
+Total: roughly 3–4 months to a usable library, ~6 months to a submission — less Phase 3's
+3–4 weeks, reclaimed when G0 came back negative.
 
 **The benchmark campaign and the paper it feeds are specified separately**, because the
 free-tier compute imposes its own calendar: `docs/05-paper.md` (claims → experiments →
@@ -105,7 +115,11 @@ communication volume, memory per device. Compare the two contraction strategies 
 all-reduce + replicated regeneration, vs. model-size all-reduce of the partial update)
 and find the crossover.
 
-**Gate G2**: a scaling curve worth putting at the top of a README.
+**Gate G2**: `docs/03-phase2-benchmarks.md` states five numbered criteria. The short form is
+"a scaling curve worth putting at the top of a README", and the four it omits are the ones that
+make the curve trustworthy — the crossover phase diagram, an external comparison at matched
+shapes, reproducibility from a committed config, and a limitations paragraph a skeptic would
+accept. Read the doc.
 
 ---
 
@@ -130,13 +144,20 @@ A repo a hiring manager can skim in five minutes and come away with:
 2. A one-paragraph statement of the architectural claim (no global flattening; perturbation
    as a strategy) with a link to the evosax comparison that motivates it.
 3. Both published algorithms runnable from the same API with a two-line diff.
-4. A test suite that runs on CPU in two minutes and includes the device-count-invariance
-   test.
+4. A test suite that runs on CPU and includes the device-count-invariance test. **Two tiers,
+   not two minutes**: `pytest --fast` is the inner loop (~2 min) and `pytest` is the full
+   suite (~6 min). `docs/conventions.md` carries the measured figures and the reasoning; this
+   line said "two minutes" until 2026-07-31 and contradicted it.
 5. Honest limitations, including anything Phase 0 or 2 disconfirmed.
 
 Nice-to-have, not required: an upstream contribution. The realistic upstream targets are
-small evosax PRs (JAX 0.11 modernization, replacing the deprecated `brax.envs` path with
-MuJoCo Playground) which can be done in parallel and are independently mergeable.
+small evosax PRs (JAX 0.11 modernization, and moving off the deprecated `brax.envs` path)
+which can be done in parallel and are independently mergeable.
+
+One correction from having actually installed it: MuJoCo Playground is **not** an alternative
+to brax. It depends on `brax>=0.14.2`, which pulls `jaxopt` (last release April 2025, folded
+into optax). It is a maintained wrapper *around* brax, not a way off it. Any upstream pitch
+that says otherwise is wrong. `docs/02` C1.7.
 
 ---
 
@@ -152,7 +173,7 @@ MuJoCo Playground) which can be done in parallel and are independently mergeable
 | Phase 2 burns budget on a config bug | medium | Full dress rehearsal on 1–2 GPUs with tiny `N` and a hard wall-clock cap. Checkpoint every generation. See `docs/compute.md` §"Not wasting the 6 hours". |
 | Estimator MSE turns out to be a bad proxy for task performance | **high — expected** | Stated up front in Phase 0's limitations. G0 gates the *abstraction*, not the algorithmic claim. **Task-level validation was Phase 3's job and Phase 3 is dropped, so it is now `docs/BACKLOG.md` B3 and nothing in this plan closes it.** Say so in the writeup rather than letting the negative read as broader than it is. |
 | Scope creep into CMA-ES variants (VD-CMA, LM-CMA) | medium | Out of scope until after G2. They're a good follow-up, not part of the core claim. |
-| Scope creep into the ZO variance-reduction literature | medium | Full-rank variance reduction beyond mirrored and `orthogonal_hd` is deferred, deliberately. Control variates, subspace projection, preconditioning and importance mixing are all plausible and none is what this project is asking. Sample design under low rank is the question; revisit the rest only after G2. |
+| Scope creep into the ZO variance-reduction literature | medium | Full-rank variance reduction beyond mirrored and `orthogonal_hd` is deferred, deliberately. Control variates, subspace projection, preconditioning and importance mixing are all plausible and none is what this project is asking. Sample design under low rank **was** the question and G0 answered it negatively, so the "revisit after G2" no longer has a live claim attached: full-rank variance reduction is now simply out of scope rather than deferred behind a pending result. |
 
 ---
 
@@ -160,9 +181,13 @@ MuJoCo Playground) which can be done in parallel and are independently mergeable
 
 1. **Contraction strategy.** Scalar all-reduce + replicated seed-regeneration, versus
    all-reducing the model-sized partial update. Both are defensible; the crossover depends
-   on `N`, `d`, and device count. Phase 2 measures it. Do not assert "ES only needs a
-   scalar all-reduce" in any public writeup until this is settled — it's true only for the
-   first strategy.
+   on `N`, `d`, and device count. **The volume half is measured** (Phase 1,
+   `experiments/phase1/comms.py`): A moves `8N` bytes, B moves `4d`, all 27 rows agree with
+   the prediction to the byte, and the crossover sits at `N = d/2`, moving with the model
+   rather than the device count. **The time half is still Phase 2's**, and it is the one the
+   claim is about — bytes are not latency and simulated devices model no interconnect. Do not
+   assert "ES only needs a scalar all-reduce" in any public writeup until that exists; it is
+   true only for the first strategy.
 2. **Embedding layers under low-rank perturbation.** EGGROLL's reference implementation
    raises `NotImplementedError` for the embedding path. Unsolved; a real contribution if
    cracked; explicitly *not* required for any gate.
@@ -171,5 +196,7 @@ MuJoCo Playground) which can be done in parallel and are independently mergeable
    every generation to save memory already spent replicating the model, and a CMA-family
    strategy would need a protocol change that Gate G0 argues against. Isotropic ships, with a
    per-coordinate diagonal that needs no protocol change. `docs/02` C1.4.
-4. **Fitness shaping is a synchronization point.** Centered ranks need a global sort over
-   all `N` fitnesses. Cheap in bytes, but it's a barrier. Measure its cost in Phase 2.
+4. **Fitness shaping is a synchronization point, and it is not only centered ranks.**
+   Centered ranks need a global sort; `centered` needs the global mean; `group_relative`
+   reduces over the member axis, which is the sharded one. All three are a barrier and only
+   `none` is not. Cheap in bytes, not free in latency. Measure the cost in Phase 2 (E10).

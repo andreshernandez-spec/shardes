@@ -111,7 +111,7 @@ routinely. Worth doing in parallel; they are not part of this project's core cla
 
 ## Prior art on coupling / QMC for ES
 
-Relevant to Phase 0 and Phase 3 only. Summary of the search: the idea is old, works in low
+Relevant to Phase 0 only, now: Phase 3 was dropped when G0 came back negative (`docs/04`). Kept because it is the reasoning the negative result is read against. Summary of the search: the idea is old, works in low
 dimensions, and the naive scale-up fails for a reason usually stated incorrectly.
 
 **Classical, low-dimensional, works.** A twenty-year line: Auger, Jebalia & Teytaud (2005)
