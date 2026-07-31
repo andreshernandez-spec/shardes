@@ -511,3 +511,59 @@ def test_the_step_does_not_depend_on_sigma():
     # assertion is about magnitude, which is exactly what the missing 1/sigma would scale.
     ratio = float(np.linalg.norm(large) / np.linalg.norm(small))
     assert abs(ratio - 1.0) < 0.15, f"step scaled with sigma by {ratio:.2f}x"
+
+
+# --------------------------------------------------------------------------------------
+# Embedding layers under low-rank perturbation. BACKLOG B4.
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.slow
+def test_an_embedding_model_trains_under_both_algorithms():
+    """B4 end to end: a gather-based model, driven by both published algorithms.
+
+    EGGROLL's reference implementation raises `NotImplementedError` on the embedding path.
+    Nothing about the perturbation is hard there — indexing distributes over the sum, so
+    `(E + s A B^T)[ids] = E[ids] + s A[ids] B^T` — what was missing is a seam, because an
+    embedding is a gather and `dense` only sees matmuls.
+
+    The model is deliberately embedding-*dominated*: at V=512, D=32 the table is 16384 of the
+    16512 parameters. If the table were being perturbed densely under `LowRank` this would
+    still train, so training alone proves nothing; `test_nn.py::test_embed_never_materializes
+    _the_table` is what pins the memory claim. This pins that the two compose at all.
+    """
+    from shardes.nn import dense, embed
+    from shardes.strategies.seed_regenerated import SeedRegenerated
+
+    V, D, C = 512, 32, 4
+    k = jax.random.split(jax.random.key(0), 3)
+    p0 = {"emb": jax.random.normal(k[0], (V, D), jnp.float32) * 0.1,
+          "out": jax.random.normal(k[1], (C, D), jnp.float32) * 0.1}
+    batch = (jax.random.randint(k[2], (8, 6), 0, V), jnp.arange(8) % C)
+
+    def model(p, b):
+        toks, lab = b
+        h = jnp.mean(embed(p["emb"], toks), axis=1)
+        # `dense`, not einsum: LowRank substitutes a LowRankWeight for this leaf and einsum
+        # is handed an object with no `.shape`. Written as einsum first, which is the natural
+        # thing to write and the third time in this session that the constraint bit.
+        logits = dense(h, p["out"])
+        return jnp.mean(jnp.sum(jax.nn.softmax(logits) * jax.nn.one_hot(lab, C), axis=-1))
+
+    mesh = sharding.make_mesh(4)
+    for strategy in (Mirrored(LowRank(r=1)), Mirrored(SeedRegenerated())):
+        es = ShardedES(strategy=strategy, n=32, sigma=0.02, lr=0.05, mesh=mesh)
+        state = es.init(jax.random.key(1), p0)
+
+        @jax.jit
+        def generation(state, b):
+            pert, state = es.ask(state)
+            f = es.apply(model, state, pert)(b)
+            return es.tell(state, pert, -f), jnp.mean(f)
+
+        state, first = generation(state, batch)
+        for _ in range(4):
+            state, last = generation(state, batch)
+        assert float(last) > float(first) + 0.05, (
+            f"{type(strategy.inner).__name__}: {float(first):.4f} -> {float(last):.4f}"
+        )

@@ -49,6 +49,15 @@ class LowRankWeight(NamedTuple):
     def apply_to(self, x: Array) -> Array:
         return x @ self.w.T + ((x @ self.b) @ self.a.T) * self.scale
 
+    def gather(self, ids: Array) -> Array:
+        """`(W + scale * A B^T)[ids]`, without forming the sum. See `shardes.nn.embed`.
+
+        Exact rather than approximate: indexing distributes over the sum, so this is the
+        same identity `apply_to` uses, read the other way round. `self.w[ids]` is unbatched
+        under vmap, so members share the base gather.
+        """
+        return self.w[ids] + (self.a[ids] @ self.b.T) * self.scale
+
 
 class LeafFactors(NamedTuple):
     """Per-leaf perturbation state. `b is None` marks a densely perturbed leaf.

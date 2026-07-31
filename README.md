@@ -135,8 +135,22 @@ def model(params, x):
     return jnp.sum(dense(h, params["w2"]))          # not h @ params["w2"].T
 ```
 
-`IIDGaussian` and `SeedRegenerated` substitute ordinary arrays and take `dense`'s array
-branch, so this only binds if you want the low-rank path.
+Embeddings need the same treatment through `embed`, because an embedding is a *gather*
+rather than a matmul and `dense` cannot see it:
+
+```python
+from shardes.nn import dense, embed
+
+h = jnp.mean(embed(params["emb"], token_ids), axis=1)   # not params["emb"][token_ids]
+logits = dense(h, params["out"])
+```
+
+That is what makes embedding tables expressible under low-rank perturbation at all —
+`(E + sAB^T)[ids] = E[ids] + sA[ids]B^T`, so the table is never formed. EGGROLL's reference
+implementation raises `NotImplementedError` on this path (`docs/BACKLOG.md` B4).
+
+`IIDGaussian` and `SeedRegenerated` substitute ordinary arrays and take the array branch of
+both seams, so this only binds if you want the low-rank path.
 
 ---
 

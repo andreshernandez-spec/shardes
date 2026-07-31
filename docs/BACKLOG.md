@@ -29,16 +29,6 @@ Not needed by this library any more: G0 came back negative, so nothing here depe
 
 ---
 
-## B4 — Embedding layers under low-rank perturbation
-
-**Status**: open, pre-existing, not required for any gate.
-
-EGGROLL's reference implementation raises `NotImplementedError` for the embedding path.
-`LowRank` here perturbs any non-rank-2 leaf densely, which is correct but gives up the memory
-win exactly where the parameters are largest. A real contribution if cracked.
-
----
-
 ## B5 — Importance mixing
 
 **Status**: deferred. Zero hits across the JAX ecosystem; cheap to add; orthogonal to
@@ -101,6 +91,50 @@ is about half a day, against a real need rather than a guess.
 
 Decisions and resolved questions, kept because the reasoning is the useful part. Reopening
 one needs a reason that did not exist when it was closed — not just renewed interest.
+
+## B4 — Embedding layers under low-rank perturbation — **CLOSED 2026-07-31: solved**
+
+**It was never a perturbation problem. It was a missing seam.**
+
+EGGROLL's reference implementation raises `NotImplementedError` on the embedding path, and
+this project inherited the assumption that the path was hard. It is not. Indexing distributes
+over a sum:
+
+    (E + s A B^T)[ids]  =  E[ids] + s * A[ids] @ B^T
+
+so the correction is a `(batch, r) x (r, d)` matmul and the `(V, d)` table is never formed.
+Measured on the identity itself: exact to 0.0, and 190x fewer entries touched at `V = 1000`,
+`d = 16`, `batch = 4`. At `V = 50k`, `d = 4096`, `r = 1` it is a 4096-fold saving per member.
+
+**Why it looked hard.** An embedding is a **gather**, not a matmul, and `shardes.nn.dense`
+only intercepts `x @ W.T`. There was nowhere to dispatch. The fix is a second seam,
+`shardes.nn.embed(table, ids)`, dispatching on a `GatherableWeight` protocol — kept separate
+from `StructuredWeight` so a weight that can only be multiplied stays valid and `embed` says
+so explicitly when it meets one.
+
+`LowRankWeight.gather` is three lines and reuses the same object `dense` already uses, so one
+weight serves both seams and `test_embed_and_dense_agree_on_the_same_weight` checks they
+describe the same matrix.
+
+**What is verified**: the identity exactly; that the per-member `(n, V, d)` table never appears
+in the jaxpr; that plain arrays pass through unchanged, so `IIDGaussian` and `SeedRegenerated`
+are untouched; and an embedding-*dominated* model (the table is 16384 of 16512 parameters)
+training end to end under both published algorithms.
+
+**What this does not claim.** It is a memory and expressiveness result, not a quality one:
+whether a rank-1 perturbation of an embedding table *learns well* at real vocabulary sizes is
+untested here and is a Phase 2 question. Training in the test proves composition, not quality —
+a densely perturbed table would train too, which is why the jaxpr check is the load-bearing
+one.
+
+**The cost is the same one the abstraction always had**, and it now applies twice: a model
+must route gathers through `embed` as well as matmuls through `dense`. Worth noting from
+writing this: the `dense` constraint was violated three separate times in one session by
+writing the natural thing (`x @ W.T`, `jnp.einsum`, `jnp.sum` on a weight). It fails loudly
+every time, but it is the sharp edge of the design and the first thing a porting user meets.
+
+---
+
 
 ## B1 — Why scrambled Sobol degraded with N — **CLOSED 2026-07-31: it was the construction**
 
