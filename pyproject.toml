@@ -23,6 +23,16 @@ dev = ["pytest"]
 # Experiment drivers only: matplotlib for figures, pyyaml for sweep configs. Kept out of
 # the core deps so the library floor stays jax + numpy.
 experiments = ["matplotlib", "pyyaml"]
+# Task adapters (C1.7). `playground` is MuJoCo Playground; it pulls mujoco, mujoco-mjx,
+# brax, flax and jaxopt. All Apache 2.0 and free: MuJoCo has not needed a paid licence
+# since DeepMind acquired it in 2021. Kept out of core so the library floor stays
+# jax + numpy, and out of `experiments` so a figure rebuild does not need a physics engine.
+#
+# Verified before adding, because the project's whole premise is not being version-locked:
+# every jax constraint in this chain is a LOWER bound (brax jax>=0.4.6, flax jax>=0.10,
+# mujoco-mjx unpinned), so none of it can force a downgrade. Contrast evosax, which pins
+# jax<0.7 and is stuck there.
+tasks = ["playground"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/shardes"]

@@ -177,6 +177,32 @@ evosax's problem adapters target `brax.envs`, deprecated at Brax v0.13.0. Use Mu
 Playground. One small env is enough for Phase 1; Phase 2 needs something that actually
 saturates 8 GPUs.
 
+**Installed and verified 2026-07-31.** `pip install playground` — MuJoCo Playground 0.2.0,
+MuJoCo 3.11.0, MJX 3.11.0. Notes worth keeping:
+
+- **It is free, and the licence question is stale.** MuJoCo required a paid Roboti licence
+  until DeepMind acquired it in 2021; it has been Apache 2.0 since 2022. No key, no account.
+- **Nothing in the chain can force a JAX downgrade**, which was the real risk and the reason
+  to check rather than assume. Every constraint is a *lower* bound: `brax jax>=0.4.6`,
+  `flax jax>=0.10.0`, `mujoco-mjx` unpinned. A `pip install --dry-run` confirmed the resolver
+  does not touch `jax` or `jaxlib`. That is exactly the trap evosax is in with `jax<0.7`, so
+  it was worth one command to be sure.
+- **This paragraph's own reasoning is half wrong and the correction matters.** "Use MuJoCo
+  Playground *because* brax.envs is deprecated" does not escape brax: Playground depends on
+  `brax>=0.14.2`, which pulls `jaxopt` (last release April 2025, folded into optax). The
+  honest version is that Playground is a *maintained wrapper around* brax rather than an
+  alternative to it. Both were verified to import and run under JAX 0.11, so the risk did not
+  materialise, but it is a live dependency to watch rather than one that was avoided.
+  Building on `mujoco-mjx` alone would have avoided brax entirely at the cost of writing the
+  environment loop; Playground was chosen for its 54 ready-made envs.
+- **Verified by running, not by importing.** `CartpoleBalance` reset/step under `jit`, and an
+  8-member `vmap` of a 20-step `lax.scan` rollout — which is the shape ES actually needs, and
+  the only one that would have exposed a vmap or scan incompatibility. Returns peaked at zero
+  action scale with symmetric falloff, which is what balancing a cartpole should look like.
+- MuJoCo 3.11 runs its physics through `mujoco_warp` (NVIDIA Warp), which JIT-compiles its
+  own kernels on first use. First `reset` cost ~14 s of compilation on CPU. Budget for that
+  in any timing harness; it is not per-step cost.
+
 ---
 
 ## How to test it
