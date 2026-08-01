@@ -54,6 +54,12 @@ import jax.numpy as jnp
 import numpy as np
 import yaml
 
+# Imported *after* the XLA_FLAGS block above, not with the stdlib imports: harness imports
+# jax, and XLA reads XLA_FLAGS once when the backend initializes. Importing it earlier would
+# silently undo the Triton workaround this file exists to apply.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import harness  # noqa: E402
+
 from shardes import metrics, shaping
 from shardes.dimensions import FULL, sampling_dimension
 from shardes.strategies.registry import STRATEGIES, check_entry
@@ -258,12 +264,7 @@ def expand(cfg: dict, registry: dict | None = None) -> list[Config]:
 
 
 def _git(*args: str) -> str:
-    try:
-        return subprocess.run(
-            ["git", *args], cwd=HERE, capture_output=True, text=True, timeout=10
-        ).stdout.strip()
-    except Exception:
-        return "unknown"
+    return harness.git(HERE, *args)
 
 
 # What this driver writes. Outputs are not provenance: a rerun that overwrites its own
@@ -276,75 +277,21 @@ OUTPUTS = ("results", "env.json", "figures")
 def worktree_is_dirty() -> bool:
     """Tracked edits, or untracked files that are not this sweep's own output.
 
-    `git status --porcelain` on its own counts the results directory, and `capture_env` runs
-    once at startup, so a *resumed* sweep would see the previous session's untracked results
-    and stamp `dirty_worktree: True` on everything it went on to write. The first 70 cells of
-    the real E1 run recorded False and the resume recorded True from identical tracked code,
-    which is how this was found.
-
-    Results are outputs, not provenance. Everything else still counts, including untracked
-    files: a new module that a strategy imports is exactly the kind of thing that makes a
-    number unreproducible, and it would not show up in `git diff`.
-
-    Fails safe: if git cannot answer, report dirty. An unknown provenance is not a clean one.
+    The logic, and the two bugs that shaped it, live in `experiments/harness.py`. `_git` is
+    passed through by name so a test can monkeypatch it here and still reach the shared code.
     """
-    # `_git` swallows a failure and returns "" for it, which is also what a clean tree looks
-    # like, so the repo probe has to be `rev-parse` rather than `status`. No repo means no
-    # provenance.
-    root = _git("rev-parse", "--show-toplevel")
-    if not root or root == "unknown" or not Path(root).is_dir():
-        return True
-    try:
-        base = Path(HERE).relative_to(root)
-        skip = tuple(str(base / o) for o in OUTPUTS)
-    except ValueError:
-        skip = None  # outputs live outside the repo; then nothing is exempt
-
-    # --untracked-files=all, because the default collapses a wholly-untracked directory to
-    # its shortest prefix: a tree whose only untracked content is results/ reports
-    # `?? experiments/`, which no results-prefix filter can match. Treating that prefix as
-    # clean would also hide a genuine untracked `experiments/phase0/new_script.py`. Listing
-    # every file makes the filter exact, and makes the answer independent of the user's
-    # status.showUntrackedFiles setting.
-    status = _git("status", "--porcelain", "--untracked-files=all")
-    if status == "unknown":
-        return True
-
-    # Filtered here rather than with a pathspec: `_git` runs with cwd=HERE, so a `-- .`
-    # pathspec would have scoped the check to experiments/phase0 and stopped noticing edits
-    # under src/, which is the opposite of the point.
-    def counts(line: str) -> bool:
-        path = line[3:].strip().strip('"')
-        return skip is None or not path.startswith(skip)  # tuple prefix: str.startswith
-
-    return any(counts(line) for line in status.splitlines())
+    return harness.worktree_is_dirty(HERE, OUTPUTS, _git)
 
 
 def capture_env() -> dict:
-    """Written by the driver, never by hand. Reconstructing it afterwards is never
-    accurate, and for a paper it has to be exact (docs/06)."""
-    devices = jax.devices()
-    dirty = worktree_is_dirty()
-    return {
-        "commit": _git("rev-parse", "HEAD"),
-        # A number from a dirty tree is not reproducible. Record it rather than trust
-        # that nobody ever runs a sweep with uncommitted edits, because everyone does.
-        "dirty_worktree": dirty,
-        "jax": jax.__version__,
-        "jaxlib": getattr(__import__("jaxlib"), "__version__", "unknown"),
-        "numpy": np.__version__,
-        # Sobol direction numbers are read out of scipy rather than vendored, so the scipy
-        # version is part of what a sobol result depends on.
-        "scipy": getattr(__import__("scipy"), "__version__", "unknown"),
-        "python": sys.version.split()[0],
-        "platform": platform.platform(),
-        "hostname": socket.gethostname(),
-        "device_count": len(devices),
-        "device_kind": getattr(devices[0], "device_kind", "unknown"),
-        "device_platform": devices[0].platform,
-        "xla_flags": os.environ.get("XLA_FLAGS", ""),
-        "jax_platforms": os.environ.get("JAX_PLATFORMS", ""),
-    }
+    """Written by the driver, never by hand (docs/06)."""
+    return harness.capture_env(HERE, OUTPUTS, _git)
+
+
+def write_atomic(path: Path, payload: dict) -> None:
+    """Write to a temp file and rename, so a kill mid-write cannot leave a partial JSON that
+    resume would skip forever."""
+    harness.write_atomic(path, payload)
 
 
 # ---------------------------------------------------------------------------------------
@@ -532,19 +479,6 @@ def run_one(config: Config, estimate, cap_s: float) -> dict:
         "relative_bias": float(metrics.relative_bias(mean_g, grad)),
         "wall_clock_s": time.time() - started,
     }
-
-
-def write_atomic(path: Path, payload: dict) -> None:
-    """Write to a temp file and rename.
-
-    A partial JSON left by a kill mid-write would still *exist*, so resume would skip it
-    forever and the sweep would silently carry a corrupt config. Rename is atomic on the
-    same filesystem, so a file either is not there or is complete.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True))
-    tmp.replace(path)
 
 
 # ---------------------------------------------------------------------------------------
