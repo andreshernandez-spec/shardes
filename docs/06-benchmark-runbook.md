@@ -45,6 +45,21 @@ at $2/hr than on the benchmarks themselves.
 Eight chips, free, ~20 TPU-hours/week, 9-hour session cap, no credit card. This carries
 E2, E3, E4 (first pass), E8-TPU, E10, E11 — the bulk of the paper.
 
+> **Unverified as of 2026-08-01, and the CLI route does not work.** Four ways of asking the
+> Kernels API for a TPU all produced a **CPU-only kernel**, one device, on the plain
+> `kaggle-images/python` image, with no error at any point: `--accelerator TpuV5E8`,
+> `--accelerator TpuV6E8`, `"enable_tpu": true`, and `"machine_shape": "TpuV5E8"`. The push
+> succeeded every time. Only reading `jax.devices()` inside the kernel showed it.
+>
+> This matters because the same day, `--accelerator NvidiaTeslaA100` silently returned a
+> P100. **Kaggle downgrades rather than refuses**, so "the job ran" is not evidence the
+> hardware was there.
+>
+> The TPU option in the notebook *editor* is untested and may well work. Until somebody opens
+> a browser and reads `jax.devices()`, **T1 is a plan, not a platform**, and anything routed
+> here (the bulk of the paper) has no confirmed home. Settle this before Phase 2 scheduling
+> depends on it.
+
 **Constraints to design around:**
 
 - **16 GB HBM per chip.** Population sizes are memory-bound well below EGGROLL's H100

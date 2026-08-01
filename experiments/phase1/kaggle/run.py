@@ -59,7 +59,7 @@ def kaggle(*args: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("kernel", choices=["probe", "t2prime"], help="subdirectory to push")
+    ap.add_argument("kernel", choices=["probe", "t2prime", "tpuprobe"], help="subdirectory to push")
     ap.add_argument(
         "--accelerator",
         default="NvidiaTeslaT4",
