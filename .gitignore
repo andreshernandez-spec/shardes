@@ -10,3 +10,6 @@ experiments/phase0/e1.log
 experiments/phase0/gate-output.txt
 # Kaggle run artifacts: logs name the account, and the account is not this repo's identity.
 experiments/phase1/kaggle/output/
+# Rehearsal output is for debugging the driver, never for a figure (docs/03).
+experiments/phase2/results-rehearsal/
+experiments/phase2/env.json

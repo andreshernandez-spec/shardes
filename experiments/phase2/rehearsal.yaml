@@ -1,0 +1,19 @@
+# The dress rehearsal (docs/03, "the week before"). Everything the real sweep does, at a
+# size that finishes on CPU-8 in minutes. Its job is to break the driver, not to produce a
+# number: no result from this file goes in a figure.
+#
+# N reduced ~100x from the real sweep and d_model from 512 to 64, which is what keeps it on
+# a laptop. The shapes still exercise every code path: both modes, all four device counts,
+# both contraction strategies, and a structured strategy alongside the dense ones.
+modes: [strong, weak]
+devices: [1, 2, 4, 8]
+d_model: [64]
+population: [64]              # strong: fixed total
+population_per_device: [8]    # weak:   times the device count
+strategies: [iid_gaussian, seed_regenerated, mirrored_lr1]
+how: [A, B]
+batch: 4
+seq: 8
+warmup: 3
+repeats: 5
+results_dir: results-rehearsal
