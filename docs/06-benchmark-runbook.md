@@ -149,7 +149,7 @@ Do the version check first and let it fail loudly. An outdated jax surfaces as a
 ```python
 # Cell 2 — preflight. Wrong answers here are cheap; wrong answers after a 40-minute run are not.
 import os
-SHA = "6576a07"          # pin it. main moves, and the result is quoted against this.
+SHA = "d1722ec"          # SET THIS to the commit under test. Do not copy it forward.
 !git clone -q https://github.com/andreshernandez-spec/shardes.git /kaggle/working/shardes
 os.chdir("/kaggle/working/shardes")
 !git checkout -q $SHA && git log --oneline -1
