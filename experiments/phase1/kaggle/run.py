@@ -27,15 +27,27 @@ import tempfile
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent
-META = HERE / "kernel-metadata.json"
 CREDS = pathlib.Path.home() / ".kaggle" / "kaggle.json"
-TERMINAL = {"complete", "error", "cancelAcknowledged"}
+#: Matched case-insensitively. The CLI prints `KernelWorkerStatus.COMPLETE`, not `complete`,
+#: and a lowercase comparison polls a finished kernel until the timeout.
+TERMINAL = {"complete", "error", "cancelacknowledged"}
 
 
 def username() -> str:
-    if not CREDS.exists():
-        sys.exit(f"{CREDS} not found. Kaggle -> Settings -> API -> Create New Token.")
-    return json.loads(CREDS.read_text())["username"]
+    """Ask the CLI, not the credential file.
+
+    There are two credential shapes in the wild: the old `~/.kaggle/kaggle.json` with a
+    username field, and `~/.kaggle/access_token`, which has no username in it at all.
+    `kaggle config view` reports the resolved account either way, so read that and stay out
+    of the credential format business.
+    """
+    for line in kaggle("config", "view").splitlines():
+        if "username:" in line:
+            return line.split("username:", 1)[1].strip()
+    sys.exit(
+        "no Kaggle credentials. Kaggle -> Settings -> API -> Create New Token, then put it "
+        f"in {CREDS.parent}/ (kaggle.json or access_token) with chmod 600."
+    )
 
 
 def kaggle(*args: str) -> str:
@@ -47,17 +59,24 @@ def kaggle(*args: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--accelerator", default="NvidiaTeslaT4")
+    ap.add_argument("kernel", choices=["probe", "t2prime"], help="subdirectory to push")
+    ap.add_argument(
+        "--accelerator",
+        default="NvidiaTeslaT4",
+        help="NvidiaTeslaT4 gives TWO T4s, measured 2026-08-01 by the probe kernel. The API "
+        "documents no count, so this was settled by running it.",
+    )
     ap.add_argument("--poll", type=int, default=20, help="seconds between status checks")
-    ap.add_argument("--timeout", type=int, default=1800)
+    ap.add_argument("--timeout", type=int, default=3600)
     args = ap.parse_args()
 
-    meta = json.loads(META.read_text())
+    src = HERE / args.kernel
+    meta = json.loads((src / "kernel-metadata.json").read_text())
     slug = meta["id"].split("/")[-1]
     meta["id"] = f"{username()}/{slug}"
 
     stage = pathlib.Path(tempfile.mkdtemp(prefix="shardes-kaggle-"))
-    shutil.copy(HERE / meta["code_file"], stage)
+    shutil.copy(src / meta["code_file"], stage)
     (stage / "kernel-metadata.json").write_text(json.dumps(meta, indent=2) + "\n")
 
     print(f"pushing {meta['id']} (accelerator={args.accelerator})")
@@ -67,14 +86,14 @@ def main() -> None:
     while True:
         status = kaggle("kernels", "status", meta["id"]).strip()
         print(f"  {status}")
-        if any(t in status for t in TERMINAL):
+        if any(t in status.lower() for t in TERMINAL):
             break
         if time.monotonic() > deadline:
             sys.exit(f"still running after {args.timeout}s; check the notebook in the browser")
         time.sleep(args.poll)
 
-    out = HERE / "output"
-    out.mkdir(exist_ok=True)
+    out = HERE / "output" / args.kernel  # per kernel, or the newest log wins the glob
+    out.mkdir(parents=True, exist_ok=True)
     kaggle("kernels", "output", meta["id"], "-p", str(out), "-o")
     logs = sorted(out.glob("*.log"))
     if not logs:
