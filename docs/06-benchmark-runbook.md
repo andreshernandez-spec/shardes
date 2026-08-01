@@ -113,34 +113,30 @@ passes there. That is the whole reason docs/02 asks for this before Phase 2.
 Ampere GPU defaults to TF32 for matmuls, which is ~1e-3 relative and reads exactly like a
 device-invariance failure. Also pass `XLA_FLAGS=--xla_gpu_deterministic_ops=true`.
 
-**Getting the code onto Kaggle, given there is no git remote.** The repo is local-only and
-`CLAUDE.md` forbids pushing, so the `pip install git+…@SHA` path in Cell 1 below does not
-exist yet. Two options that need no push:
+**Getting the code onto Kaggle.** The repo is public as of 2026-08-01:
+`github.com/andreshernandez-spec/shardes`, Apache 2.0. Clone it, anonymously, and check out
+the SHA the result should be attributed to.
 
-1. **Kaggle Dataset (recommended).** `git archive --format=zip HEAD -o shardes.zip`, upload as
-   a private dataset, then **unzip it** into `/kaggle/working` and run from there. The commit
-   SHA goes in the dataset description so the result stays attributable, which is the property
-   the pip-from-SHA path was there to provide.
-2. Publish the repo. That needs an explicit decision and the right account
-   (`CLAUDE.md` §1), and it is not required for this check.
+**Clone, do not `pip install`.** Rehearsed on 2026-08-01, first against a `git archive` zip
+and then against the public clone. The obvious install path does not work:
 
-**Unzip, do not `pip install`.** This cell was rehearsed locally on 2026-08-01 against a real
-`git archive` zip, and the earlier version of it did not work. Two reasons, both worth knowing
-before they cost rented GPU time:
+- `pip install "git+…@SHA"` (and `pip install shardes.zip`) installs the *package* and nothing
+  else. `tests/` and `experiments/phase1/reference.json` are not inside `src/shardes/`, so they
+  do not land, and `pytest tests/gpu` then reports **`no tests ran in 0.00s`** — a message that
+  scrolls past looking like nothing went wrong.
+- It also *builds* a wheel, which fetches `hatchling` from PyPI, for nothing.
 
-- `pip install shardes.zip` installs the *package* and nothing else. `tests/` and
-  `experiments/phase1/reference.json` are not inside `src/shardes/`, so they do not land, and
-  `pytest tests/gpu` then reports **`no tests ran in 0.00s`** — a message that scrolls past
-  looking like nothing went wrong.
-- Installing also *builds* a wheel, which fetches `hatchling` from PyPI. That needs notebook
-  internet enabled (phone-verified account). Running from source needs no build and no network.
+A clone carries the tests, the reference and the SHA together, which is the whole point.
+`PYTHONPATH=src` then needs no install step at all.
+
+**Pin the SHA.** `main` moves. A T2′ result recorded against "HEAD" is not attributable, and
+this check exists to be quoted in a gate.
 
 **Internet must be on, for jax, not for us.** `src/shardes/contraction.py` does
 `from jax import shard_map`, which is jax ≥ 0.8, and `pyproject.toml` floors it at 0.11.
 Kaggle's image ships an older jax, so the upgrade is unavoidable and it is a ~500 MB CUDA
 download. Enable internet in the notebook sidebar (needs a phone-verified account) *before*
-starting the session. Skipping the unzip does not buy a network-free run; it only removes the
-`hatchling` fetch.
+starting the session. Running from source avoids the `hatchling` fetch, not this one.
 
 Do the version check first and let it fail loudly. An outdated jax surfaces as a collection
 `ImportError` twenty lines deep, which reads like a bug in `shardes`.
@@ -153,8 +149,10 @@ Do the version check first and let it fail loudly. An outdated jax surfaces as a
 ```python
 # Cell 2 — preflight. Wrong answers here are cheap; wrong answers after a 40-minute run are not.
 import os
-!mkdir -p /kaggle/working/shardes && unzip -q -o /kaggle/input/shardes/shardes.zip -d /kaggle/working/shardes
+SHA = "6576a07"          # pin it. main moves, and the result is quoted against this.
+!git clone -q https://github.com/andreshernandez-spec/shardes.git /kaggle/working/shardes
 os.chdir("/kaggle/working/shardes")
+!git checkout -q $SHA && git log --oneline -1
 os.environ["PYTHONPATH"] = "src"
 os.environ["JAX_PLATFORMS"] = "cuda"
 os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
