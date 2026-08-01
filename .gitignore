@@ -8,3 +8,5 @@ dist/
 .venv/
 experiments/phase0/e1.log
 experiments/phase0/gate-output.txt
+# Kaggle run artifacts: logs name the account, and the account is not this repo's identity.
+experiments/phase1/kaggle/output/
