@@ -177,6 +177,13 @@ when it cannot find that file rather than failing, so a broken delivery shows up
 Record the output of `test_report_the_environment` with the result. A green tick that names no
 hardware is not evidence.
 
+**Keep the notebook private.** T2′ runs on the personal Kaggle account
+(`al252130@gmail.com`), which is not the `andreshernandez-spec` identity the repo is published
+under; a phone number can only verify one Kaggle account, so this is not a thing to tidy up
+later. It costs nothing: the result travels into the repo as the `test_report_the_environment`
+output in a commit, so provenance comes from the commit, not from the notebook. Publishing the
+notebook would be the one step that ties an unrelated identity to the project for no gain.
+
 ---
 
 **T2′, the fallback:** Kaggle GPU, P100 (16 GB) or 2× T4, ~30 GPU-hours/week, if the
