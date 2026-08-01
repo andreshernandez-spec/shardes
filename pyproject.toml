@@ -8,6 +8,9 @@ version = "0.0.0"
 description = "Sharded evolution strategies for JAX"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Andres Hernandez" }]
 dependencies = [
     # Do not pin jax below 0.11. The whole point is that evosax is stuck at <0.7.
     "jax>=0.11",
