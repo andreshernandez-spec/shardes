@@ -13,3 +13,4 @@ experiments/phase1/kaggle/output/
 # Rehearsal output is for debugging the driver, never for a figure (docs/03).
 experiments/phase2/results-rehearsal/
 experiments/phase2/env.json
+experiments/phase2/figures-rehearsal/

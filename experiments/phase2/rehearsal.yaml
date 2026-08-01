@@ -5,11 +5,15 @@
 # N reduced ~100x from the real sweep and d_model from 512 to 64, which is what keeps it on
 # a laptop. The shapes still exercise every code path: both modes, all four device counts,
 # both contraction strategies, and a structured strategy alongside the dense ones.
+#
+# The (N, d) grid is 2x2 rather than a single point because M3 needs a grid to draw a
+# crossover contour at all. The first rehearsal had one point and plot.py skipped M3, which
+# means that code path had never run.
 modes: [strong, weak]
 devices: [1, 2, 4, 8]
-d_model: [64]
-population: [64]              # strong: fixed total
-population_per_device: [8]    # weak:   times the device count
+d_model: [32, 64]
+population: [32, 64]          # strong: fixed total
+population_per_device: [4, 8] # weak:   times the device count
 strategies: [iid_gaussian, seed_regenerated, mirrored_lr1]
 how: [A, B]
 batch: 4
