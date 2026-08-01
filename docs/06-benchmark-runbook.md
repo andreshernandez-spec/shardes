@@ -92,8 +92,13 @@ stays on T0.
 
 ### T2′ for Gate G1 criterion 2 — the two-GPU invariance check
 
-**Status 2026-07-31: half done.** The portability half passes on the local 3080; the sharding
-half needs two devices and is the only thing still open in G1.
+**Status 2026-08-01: PASSED. 16 passed in 74.97 s on 2 x Tesla T4**, Kaggle, jax 0.11.0,
+commit `e720c92`, `matmul precision: highest`. No skips. Run headlessly through the API with
+`python experiments/phase1/kaggle/run.py t2prime`; the log is under `output/t2prime/`.
+
+The reference it was checked against: `{'jax': '0.11.0', 'platform': 'cpu', 'device_kind':
+'cpu', 'device_count': 8}`. That is the point of the exercise, a simulated 8-device CPU result
+reproduced on hardware that shares none of its assumptions.
 
 The check splits into two claims that want different hardware and different tolerances, and
 `tests/gpu/test_device_invariance_gpu.py` keeps them apart:
@@ -101,8 +106,8 @@ The check splits into two claims that want different hardware and different tole
 | claim | needs | tolerance | status |
 |---|---|---|---|
 | one real GPU reproduces the CPU-8 simulated reference | 1 GPU | `1e-4`, loose: different kernels, different reduction trees | **passing** on the RTX 3080, 3 strategies × A and B |
-| 2 GPUs give the same update as 1 | **2 GPUs** | `1e-5`, tight: only summation order changes | skipped, needs T2′ |
-| A and B agree over a real interconnect | **2 GPUs** | `1e-5` | skipped, needs T2′ |
+| 2 GPUs give the same update as 1 | **2 GPUs** | `1e-5`, tight: only summation order changes | **passing** on 2x T4, 2026-08-01 |
+| A and B agree over a real interconnect | **2 GPUs** | `1e-5` | **passing** on 2x T4, 2026-08-01 |
 
 The second and third are the ones simulated devices *cannot* answer:
 `--xla_force_host_platform_device_count` gives eight devices that share one memory space and
