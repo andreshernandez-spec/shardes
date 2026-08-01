@@ -99,8 +99,15 @@ update path is measured and matches the analysis.
 > checks numerics and cannot check sharding — which is the entire reason the criterion exists.
 > Corrected here rather than satisfied on the easier reading.
 >
-> **Status 2026-07-31: capabilities C1.1–C1.7 complete, 5 of 6 criteria met.** Outstanding:
-> the 2-GPU run (`docs/06` T2′). The 1-GPU half passes on the RTX 3080.
+> **Status 2026-08-01: G1 CLOSED. Capabilities C1.1–C1.7 complete, 6 of 6 criteria met.**
+> The 2-GPU run passed on Kaggle: 16 passed on 2 x Tesla T4, jax 0.11.0, commit `e720c92`,
+> against the committed CPU-8 reference. `docs/06` T2′.
+>
+> This is the criterion that could not be faked. Simulated devices share a memory space and
+> never communicate, so a collective that is wrong over a real interconnect passes on CPU-8.
+> It is now checked on hardware, and re-checkable in one command.
+>
+> **Phase 2 is startable.**
 >
 > Criterion 1's "under two minutes" predated the tier split and contradicted
 > `docs/conventions.md`. **Settled 2026-08-01: the tiers win**, and the wording is propagated
