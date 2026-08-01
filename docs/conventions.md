@@ -91,6 +91,14 @@ and say so.
   concurrent job pushed the fast tier to 159 s once, which is not a regression. Re-measure
   before concluding anything from a timing.
 
+  **The full-tier figure is stale and the budget line above is provisional (2026-08-01).** At
+  645 tests it read 437 s once and 594 s once, and *both* runs shared the machine with another
+  job, so the 36% spread is the contention and not the suite. The rule that applies here is
+  the one directly above: neither number licenses a conclusion, so nothing was changed on the
+  strength of them. Re-measure on an idle box, then update the table. Check with `uptime` and
+  `ps` first, and note that the suite alone drives load past 10 on 16 cores, so a load average
+  taken during a run is not evidence of an idle machine.
+
   **The budgets are the human constraint, not a number.** Fast has to stay usable as an inner
   loop while editing; full has to stay runnable before a commit without the urge to skip it.
   Two and six minutes are what those mean. The history is worth knowing: 90 s when the

@@ -219,7 +219,8 @@ MuJoCo 3.11.0, MJX 3.11.0. Notes worth keeping:
 
 ## How to test it
 
-`tests/` stays CPU-only and under two minutes. The trick that makes this possible:
+`tests/` stays CPU-only, in the two tiers `docs/conventions.md` defines. The trick that makes
+this possible:
 
 ```bash
 XLA_FLAGS=--xla_force_host_platform_device_count=8 pytest tests/
@@ -270,7 +271,10 @@ devices is a thing a reviewer can run in thirty seconds.
 
 All of:
 
-1. `pytest tests/` green on CPU with 8 simulated devices, under two minutes.
+1. `pytest tests/` green on CPU with 8 simulated devices, within the `docs/conventions.md`
+   tier budgets. **Said "under two minutes" until 2026-08-01**, which predated the code and
+   would have been met by cutting `R` in the unbiasedness tests. The criterion is that the
+   suite is green and both tiers stay usable, not a stopwatch reading.
 2. `test_device_invariance` passes on CPU-8, and is reproduced on a real 2-GPU box.
 3. Both published algorithms run end-to-end on a MuJoCo Playground task from the same API.
 4. Both contraction strategies implemented, and their communication volume instrumented

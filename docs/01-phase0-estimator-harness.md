@@ -387,7 +387,7 @@ give it two homes and one of them would go stale.
 
 ## How to test it
 
-`tests/` — CPU, under two minutes, no GPU, no network.
+`tests/` — CPU, no GPU, no network, two tiers (`docs/conventions.md`).
 
 | Test | Asserts |
 |---|---|

@@ -87,7 +87,10 @@ shardes/
 └── experiments/           throwaway-ish scripts that produce the plots and tables
 ```
 
-`tests/` must run on CPU in under two minutes. Anything slower is an experiment.
+`tests/` runs on CPU, no GPU, no network, in **two tiers**: `pytest --fast` is the inner
+loop while editing, `pytest` is everything and is the default. Budgets and the reasoning
+are in `docs/conventions.md`. This line said "under two minutes" until 2026-08-01; that
+number predated the code and was about to cost `R` in the unbiasedness tests.
 
 ---
 

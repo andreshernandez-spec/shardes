@@ -4,7 +4,9 @@ Sets the simulated-device flag before jax is imported so it cannot be forgotten 
 command line (docs/conventions.md, "Tests"). The gpu marker and its default deselection
 live in pyproject.toml.
 
-Budget: the whole suite runs on CPU, no GPU, no network, under two minutes.
+Budget: the whole suite runs on CPU, no GPU, no network, in two tiers. `pytest --fast` is
+structural only and is the inner loop; plain `pytest` runs the statistical tier too and is
+the default. `docs/conventions.md` carries the budgets and why the default is the slow one.
 """
 
 import os

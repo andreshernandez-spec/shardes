@@ -102,9 +102,13 @@ update path is measured and matches the analysis.
 > **Status 2026-07-31: capabilities C1.1–C1.7 complete, 5 of 6 criteria met.** Outstanding:
 > the 2-GPU run (`docs/06` T2′). The 1-GPU half passes on the RTX 3080.
 >
-> Criterion 1's "under two minutes" also predates the tier split and contradicts
-> `docs/conventions.md`, which measures and budgets ~2 min fast / ~6 min full. One of the two
-> needs to win; the suite currently runs 149 s and 363 s.
+> Criterion 1's "under two minutes" predated the tier split and contradicted
+> `docs/conventions.md`. **Settled 2026-08-01: the tiers win**, and the wording is propagated
+> to all six places that carried the old number (`CLAUDE.md`, `tests/conftest.py`, `docs/01`,
+> `docs/02` twice, here). The rule was written before any code existed and the only way to
+> meet it was cutting `R` from 10 000 to 5 000 in the unbiasedness tests, taking the margin on
+> the 2% gate from 4× to 2.8×. A number with nothing behind it does not get to weaken a test
+> that does. `docs/conventions.md:145` keeps the history.
 
 ---
 
