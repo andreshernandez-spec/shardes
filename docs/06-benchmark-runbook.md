@@ -118,25 +118,63 @@ device-invariance failure. Also pass `XLA_FLAGS=--xla_gpu_deterministic_ops=true
 exist yet. Two options that need no push:
 
 1. **Kaggle Dataset (recommended).** `git archive --format=zip HEAD -o shardes.zip`, upload as
-   a private dataset, then `pip install /kaggle/input/<name>/shardes.zip`. The commit SHA goes
-   in the dataset description so the result stays attributable, which is the property the
-   pip-from-SHA path was there to provide.
+   a private dataset, then **unzip it** into `/kaggle/working` and run from there. The commit
+   SHA goes in the dataset description so the result stays attributable, which is the property
+   the pip-from-SHA path was there to provide.
 2. Publish the repo. That needs an explicit decision and the right account
    (`CLAUDE.md` §1), and it is not required for this check.
 
+**Unzip, do not `pip install`.** This cell was rehearsed locally on 2026-08-01 against a real
+`git archive` zip, and the earlier version of it did not work. Two reasons, both worth knowing
+before they cost rented GPU time:
+
+- `pip install shardes.zip` installs the *package* and nothing else. `tests/` and
+  `experiments/phase1/reference.json` are not inside `src/shardes/`, so they do not land, and
+  `pytest tests/gpu` then reports **`no tests ran in 0.00s`** — a message that scrolls past
+  looking like nothing went wrong.
+- Installing also *builds* a wheel, which fetches `hatchling` from PyPI. That needs notebook
+  internet enabled (phone-verified account). Running from source needs no build and no network.
+
+**Internet must be on, for jax, not for us.** `src/shardes/contraction.py` does
+`from jax import shard_map`, which is jax ≥ 0.8, and `pyproject.toml` floors it at 0.11.
+Kaggle's image ships an older jax, so the upgrade is unavoidable and it is a ~500 MB CUDA
+download. Enable internet in the notebook sidebar (needs a phone-verified account) *before*
+starting the session. Skipping the unzip does not buy a network-free run; it only removes the
+`hatchling` fetch.
+
+Do the version check first and let it fail loudly. An outdated jax surfaces as a collection
+`ImportError` twenty lines deep, which reads like a bug in `shardes`.
+
 ```python
-# Kaggle notebook, accelerator = GPU T4 x2
-!pip install -q /kaggle/input/shardes/shardes.zip
-!cd /kaggle/working && git clone --depth 1 file:///kaggle/input/shardes 2>/dev/null || true
+# Cell 1 — Kaggle notebook, accelerator = GPU T4 x2
+!pip install -q -U "jax[cuda12]>=0.11"
+```
+
+```python
+# Cell 2 — preflight. Wrong answers here are cheap; wrong answers after a 40-minute run are not.
 import os
+!mkdir -p /kaggle/working/shardes && unzip -q -o /kaggle/input/shardes/shardes.zip -d /kaggle/working/shardes
+os.chdir("/kaggle/working/shardes")
+os.environ["PYTHONPATH"] = "src"
 os.environ["JAX_PLATFORMS"] = "cuda"
 os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
+!python -c "import jax; v=jax.__version__; assert tuple(map(int,v.split('.')[:2]))>=(0,11), f'jax {v} < 0.11'; \
+from jax import shard_map; d=jax.devices(); print(v, len(d), d[0].device_kind); assert len(d)==2, f'{len(d)} devices, want 2'"
+```
+
+```python
+# Cell 3 — the check itself.
 !python -m pytest tests/gpu -m gpu -q -s        # expects 16 passed on 2 GPUs
 ```
 
+Sanity-check the count. **16 collected** is the sign the checkout is intact; anything less
+means the delivery is broken, not that the code is fine.
+
 `experiments/phase1/reference.json` is committed and travels with the checkout, so the CPU-8
 reference does not have to be regenerated on Kaggle — and must not be: the point is to carry
-the *simulated* result to hardware that does not share its assumptions.
+the *simulated* result to hardware that does not share its assumptions. The fixture **skips**
+when it cannot find that file rather than failing, so a broken delivery shows up as
+`6 skipped`, not red. Read the skip reasons; do not read the exit code.
 
 Record the output of `test_report_the_environment` with the result. A green tick that names no
 hardware is not evidence.
