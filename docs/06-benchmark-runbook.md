@@ -45,20 +45,27 @@ at $2/hr than on the benchmarks themselves.
 Eight chips, free, ~20 TPU-hours/week, 9-hour session cap, no credit card. This carries
 E2, E3, E4 (first pass), E8-TPU, E10, E11 — the bulk of the paper.
 
-> **Unverified as of 2026-08-01, and the CLI route does not work.** Four ways of asking the
-> Kernels API for a TPU all produced a **CPU-only kernel**, one device, on the plain
-> `kaggle-images/python` image, with no error at any point: `--accelerator TpuV5E8`,
-> `--accelerator TpuV6E8`, `"enable_tpu": true`, and `"machine_shape": "TpuV5E8"`. The push
-> succeeded every time. Only reading `jax.devices()` inside the kernel showed it.
+> **VERIFIED 2026-08-01.** `--accelerator TpuV5E8` through the Kernels API gives
+> **8 x "TPU v5 lite"**, `platform=tpu`, on `kaggle-gpu-images/python-tpuvm`. Phase 2 can run
+> here for free. Reproduce with `python experiments/phase1/kaggle/run.py tpuprobe
+> --accelerator TpuV5E8`.
 >
-> This matters because the same day, `--accelerator NvidiaTeslaA100` silently returned a
-> P100. **Kaggle downgrades rather than refuses**, so "the job ran" is not evidence the
-> hardware was there.
+> **The precondition is Persona identity verification, and no Kaggle doc says so.** Before it,
+> the same four requests (`--accelerator TpuV5E8`, `TpuV6E8`, `"enable_tpu": true`,
+> `"machine_shape": "TpuV5E8"`) each produced a **CPU-only kernel**, one device, on the plain
+> `kaggle-images/python` image, with no error at any point. Every push succeeded. Only reading
+> `jax.devices()` inside the kernel showed it, the same way `--accelerator NvidiaTeslaA100`
+> silently returned a P100 that morning. **Kaggle downgrades rather than refuses.**
 >
-> The TPU option in the notebook *editor* is untested and may well work. Until somebody opens
-> a browser and reads `jax.devices()`, **T1 is a plan, not a platform**, and anything routed
-> here (the bulk of the paper) has no confirmed home. Settle this before Phase 2 scheduling
-> depends on it.
+> Two measured facts that change how this tier gets used:
+>
+> - **The batch queue was ~2.5 hours.** T1 is one shot per attempt, not somewhere to iterate.
+>   That is the argument for the rehearsal being complete before anything is submitted, and
+>   for the driver being resumable rather than merely restartable.
+> - **The image ships jax 0.10.2**, below this project's 0.11 floor, so a TPU-side upgrade is
+>   required. Treat that as a risk rather than a formality: `jax[tpu]` is coupled to `libtpu`
+>   in a way `jax[cuda12]` is not, and a mismatch takes the runtime out entirely. **Prove the
+>   upgrade in its own short kernel before spending a session on it.**
 
 **Constraints to design around:**
 
