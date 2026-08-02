@@ -202,3 +202,48 @@ def test_the_projection_is_reproducible_across_calls():
     """A seeded projection, or two runs of the same config would never compare equal."""
     tree = {"w": np.arange(6.0).reshape(2, 3)}
     assert run.fingerprint(tree)["probe"] == run.fingerprint(tree)["probe"]
+
+
+# --------------------------------------------------------------------------- memory
+
+
+feasible = _load("feasible")
+
+
+def test_strategy_a_memory_does_not_fall_with_device_count():
+    """The asymmetry that nearly wasted a rented booking.
+
+    A regenerates the whole population on every device, so its storage is `N*|params|` at any
+    `D`. B holds one shard. Reading A as if it sharded is what put six 96 GB configurations
+    into the first sweep config, including the `D=1` baseline that every parallel-efficiency
+    figure divides by.
+    """
+    a1 = feasible.per_device_bytes(2048, 1024, 1, "A")
+    a8 = feasible.per_device_bytes(2048, 1024, 8, "A")
+    b1 = feasible.per_device_bytes(2048, 1024, 1, "B")
+    b8 = feasible.per_device_bytes(2048, 1024, 8, "B")
+    assert a1 == a8, "A must not appear to shard; it regenerates everything everywhere"
+    assert b8 * 8 == b1, "B must fall as 1/D"
+    assert a8 == b8 * 8
+
+
+def test_the_committed_sweep_fits_an_80gb_device():
+    """`sweep.yaml` is the config the node gets booked for. If it does not fit, the booking
+    buys error records."""
+    import pathlib as _p
+
+    cfg = __import__("yaml").safe_load(
+        (_p.Path(__file__).resolve().parent.parent / "experiments" / "phase2"
+         / "sweep.yaml").read_text())
+    over = [r for r in feasible.audit(cfg, 80.0) if r[1]]
+    assert not over, f"{len(over)} configs exceed 80 GB: {over[:2]}"
+
+
+def test_populations_may_be_per_model_size_or_shared():
+    """A mapping keyed by model size, because the memory ceiling is per model size. A plain
+    list still works, which is what the rehearsal config uses."""
+    shared = {"population": [16], "population_per_device": [4]}
+    per_size = {"population": {512: [16], 2048: [8]}, "population_per_device": {512: [4], 2048: [2]}}
+    assert feasible.populations(shared, "strong", 512, 4) == [16]
+    assert feasible.populations(per_size, "strong", 2048, 4) == [8]
+    assert feasible.populations(per_size, "weak", 2048, 4) == [8]  # 2 per device x 4
