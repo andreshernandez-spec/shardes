@@ -24,7 +24,7 @@ import os
 import subprocess
 import sys
 
-SHA = "PLACEHOLDER"  # set at submit time
+SHA = "66270b6"  # SET THIS to the commit under test.
 REPO = "https://github.com/andreshernandez-spec/shardes.git"
 CHECKOUT = "/kaggle/working/shardes"
 
