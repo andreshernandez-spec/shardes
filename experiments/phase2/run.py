@@ -143,9 +143,22 @@ def fingerprint(tree) -> dict:
 
 
 def measure(config: Config, cfg: dict) -> dict:
-    """Time one configuration. Returns the record written to disk."""
+    """Time one configuration. Returns the record written to disk.
+
+    **Timing and correctness need different matmul precisions, and conflating them cost a
+    TPU prep run.** A TPU MXU multiplies in bf16 unless told otherwise, exactly as an Ampere
+    GPU uses TF32. Run the trajectory guard at that default and strategy B's updates diverge
+    across device counts by up to 3.9e-2, which reads as a sharding bug and is not one: it is
+    ~1e-3 relative arithmetic, amplified by a psum whose summation order changes with D.
+
+    So the guard always runs at `highest`, and the timed generations run at whatever
+    `matmul_precision` the config asks for, which is recorded in the result. A throughput
+    number is only meaningful next to the precision that produced it, and a correctness check
+    is only meaningful above the noise floor. One global setting cannot serve both.
+    """
     warmup = int(cfg.get("warmup", 3))
     repeats = int(cfg.get("repeats", 5))
+    precision = cfg.get("matmul_precision", "highest")
 
     mesh = sharding.make_mesh(config.devices)
     sharding.check_population(config.population, mesh)
@@ -175,24 +188,26 @@ def measure(config: Config, cfg: dict) -> dict:
         fitness = es.apply(transformer_block.loss, state, pert)(batch)
         return es.tell(state, pert, fitness)
 
-    # Warm-up. The first call compiles; `docs/03` says discard at least three.
-    for _ in range(warmup):
-        state = generation(state)
-    jax.block_until_ready(state)
-
-    times = []
-    for _ in range(repeats):
-        t0 = time.perf_counter()
-        state = generation(state)
+    with jax.default_matmul_precision(precision):
+        # Warm-up. The first call compiles; `docs/03` says discard at least three.
+        for _ in range(warmup):
+            state = generation(state)
         jax.block_until_ready(state)
-        times.append(time.perf_counter() - t0)
+
+        times = []
+        for _ in range(repeats):
+            t0 = time.perf_counter()
+            state = generation(state)
+            jax.block_until_ready(state)
+            times.append(time.perf_counter() - t0)
 
     # The trajectory guard runs from a *fresh* state for exactly one generation, not from
     # the timed state after warmup+repeats. Drift across generations compounds, and the
     # tolerance this is compared against (tests/gpu, 1e-5) is a one-generation figure. The
     # rehearsal measured 1.2e-5 after 8 generations and it read like a violation; it was an
     # accumulation. Comparing like with like costs one extra generation.
-    trajectory = fingerprint(generation(es.init(jax.random.key(SEED), params)).params)
+    with jax.default_matmul_precision("highest"):
+        trajectory = fingerprint(generation(es.init(jax.random.key(SEED), params)).params)
 
     compiled = generation.lower(state).compile()
     try:
@@ -213,6 +228,8 @@ def measure(config: Config, cfg: dict) -> dict:
         "warmup": warmup,
         "repeats": repeats,
         "peak_bytes_per_device": peak,
+        "matmul_precision": precision,
+        "guard_precision": "highest",
         # Trajectory identity: same seed, same generation count, so this must not depend on
         # the device count beyond summation order. The report asserts it; recording it is
         # what makes that possible.

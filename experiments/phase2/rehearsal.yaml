@@ -21,3 +21,4 @@ seq: 8
 warmup: 3
 repeats: 5
 results_dir: results-rehearsal
+matmul_precision: highest

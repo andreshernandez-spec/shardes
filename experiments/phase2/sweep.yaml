@@ -36,3 +36,9 @@ warmup: 3
 repeats: 5
 
 results_dir: results
+
+# The MXU multiplies in bf16 by default and an Ampere GPU uses TF32, either of which makes
+# strategy B disagree across device counts by ~1e-3 to 1e-2. The trajectory guard always runs
+# at "highest" regardless; this is the precision the TIMED generations use, and it is recorded
+# in every result because a throughput number without its precision is not a number.
+matmul_precision: highest
