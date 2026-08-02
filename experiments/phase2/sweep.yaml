@@ -17,11 +17,24 @@ modes: [strong, weak]
 devices: [1, 2, 4, 8]
 d_model: [512, 2048]
 
+# **Populations are per model size, because the memory ceiling is.** Strategy A regenerates
+# all N members on EVERY device, so its storage is N*|params| and does not fall with D. At
+# d=2048 that is 100.7 MB a member, so N=1024 needs 96 GB per device and does not fit an
+# 80 GB A100 at any device count, D=1 included. D=1 is the baseline every parallel-efficiency
+# figure divides by, so losing it loses the figure.
+#
+# `python feasible.py --config sweep.yaml --hbm 80` is the check, and it exits non-zero.
+# Re-run it after touching anything here.
+#
 # Strong: fixed total, divisible by 8 so every device count splits evenly.
-population: [256, 1024]
+population:
+  512: [256, 1024]
+  2048: [128, 512]
 
-# Weak: per device, so the totals are 32..1024 across D.
-population_per_device: [32, 128]
+# Weak: per device, so the total is this times D.
+population_per_device:
+  512: [32, 128]
+  2048: [16, 64]
 
 # All four, including lowrank_r1 unmirrored: M3's crossover is a property of the contraction
 # strategy, and the structured path is where "never materialized" is supposed to pay off.

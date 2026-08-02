@@ -41,7 +41,13 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE))
 import harness  # noqa: E402
+
+# One definition of "which populations does this model size get", shared with the memory
+# audit. Two copies would drift, and the copy that drifted would be the one that decided
+# whether a rented node ran the configuration it was booked for.
+from feasible import per_device_bytes, populations  # noqa: E402
 
 from shardes import sharding  # noqa: E402
 from shardes.core import ShardedES  # noqa: E402
@@ -97,11 +103,7 @@ def expand(cfg: dict) -> list[Config]:
     for mode in cfg["modes"]:
         for d_model in cfg["d_model"]:
             for devices in cfg["devices"]:
-                if mode == "strong":
-                    pops = [int(n) for n in cfg["population"]]
-                else:
-                    pops = [int(n) * devices for n in cfg["population_per_device"]]
-                for population in pops:
+                for population in populations(cfg, mode, d_model, devices):
                     for strategy in cfg["strategies"]:
                         for how in cfg["how"]:
                             out.append(
@@ -244,6 +246,8 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--config", type=Path, default=HERE / "sweep.yaml")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--hbm", type=float, default=None,
+                    help="per-device HBM in GB; warns about configs that cannot fit")
     ap.add_argument("--cap", type=float, default=300.0,
                     help="per-config wall-clock cap, s: flagged after the fact, see below")
     ap.add_argument("--budget", type=float, default=8 * 3600.0,
@@ -258,6 +262,19 @@ def main(argv=None) -> int:
     available = jax.device_count()
     runnable = [c for c in configs if c.devices <= available]
     skipped = len(configs) - len(runnable)
+
+    # Memory preflight. Strategy A regenerates all N on every device, so a configuration can
+    # be far too large for the node while looking modest in the config file. Reported here
+    # rather than discovered as an OOM two hours into a rented session.
+    if args.hbm:
+        budget = args.hbm * 1024**3 * 0.9
+        over = [c for c in runnable
+                if per_device_bytes(c.d_model, c.population, c.devices, c.how) > budget]
+        if over:
+            print(f"WARNING: {len(over)} of {len(runnable)} configs exceed {args.hbm:g} GB "
+                  f"per device and will be recorded as errors. Run feasible.py.")
+            for c in over[:3]:
+                print(f"  {c.slug()}")
 
     if args.dry_run:
         print(f"{len(configs)} configs, {len(runnable)} runnable on {available} devices")
