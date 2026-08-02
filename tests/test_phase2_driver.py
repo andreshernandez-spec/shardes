@@ -247,3 +247,31 @@ def test_populations_may_be_per_model_size_or_shared():
     assert feasible.populations(shared, "strong", 512, 4) == [16]
     assert feasible.populations(per_size, "strong", 2048, 4) == [8]
     assert feasible.populations(per_size, "weak", 2048, 4) == [8]  # 2 per device x 4
+
+
+def test_a_near_zero_probe_component_does_not_manufacture_a_failure(tmp_path):
+    """The metric bug, encoded.
+
+    The guard used elementwise `max(|a-b| / max(|b|, 1e-30))`. A random projection of a
+    parameter vector has components near zero routinely, and dividing by one turns a tiny
+    absolute difference into an enormous ratio. It reported `lowrank_r1/B` diverging by
+    2.7e-02 where the update actually agreed to 2.3e-07, and it failed a TPU run whose cause
+    was then misattributed to matmul precision.
+
+    Here the vectors agree to ~1e-9 in norm and differ by 100% on the near-zero component.
+    That must pass: the claim is about the update as a vector, not about a coordinate whose
+    magnitude is arithmetic noise.
+    """
+    _write(tmp_path, 1, "B", _fingerprint(1.0, [1.0, 1e-12], digest="one"))
+    _write(tmp_path, 2, "B", _fingerprint(1.0, [1.0 + 1e-9, 2e-12], digest="two"))
+    assert check.main(["--results", str(tmp_path)]) == 0
+
+
+def test_the_guard_uses_the_same_measure_as_the_gpu_test():
+    """Same claim, same metric. tests/gpu compares norms; so must this."""
+    gpu = (pathlib.Path(__file__).resolve().parent / "gpu"
+           / "test_device_invariance_gpu.py").read_text()
+    assert "np.linalg.norm(a - b) / np.linalg.norm(b)" in gpu
+    src = (PHASE2 / "check.py").read_text()
+    assert "np.linalg.norm(a - b) / denom" in src
+    assert "1e-30" not in src, "the elementwise divide-by-near-zero metric is back"
