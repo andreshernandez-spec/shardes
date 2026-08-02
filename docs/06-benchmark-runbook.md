@@ -10,13 +10,13 @@ it, and how not to lose a session.
 | Tier | What | Devices | Cost | Limits |
 |---|---|---|---|---|
 | **T0** | Local / any CPU | 8 simulated | $0 | No timing validity |
-| **T1** | **Kaggle TPU v5e-8** | **8 chips, 16 GB each** | **$0** | ~20 TPU-h/week, 9-h sessions |
+| **T1** | **Kaggle TPU v5e-8** | **8 chips, 16 GB each** | **$0** | ~20 TPU-h/week, 9-h sessions, **2.5-4 h queue** |
 | **T2** | **Local RTX 3080 Laptop, 16 GB, Ampere** | 1 | **$0** | Laptop thermals; single device, so no sharding |
 | **T2′** | Kaggle GPU: P100 16 GB, or 2× T4 | 1–2 | $0 | ~30 GPU-h/week; Turing. Fallback for T2 |
 | **T3** | TPU Research Cloud | 8–256 chips, per grant | $0 TPU + ~$10–20 VM/GCS | Temporary grant, ~30 days |
 | **T4** | GCP DWS, `a2-ultragpu-8g` | 8× A100 80 GB, NVLink | $19.20/h | Needs quota |
 | **T4′** | GCP DWS, `a3-highgpu-8g` | 8× H100 80 GB | $38.32/h flex-start | Only if matching EGGROLL's H100 numbers |
-| **T5** | Vast/RunPod spot | 1–8 | ~$0.7–2/GPU-h | Reruns, host quality varies |
+| **T5** | **RunPod on-demand 8x A100 SXM** | **8, NVLink** | **~$10-12/h, ~$40-70 a sweep** | **The Phase 2 critical path as of 2026-08-02.** No quota, minutes to start, SSH. Require SXM: the interconnect is part of the result |
 
 The routing principle: **every experiment goes to the cheapest tier that can answer it.**
 Almost everything lands on T0–T3, which are free.
@@ -40,10 +40,29 @@ at $2/hr than on the benchmarks themselves.
 
 ---
 
-## T1 — Kaggle TPU v5e-8. The primary scaling platform.
+## T1 — Kaggle TPU v5e-8. A free parallel track, not the critical path.
 
-Eight chips, free, ~20 TPU-hours/week, 9-hour session cap, no credit card. This carries
-E2, E3, E4 (first pass), E8-TPU, E10, E11 — the bulk of the paper.
+Eight chips, free, ~20 TPU-hours/week, 9-hour session cap, no credit card.
+
+> **Demoted from "the primary scaling platform" on 2026-08-02, and the reason is calendar,
+> not capability.** The tier works: verified end to end, and the prep kernel found a real bug
+> in our own driver. But the batch queue measured 2.5 h and then 4 h, against a 9-hour cap and
+> a ~20 TPU-h weekly quota. A phase needing a calibration, a sweep and one re-run is three or
+> four queue waits, and if the sweep exceeds the weekly quota the quota alone spreads it over
+> weeks. Money cannot shorten a queue you are not paying for.
+>
+> So Phase 2's sweep goes to a rented 8x A100 node (`docs/compute.md`, refreshed the same
+> day), and **T1 runs beside it**. A queued kernel costs nothing to leave queued: submit, and
+> get on with the next phase rather than waiting.
+>
+> Keep using it, for two reasons that are not cost. A TPU result is a **second architecture**,
+> and a scaling claim reproduced on two is far harder to dismiss than one that might be tuned
+> to a single node. And it has already paid for itself once, by catching the bf16 matmul
+> default that would have corrupted the sweep on any hardware with an aggressive precision
+> default, the rented A100 included.
+
+This still carries E2, E3, E4 (first pass), E8-TPU, E10, E11 — the bulk of the paper — as the
+free half of a two-platform story.
 
 > **VERIFIED 2026-08-01.** `--accelerator TpuV5E8` through the Kernels API gives
 > **8 x "TPU v5 lite"**, `platform=tpu`, on `kaggle-gpu-images/python-tpuvm`. Phase 2 can run
@@ -59,9 +78,10 @@ E2, E3, E4 (first pass), E8-TPU, E10, E11 — the bulk of the paper.
 >
 > Two measured facts that change how this tier gets used:
 >
-> - **The batch queue was ~2.5 hours.** T1 is one shot per attempt, not somewhere to iterate.
->   That is the argument for the rehearsal being complete before anything is submitted, and
->   for the driver being resumable rather than merely restartable.
+> - **The batch queue was ~2.5 hours, then ~4 hours.** Budget for the worse one. T1 is one
+>   shot per attempt, not somewhere to iterate. That is the argument for the rehearsal being
+>   complete before anything is submitted, for the driver being resumable rather than merely
+>   restartable, and ultimately for T1 not being the critical path at all.
 > - **The image ships jax 0.10.2**, below this project's 0.11 floor, so a TPU-side upgrade is
 >   required. **Measured 2026-08-02: it is safe.** `pip install -U "jax[tpu]>=0.11"` left all
 >   8 chips working. This paragraph previously called it a likely landmine because `jax[tpu]`

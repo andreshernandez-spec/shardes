@@ -47,8 +47,11 @@ Total: roughly 3–4 months to a usable library, ~6 months to a submission — l
 **The benchmark campaign and the paper it feeds are specified separately**, because the
 free-tier compute imposes its own calendar: `docs/05-paper.md` (claims → experiments →
 figures) and `docs/06-benchmark-runbook.md` (Kaggle, TRC, GCP mechanics). Read those
-before scheduling Phase 2 — Kaggle's TPU v5e-8 absorbs most of it at zero cost, and TRC's
-grant window has a timing trap that costs you the free compute if you apply too early.
+before scheduling Phase 2. Kaggle's TPU v5e-8 works and is free, but its 2.5-4 h queue and
+~20 TPU-h weekly quota make it a **parallel track rather than the critical path** (revised
+2026-08-02): the sweep goes to a rented 8x A100 node for ~$40-70, and TPU work runs beside it
+without blocking the next phase. TRC's grant window also has a timing trap that costs you the
+free compute if you apply too early.
 
 ---
 
@@ -176,7 +179,7 @@ that says otherwise is wrong. `docs/02` C1.7.
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| GCP GPU quota not approved in time | **high** | Request during Phase 0. Mostly de-risked now: the primary scaling study runs free on Kaggle TPU. |
+| GCP GPU quota not approved in time | **low** | Retired 2026-08-02: do not depend on GCP. A rented 8x A100 node needs no quota and starts in minutes (`docs/compute.md`), and Kaggle TPU v5e-8 is a free parallel track. The quota process was the risk; not using it removes it. |
 | TRC grant window wasted by applying too early | **high** | Grant is temporary (~30 days) and starts on acceptance. Apply ~week 10. See `docs/06-benchmark-runbook.md` §T3. |
 | Kaggle weekly quota throttles the E4 grid | medium | Plan E4 as four ~5-h chunks across two weeks. Resumable driver is mandatory, not optional. |
 | Someone publishes sharded ES first | medium | The architectural claim (strategy-pluggable, unflattened) survives even if a scaling result doesn't. Check monthly. |
