@@ -59,7 +59,12 @@ def kaggle(*args: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("kernel", choices=["probe", "t2prime", "tpuprobe"], help="subdirectory to push")
+    ap.add_argument(
+        "kernel",
+        help="kernel directory: a name under this file's directory, or any path. Any "
+        "directory with a kernel-metadata.json works, so phase 2 keeps its kernels next to "
+        "its own code rather than here.",
+    )
     ap.add_argument(
         "--accelerator",
         default="NvidiaTeslaT4",
@@ -70,7 +75,11 @@ def main() -> None:
     ap.add_argument("--timeout", type=int, default=3600)
     args = ap.parse_args()
 
-    src = HERE / args.kernel
+    src = pathlib.Path(args.kernel)
+    if not (src / "kernel-metadata.json").exists():
+        src = HERE / args.kernel
+    if not (src / "kernel-metadata.json").exists():
+        sys.exit(f"no kernel-metadata.json in {args.kernel!r}")
     meta = json.loads((src / "kernel-metadata.json").read_text())
     slug = meta["id"].split("/")[-1]
     meta["id"] = f"{username()}/{slug}"
@@ -92,7 +101,7 @@ def main() -> None:
             sys.exit(f"still running after {args.timeout}s; check the notebook in the browser")
         time.sleep(args.poll)
 
-    out = HERE / "output" / args.kernel  # per kernel, or the newest log wins the glob
+    out = HERE / "output" / src.name  # per kernel, or the newest log wins the glob
     out.mkdir(parents=True, exist_ok=True)
     kaggle("kernels", "output", meta["id"], "-p", str(out), "-o")
     logs = sorted(out.glob("*.log"))
