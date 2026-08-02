@@ -243,11 +243,24 @@ FAIL: iid_gaussian/B exceeds rtol 1e-05 across D (3.92e-02)
 FAIL: mirrored_lr1/B exceeds rtol 1e-05 across D (2.56e-05)
 ```
 
-**A TPU MXU multiplies in bf16 unless told otherwise**, the same trap as TF32 on Ampere, and
-the phase 2 driver was not setting the precision that `tests/gpu` has always set. Strategy A
-stayed bitwise identical across device counts; only B moved, because a `psum` amplifies ~1e-3
-arithmetic differently as the summation order changes with `D`. 3.9e-2 is 4%, so the natural
-reading is a sharding bug, and the hours would have gone into looking for one.
+**That diagnosis was wrong, and the correction is worth more than the original claim.**
+
+It was attributed to the TPU MXU multiplying in bf16 by default, the analogue of TF32 on
+Ampere. The bf16 default is real. **It is not what those numbers show**, because the guard's
+metric was unsound: `check.py` compared probe vectors with elementwise
+`max(|a-b| / max(|b|, 1e-30))`, and a random projection has components near zero routinely,
+so a tiny absolute difference divided by one of them explodes. Measured on CPU at `d=256`,
+the same configurations read **2.7e-02 elementwise and 2.3e-07 in the norm**. The library was
+never diverging.
+
+The metric now matches `tests/gpu`: relative error in the L2 norm. **Whether bf16 also moves
+these numbers is untested** — it plausibly does, at roughly 1e-3, but no measurement here
+separates the two, and one is not going to be claimed on the strength of a broken ruler.
+Re-running the prep kernel would settle it.
+
+The precision split below stands regardless, on its own argument rather than on this
+evidence: a correctness check should not run below the arithmetic noise floor, and a
+throughput number is meaningless without the precision that produced it.
 
 The fix is not "set highest everywhere": on TPU that costs several times the throughput, so it
 would silently change what the sweep measures. **The guard now always runs at `highest`, the

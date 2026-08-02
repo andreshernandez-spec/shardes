@@ -35,6 +35,24 @@ HERE = pathlib.Path(__file__).resolve().parent
 RTOL = 1e-5
 
 
+def _rel(a: np.ndarray, b: np.ndarray) -> float:
+    """Relative error in the L2 norm, the same measure `tests/gpu` uses.
+
+    **Not elementwise `max(|a-b|/|b|)`, which is what this used to be and which was wrong.**
+    Dividing componentwise means any component of `b` near zero inflates the ratio without
+    bound, and a random projection of a parameter vector has components near zero all the
+    time. That metric reported `lowrank_r1/B` diverging by 2.7e-02 on a run where the real
+    disagreement was 2.3e-07, and it failed a TPU prep run whose cause was then misattributed.
+
+    The norm ratio asks the question actually being asked: is the *update* the same vector,
+    whatever happened to individual coordinates.
+    """
+    denom = float(np.linalg.norm(b))
+    if denom == 0.0:
+        return float(np.linalg.norm(a - b))
+    return float(np.linalg.norm(a - b) / denom)
+
+
 def load(results: pathlib.Path) -> list[dict]:
     rows = [json.loads(p.read_text()) for p in sorted(results.glob("*.json"))]
     if not rows:
@@ -69,7 +87,7 @@ def main(argv=None) -> int:
         worst = 0.0
         for t in by_devices.values():
             a, b = np.array(t["probe"]), np.array(base["probe"])
-            worst = max(worst, float(np.max(np.abs(a - b) / np.maximum(np.abs(b), 1e-30))))
+            worst = max(worst, _rel(a, b))
 
         if how == "A" and not exact:
             failures.append(f"{strategy}/A is not bitwise identical across D ({worst:.2e})")
