@@ -218,13 +218,37 @@ def test_strategy_a_memory_does_not_fall_with_device_count():
     into the first sweep config, including the `D=1` baseline that every parallel-efficiency
     figure divides by.
     """
-    a1 = feasible.per_device_bytes(2048, 1024, 1, "A")
-    a8 = feasible.per_device_bytes(2048, 1024, 8, "A")
-    b1 = feasible.per_device_bytes(2048, 1024, 1, "B")
-    b8 = feasible.per_device_bytes(2048, 1024, 8, "B")
+    # The claim is about what the STRATEGY stores. Total per-device memory also carries
+    # activations, which are sharded for both A and B, so the totals are not equal; asserting
+    # on them was asserting the old single-term model rather than the property.
+    a1 = feasible.perturbation_bytes("iid_gaussian", 2048, 1024)          # A contracts all N
+    a8 = feasible.perturbation_bytes("iid_gaussian", 2048, 1024)
+    b8 = feasible.perturbation_bytes("iid_gaussian", 2048, 1024 // 8)
     assert a1 == a8, "A must not appear to shard; it regenerates everything everywhere"
-    assert b8 * 8 == b1, "B must fall as 1/D"
-    assert a8 == b8 * 8
+    assert b8 * 8 == a8, "B must fall as 1/D"
+
+    # And the total for A must still be dominated by the un-sharded part, or the sizing
+    # advice this file exists to give is wrong.
+    total_a1 = feasible.per_device_bytes(2048, 1024, 1, "A", "iid_gaussian")
+    total_a8 = feasible.per_device_bytes(2048, 1024, 8, "A", "iid_gaussian")
+    assert total_a8 > 0.9 * total_a1, "A's memory must barely improve with more devices"
+
+
+def test_the_strategies_do_not_all_store_the_population():
+    """Measured, and the reason the first model was wrong in both directions.
+
+    `iid_gaussian` materialises. `seed_regenerated` re-derives, so its footprint is flat in
+    N. The low-rank path stores `N*r*(m+n)` and never an `(m, n)` perturbation, which is
+    invariant 3. Predicting one number for all three over-sized two strategies and under-sized
+    the one that OOMs.
+    """
+    d, n = 2048, 512
+    iid = feasible.perturbation_bytes("iid_gaussian", d, n)
+    seed = feasible.perturbation_bytes("seed_regenerated", d, n)
+    low = feasible.perturbation_bytes("lowrank_r1", d, n)
+    assert seed == feasible.perturbation_bytes("seed_regenerated", d, 8 * n), "flat in N"
+    assert low < iid / 100, "the low-rank path must not scale like a materialised one"
+    assert seed < iid / 100
 
 
 def test_the_committed_sweep_fits_an_80gb_device():
