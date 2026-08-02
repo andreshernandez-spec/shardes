@@ -6,6 +6,7 @@ factored representation: that it equals the thing it is an optimisation of, that
 builds that thing, and that it converges to full rank as r grows.
 """
 
+import functools
 import jax
 import jax.numpy as jnp
 import pytest
@@ -29,9 +30,19 @@ def params():
     }
 
 
+@functools.lru_cache(maxsize=None)
+def _epsilon_fn(strategy):
+    return jax.jit(lambda k, p, i, ids: strategy.contract(
+        strategy.sample(k, p, ids), (ids == i).astype(jnp.float32)))
+
+
 def epsilon(strategy, key, params, i, ids):
-    """Member i's perturbation, via a one-hot contraction."""
-    return strategy.contract(strategy.sample(key, params, ids), (ids == i).astype(jnp.float32))
+    """Member i's perturbation, via a one-hot contraction.
+
+    Jitted and cached per strategy: eager dispatch compiles one tiny module per primitive,
+    and a strategy is a few hundred of them. jit is not part of the contract under test.
+    """
+    return _epsilon_fn(strategy)(key, params, i, ids)
 
 
 @pytest.mark.parametrize("r", [1, 2, 4])

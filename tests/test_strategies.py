@@ -18,6 +18,7 @@ strategy's internal layout, which is the whole point of the protocol being struc
 
 import inspect
 
+import functools
 import jax
 import jax.numpy as jnp
 import pytest
@@ -35,17 +36,33 @@ def rel_err(got, want):
     return jnp.linalg.norm(flat_g - flat_w) / jnp.linalg.norm(flat_w)
 
 
+@functools.lru_cache(maxsize=None)
+def _contract_fn(strategy):
+    """The jitted sample-and-contract for one strategy, built once.
+
+    **Cached on the strategy, and that is the whole point.** `jax.jit` keys its compilation
+    cache on the function object it was handed. Building `jax.jit(lambda ...)` inside the
+    helper made a new lambda per call, so every call was a cache miss and recompiled the
+    whole strategy: measured 2.3 s per call for `mirrored_hd_lr4`, against 2.3 s once and
+    then 0.3 ms. A test that contracts under five different weight vectors paid five
+    compiles for one program.
+
+    The previous version's docstring said "one compile instead of hundreds", and it did
+    replace per-primitive dispatch, so the fast tier really did drop from 98 s. It was one
+    compile per *call*, though, which is what this fixes.
+    """
+    return jax.jit(lambda k, p, i, w: strategy.contract(strategy.sample(k, p, i), w))
+
+
 def contracted(strategy, base_key, params, member_ids, weights):
     """sample then contract, under one jit.
 
     `jit` here is about the suite's runtime, not about what is being tested. A strategy is a
     few hundred primitives (an FWHT chain, a 30-step XOR, a scan), and dispatching each one
-    eagerly compiles a tiny HLO module per primitive: `mirrored_hd_lr1` cost 3.7 s on a test
-    whose arrays are 8x5. One compile instead of hundreds took the fast tier from 98 s to
-    under budget. Nothing about the strategies changes; jit is not part of the contract.
+    eagerly compiles a tiny HLO module per primitive. Nothing about the strategies changes;
+    jit is not part of the contract.
     """
-    f = jax.jit(lambda k, p, i, w: strategy.contract(strategy.sample(k, p, i), w))
-    return f(base_key, params, member_ids, weights)
+    return _contract_fn(strategy)(base_key, params, member_ids, weights)
 
 
 def epsilon(strategy, base_key, params, member_id, member_ids):
