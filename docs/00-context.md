@@ -94,7 +94,17 @@ strategies in one codebase.
    documentation only: a notebook where the user passes `out_shardings` by hand. That
    shards the population but **replicates all algorithm state** — for CMA-ES, the `d×d`
    covariance sits on every device.
-3. **Stale JAX pin**: `jax>=0.5.0,<0.7` while JAX is at 0.11.
+3. ~~**Stale JAX pin**~~ **FIXED UPSTREAM, re-checked 2026-08-02.** evosax **0.2.0**
+   declares `Requires-Dist: jax>=0.5.0` with **no upper bound**, read straight out of the
+   published wheel's METADATA. The `<0.7` pin this project quoted is gone, and every place
+   that used it to justify our own floor has been corrected. Do not re-add it: a public repo
+   whose motivation rests on an out-of-date pin is one `pip show` from being embarrassing.
+
+   The two claims that actually matter survived the same check, and are now evidenced rather
+   than asserted. In the 0.2.0 wheel, `ravel_pytree`/`flatten_util` still appear, in
+   `evosax/algorithms/base.py` and nowhere else, so item 1 holds. `shard_map`,
+   `NamedSharding`, `Mesh(`, `jax.sharding` and `psum` appear in **zero** files, so item 2
+   holds. **The architectural gap is the claim; the version pin never was.**
 4. **Deprecated Brax path**: targets `brax.envs`, deprecated at Brax v0.13.0 in favour of
    MuJoCo Playground.
 

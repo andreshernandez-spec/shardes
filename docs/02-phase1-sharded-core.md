@@ -197,7 +197,8 @@ MuJoCo 3.11.0, MJX 3.11.0. Notes worth keeping:
 - **Nothing in the chain can force a JAX downgrade**, which was the real risk and the reason
   to check rather than assume. Every constraint is a *lower* bound: `brax jax>=0.4.6`,
   `flax jax>=0.10.0`, `mujoco-mjx` unpinned. A `pip install --dry-run` confirmed the resolver
-  does not touch `jax` or `jaxlib`. That is exactly the trap evosax is in with `jax<0.7`, so
+  does not touch `jax` or `jaxlib`. That is exactly the trap evosax *was* in at `jax<0.7`
+  (lifted in 0.2.0, see docs/00), so
   it was worth one command to be sure.
 - **This paragraph's own reasoning is half wrong and the correction matters.** "Use MuJoCo
   Playground *because* brax.envs is deprecated" does not escape brax: Playground depends on
