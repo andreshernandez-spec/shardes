@@ -63,9 +63,11 @@ E2, E3, E4 (first pass), E8-TPU, E10, E11 — the bulk of the paper.
 >   That is the argument for the rehearsal being complete before anything is submitted, and
 >   for the driver being resumable rather than merely restartable.
 > - **The image ships jax 0.10.2**, below this project's 0.11 floor, so a TPU-side upgrade is
->   required. Treat that as a risk rather than a formality: `jax[tpu]` is coupled to `libtpu`
->   in a way `jax[cuda12]` is not, and a mismatch takes the runtime out entirely. **Prove the
->   upgrade in its own short kernel before spending a session on it.**
+>   required. **Measured 2026-08-02: it is safe.** `pip install -U "jax[tpu]>=0.11"` left all
+>   8 chips working. This paragraph previously called it a likely landmine because `jax[tpu]`
+>   is coupled to `libtpu` in a way `jax[cuda12]` is not; that was reasoning, not measurement,
+>   and the measurement disagreed. Still prove an upgrade in its own kernel before a session
+>   depends on it, and assert the device count in a **fresh interpreter** afterwards.
 
 **Constraints to design around:**
 
