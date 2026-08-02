@@ -46,13 +46,29 @@ SHARDING_RTOL = 1e-5
 PLATFORM_RTOL = 1e-4
 
 
-def _gpus():
-    return [d for d in jax.devices() if d.platform in ("gpu", "cuda", "rocm")]
+#: Any real accelerator, not just a GPU. **A TPU has to be in here or this whole file
+#: silently becomes a no-op on one**: every test gates on this list, so an omitted platform
+#: means 16 skips, exit 0, and a green run that checked nothing. That is the same failure as
+#: an accelerator request being silently downgraded, and harder to notice.
+_REAL = ("gpu", "cuda", "rocm", "tpu")
+
+
+def _accelerators():
+    return [d for d in jax.devices() if d.platform in _REAL]
+
+
+#: Kept as the old name so nothing that imports it breaks. The marker is still `gpu` because
+#: it is wired into pyproject's addopts; read it as "needs real hardware".
+_gpus = _accelerators
 
 
 @pytest.fixture(scope="module", autouse=True)
 def highest_precision():
-    """Without this an Ampere GPU uses TF32 and every comparison below fails at ~1e-3."""
+    """Without this an Ampere GPU uses TF32 and every comparison below fails at ~1e-3.
+
+    It matters at least as much on a TPU, where the MXU multiplies in bf16 by default. Same
+    symptom, different hardware: a portability failure that is really a precision default.
+    """
     old = jax.config.jax_default_matmul_precision
     jax.config.update("jax_default_matmul_precision", "highest")
     yield
@@ -87,7 +103,7 @@ def _rel(a: np.ndarray, b: np.ndarray) -> float:
 NAMES = ["iid_gaussian", "seed_regenerated", "mirrored_lr1"]
 
 
-@pytest.mark.skipif(not _gpus(), reason="no GPU visible")
+@pytest.mark.skipif(not _accelerators(), reason="no real accelerator visible")
 @pytest.mark.parametrize("name", NAMES)
 @pytest.mark.parametrize("how", ["A", "B"])
 def test_one_gpu_matches_the_cpu_reference(reference, name, how):
@@ -102,7 +118,7 @@ def test_one_gpu_matches_the_cpu_reference(reference, name, how):
     assert _rel(got, want) < PLATFORM_RTOL, f"{name}/{how} differs from the CPU reference"
 
 
-@pytest.mark.skipif(len(_gpus()) < 2, reason="needs 2 real GPUs (T2', docs/06)")
+@pytest.mark.skipif(len(_accelerators()) < 2, reason="needs 2 real GPUs (T2', docs/06)")
 @pytest.mark.parametrize("name", NAMES)
 @pytest.mark.parametrize("how", ["A", "B"])
 def test_two_gpus_match_one_gpu(name, how):
@@ -118,7 +134,7 @@ def test_two_gpus_match_one_gpu(name, how):
     assert _rel(two, one) < SHARDING_RTOL, f"{name}/{how} differs between 1 and 2 real GPUs"
 
 
-@pytest.mark.skipif(len(_gpus()) < 2, reason="needs 2 real GPUs")
+@pytest.mark.skipif(len(_accelerators()) < 2, reason="needs 2 real GPUs")
 @pytest.mark.parametrize("name", NAMES)
 def test_the_two_contraction_strategies_agree_on_real_hardware(name):
     """A and B on 2 real GPUs. On CPU they agree partly because nothing is really
@@ -127,7 +143,7 @@ def test_the_two_contraction_strategies_agree_on_real_hardware(name):
     assert _rel(a, b) < SHARDING_RTOL, f"{name}: A and B differ on real hardware"
 
 
-@pytest.mark.skipif(not _gpus(), reason="no GPU visible")
+@pytest.mark.skipif(not _accelerators(), reason="no real accelerator visible")
 def test_report_the_environment(reference, capsys):
     """Not an assertion. G1 needs the run recorded, and a green tick naming no hardware is
     not evidence. Run with `-s`."""
