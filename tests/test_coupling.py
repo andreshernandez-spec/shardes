@@ -10,6 +10,7 @@ Phase 0 scope is unsharded. The sharded tests arrive with Phase 3
 (docs/04-phase3-coupling.md) and are conditional on Gate G0.
 """
 
+import functools
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -43,14 +44,36 @@ def rows(coupling: Coupling, ids, d: int, stream: jax.Array = STREAM) -> jax.Arr
     primitive: 1.2 s for a d=8 case that computes nothing. One compile instead of a hundred
     took the file from 38 s to a few seconds.
     """
-    f = jax.jit(jax.vmap(lambda i: coupling(stream, i, d, jnp.float32)))
-    return f(jnp.asarray(ids))
+    return _rows_fn(coupling, d)(jnp.asarray(ids), stream)
+
+
+@functools.lru_cache(maxsize=None)
+def _rows_fn(coupling, d):
+    """Built once per (coupling, d), because `jax.jit` caches on the function object.
+
+    The stream is a **runtime argument, not a cache key**: it is a `PRNGKeyArray` and
+    unhashable, and keying on it would recompile per stream anyway, which is the defect being
+    fixed. `d` stays a key because it is a static shape.
+
+    A `jax.jit(...)` constructed inside the helper is a new object on every call, so every
+    call missed the cache and recompiled. Same defect, and same fix, as
+    `tests/test_strategies.py::_contract_fn`; that one measured 2.3 s per call against 0.3 ms
+    once cached.
+    """
+    return jax.jit(jax.vmap(lambda i, s: coupling(s, i, d, jnp.float32), in_axes=(0, None)))
+
+
+@functools.lru_cache(maxsize=None)
+def _sample_fn(strategy):
+    """`strategy.sample` is a *bound method*, and attribute access makes a new object every
+    time, so `jax.jit(strategy.sample)` never hit its cache either."""
+    return jax.jit(strategy.sample)
 
 
 def sampled(strategy, base_key, params, member_ids):
     """`strategy.sample`, jitted. Same reason as `rows`: eager dispatch of a few hundred
     primitives costs seconds on arrays this small."""
-    return jax.jit(strategy.sample)(base_key, params, member_ids)
+    return _sample_fn(strategy)(base_key, params, member_ids)
 
 
 # --------------------------------------------------------------------------------------
