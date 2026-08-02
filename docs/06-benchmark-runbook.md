@@ -204,6 +204,34 @@ when it cannot find that file rather than failing, so a broken delivery shows up
 Record the output of `test_report_the_environment` with the result. A green tick that names no
 hardware is not evidence.
 
+### T1 prep, run 2026-08-02: the sweep would have produced divergent updates
+
+`experiments/phase2/kaggle/tpuprep/` exists because the T1 queue is ~2.5 h, so a session is
+one shot. It proved three things and broke on a fourth, which is the point of it.
+
+Worked: the **jax upgrade** (0.10.2 to 0.11, all 8 chips still there, `platform=tpu`), the
+**library on TPU** (`shard_map`, `psum`, `make_mesh`; one generation gave a params norm of
+`6.7936177` against `6.7936144` measured on CPU, agreeing to ~7 figures), and the **driver**
+end to end, which ran 186/192 configs and stopped on its own budget with a resume message.
+
+Broke: **the trajectory guard**, and it was right to.
+
+```
+FAIL: iid_gaussian/B exceeds rtol 1e-05 across D (3.92e-02)
+FAIL: mirrored_lr1/B exceeds rtol 1e-05 across D (2.56e-05)
+```
+
+**A TPU MXU multiplies in bf16 unless told otherwise**, the same trap as TF32 on Ampere, and
+the phase 2 driver was not setting the precision that `tests/gpu` has always set. Strategy A
+stayed bitwise identical across device counts; only B moved, because a `psum` amplifies ~1e-3
+arithmetic differently as the summation order changes with `D`. 3.9e-2 is 4%, so the natural
+reading is a sharding bug, and the hours would have gone into looking for one.
+
+The fix is not "set highest everywhere": on TPU that costs several times the throughput, so it
+would silently change what the sweep measures. **The guard now always runs at `highest`, the
+timed generations run at the config's `matmul_precision`, and both are recorded in every
+result.** A throughput number without its precision is not a number.
+
 **Keep the notebook private.** T2′ runs on the personal Kaggle account
 (`al252130@gmail.com`), which is not the `andreshernandez-spec` identity the repo is published
 under; a phone number can only verify one Kaggle account, so this is not a thing to tidy up
