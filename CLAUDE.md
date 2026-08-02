@@ -96,8 +96,10 @@ number predated the code and was about to cost `R` in the unbiasedness tests.
 
 ## Environment
 
-- Python ≥ 3.11, JAX ≥ 0.11. **Do not pin below 0.11** — the whole point is that evosax
-  is stuck at `<0.7`.
+- Python ≥ 3.11, JAX ≥ 0.11. **Do not pin below 0.11** — `from jax import shard_map` needs
+  0.8 and `AxisType` needs 0.11, and those are what the library is built on. This used to
+  say "evosax is stuck at `<0.7`"; that stopped being true at evosax 0.2.0 (`jax>=0.5.0`,
+  no upper bound). The floor is justified by what we use, not by what they pin.
 - `from jax import shard_map`. `jax.experimental.shard_map` is deprecated (JAX 0.8.0).
 - Multi-device logic is developed and tested **on CPU** with
   `XLA_FLAGS=--xla_force_host_platform_device_count=8`. See `docs/compute.md`. Do not

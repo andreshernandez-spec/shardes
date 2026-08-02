@@ -12,7 +12,9 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Andres Hernandez" }]
 dependencies = [
-    # Do not pin jax below 0.11. The whole point is that evosax is stuck at <0.7.
+    # Do not pin jax below 0.11. Modern sharding is the point: `from jax import shard_map`
+    # is 0.8+, and AxisType is 0.11. (This used to say evosax was stuck at <0.7. It is not,
+    # as of 0.2.0; see docs/00. The reason for the floor is what we need, not what they pin.)
     "jax>=0.11",
     "numpy",
     # Sobol direction numbers only: `ScrambledSobol` reads the Joe-Kuo table out of
@@ -33,8 +35,7 @@ experiments = ["matplotlib", "pyyaml"]
 #
 # Verified before adding, because the project's whole premise is not being version-locked:
 # every jax constraint in this chain is a LOWER bound (brax jax>=0.4.6, flax jax>=0.10,
-# mujoco-mjx unpinned), so none of it can force a downgrade. Contrast evosax, which pins
-# jax<0.7 and is stuck there.
+# mujoco-mjx unpinned), so none of it can force a downgrade.
 tasks = ["playground"]
 
 [tool.hatch.build.targets.wheel]
