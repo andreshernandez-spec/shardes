@@ -116,31 +116,77 @@ clouds generally $2.50–$3.50/GPU/hr. So an 8×H100 node is roughly $16–32/hr
 
 ## Recommendation
 
-**Do the scaling study on 8× A100 80GB, not H100.**
-
-`a2-ultragpu-8g` on DWS flex-start is **$19.20/hr → ~$115 for a 6-hour session**, about
-half the H100 price. Strong and weak scaling curves, the contraction crossover, memory
-scaling, and communication volume — M1, M2, M3, M5, M6 in `docs/03-phase2-benchmarks.md` —
-are all about *relative* behaviour across device counts. A100 answers every one of them.
-
-Reserve H100 for one thing only: if you want an absolute throughput number comparable to
-EGGROLL's published H100 figures (M4). That's a short, targeted run, not the whole sweep,
-and it can be a second booking once you know the sweep works.
-
-Decision rule:
-
-1. **Have GCP credits, or want it on GCP?** → request A100 quota now, book
-   `a2-ultragpu-8g` via DWS flex-start. ~$115 for the session.
-2. **No credits, want it working this week?** → RunPod or Lambda, 8×H100 or 8×A100,
-   ~$130–190 for six hours, no quota process.
-3. **Want NVIDIA specifically?** → Brev, and accept that you're paying a convenience
-   premium over (2) for approximately the same machine.
-
-Budget the whole project at **$300–500** of compute across all phases, assuming the dress
-rehearsal in `docs/03-phase2-benchmarks.md` is taken seriously. Without the rehearsal,
-assume double.
-
----
+> **REFRESHED 2026-08-02, superseding the DWS-first advice below it.** Three things learned
+> since this page was written change the answer, and only one of them is a price move.
+>
+> **1. The sweep driver is resumable and writes one file per configuration.** That is the big
+> one. When this page was written nothing could survive an interruption, so it reached for
+> on-demand. A preemption now costs **one configuration**, not the run, which makes spot and
+> preemptible capacity rational rather than reckless.
+>
+> **2. Kaggle TPU v5e-8 works, and is queue-bound rather than slow.** 8 chips, free, verified
+> end to end (`docs/06` T1). But the batch queue measured 2.5 h and then 4 h, against a
+> 9-hour session cap and ~20 TPU-h/week. The compute is fine; the **calendar** is the problem,
+> and no amount of money shortens a queue you are not paying for.
+>
+> **3. The interconnect is part of the result, not part of the invoice.** M1, M2 and M5
+> measure communication volume and scaling across devices, and the A/B contraction crossover
+> is the headline. On PCIe A100s rather than NVLink SXM, strategy B's model-size all-reduce
+> behaves differently and the crossover contour becomes a property of the rental. **Require
+> SXM/NVLink and put the topology in the results caption.** This is the reason not to take the
+> cheapest marketplace price.
+>
+> Approximate, for **8x A100 80 GB over 4-6 hours**, which is the shape of the Phase 2 sweep:
+>
+> | option | ~$/hr for 8 | 4-6 h | lead time | interconnect |
+> |---|---|---|---|---|
+> | Vast.ai / spot marketplaces | $5-9 | $20-55 | minutes | **varies, often PCIe** |
+> | **RunPod on-demand SXM** | **$9.5-12** | **$40-70** | **minutes** | NVLink |
+> | Modal (serverless, per-second) | ~$20 | $40-80, idle free, $30/mo credit | none | NVLink |
+> | CoreWeave 8x A100 | $21.6 | $86-130 | minutes | NVLink |
+> | GCP `a2-ultragpu-8g` DWS | $19.2 | ~$115 | **days to weeks (quota)** | NVLink |
+> | Colab Pro+ | n/a | $50/mo | minutes | **1 GPU, or a 1-chip TPU** |
+>
+> **Colab cannot do this at all** and is listed only so nobody re-proposes it: its CLI offers
+> `TpuV5e1`/`TpuV6e1`, single chip, and one GPU per runtime. Phase 2 needs 8 devices in one
+> session. Paying there buys a faster device, and the measurement needs *more* devices.
+>
+> **Do not start with GCP if speed is the point.** The quota process is still the single
+> biggest scheduling risk on this page and can take longer than the TPU queue it would be
+> replacing.
+>
+> ### The decision, as of 2026-08-02
+>
+> **RunPod on-demand 8x A100 SXM, ~$40-70 for the sweep.** No quota, minutes to start, SSH so
+> there is no session cap and no one-shot-per-attempt problem, NVLink, and CUDA, which is the
+> platform this stack is most proven on. `tests/gpu` passes on real GPUs and the TF32 trap is
+> already handled, so the class of surprise the TPU produced does not recur.
+>
+> **Modal is the live alternative**, not an also-ran. It is script-first, which is what the
+> driver already is; per-second billing with scale-to-zero means paying for compute rather
+> than for the hours spent looking at it. If the sweep is 2-3 h of real compute, Modal likely
+> wins on the bill actually paid rather than the rate quoted.
+>
+> **A100, not H100.** Every Phase 2 measurement except M4 is *relative* across device counts.
+> H100 roughly doubles the cost to answer nothing extra. Reserve it for M4's absolute
+> throughput comparison against EGGROLL's published figures, as a separate short booking.
+>
+> **Calibrate free before booking.** Kaggle's GPU tier queues in seconds. A timing run at real
+> shapes on 1-2 devices tells you whether the sweep is 2 h or 12 h, which is the difference
+> between a $50 booking and a $200 one.
+>
+> ### T1 stays in play, as a parallel track rather than the critical path
+>
+> Renting does not retire the TPU. It changes what the TPU is *for*: **the paid node is the
+> critical path, and T1 runs beside it without blocking anything.** A queued kernel costs
+> nothing to leave queued, so submit TPU work and carry on with the next phase rather than
+> waiting on it.
+>
+> That is worth having for two reasons beyond cost. A TPU result is a **second platform**, and
+> a scaling claim reproduced on two architectures is much harder to dismiss than one tuned to a
+> single node. And the TPU already earned its place: it caught the bf16 matmul default that
+> would have corrupted the sweep on **any** hardware with an aggressive precision default,
+> including the A100 that would otherwise have been the first to run it.
 
 ## Setup runbook
 
