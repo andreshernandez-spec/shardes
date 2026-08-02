@@ -227,7 +227,10 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--config", type=Path, default=HERE / "sweep.yaml")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--cap", type=float, default=300.0, help="per-config wall-clock cap, s")
+    ap.add_argument("--cap", type=float, default=300.0,
+                    help="per-config wall-clock cap, s: flagged after the fact, see below")
+    ap.add_argument("--budget", type=float, default=8 * 3600.0,
+                    help="stop scheduling once the session has used this many seconds")
     args = ap.parse_args(argv)
 
     cfg = yaml.safe_load(args.config.read_text())
@@ -254,10 +257,28 @@ def main(argv=None) -> int:
     if env["dirty_worktree"]:
         print("WARNING: dirty worktree, results will be stamped unreproducible")
 
-    done = failed = 0
+    # `docs/03` asks for "a hard wall-clock cap per configuration, and exceeding it logs and
+    # moves on". Half of that is not implementable in process: a generation is one blocking
+    # XLA call, and neither SIGALRM nor a thread can preempt it, so a cap cannot *stop* a
+    # configuration that is already running. Pretending otherwise is worse than not having it.
+    #
+    # What is implementable, and what actually protects a 9-hour session:
+    #   - a session budget checked between configurations, so an overrunning sweep stops
+    #     scheduling rather than being killed by the session cap with nothing written,
+    #   - the cap recorded per configuration, so an overrun is visible in the results,
+    #   - resume, so the next session continues instead of starting over.
+    # The remaining exposure is one pathological configuration hanging forever. Compile times
+    # are measured in the rehearsal, which is what that rehearsal is for.
+    started = time.perf_counter()
+    done = failed = over = 0
+    stopped_early = None
     for i, config in enumerate(runnable, 1):
         if config.path().exists():
             continue
+        elapsed = time.perf_counter() - started
+        if elapsed > args.budget:
+            stopped_early = (i, elapsed)
+            break
         t0 = time.perf_counter()
         try:
             record = measure(config, cfg)
@@ -268,12 +289,20 @@ def main(argv=None) -> int:
             failed += 1
         record["env"] = env
         record["wall_seconds"] = time.perf_counter() - t0
+        record["cap_seconds"] = args.cap
+        record["over_cap"] = record["wall_seconds"] > args.cap
         harness.write_atomic(config.path(), record)
         done += 1
+        over += record["over_cap"]
         status = "ERROR" if "error" in record else f"{record['seconds_median'] * 1e3:.1f} ms"
-        print(f"[{i}/{len(runnable)}] {config.slug()}  {status}", flush=True)
+        flag = "  OVER CAP" if record["over_cap"] else ""
+        print(f"[{i}/{len(runnable)}] {config.slug()}  {status}{flag}", flush=True)
 
-    print(f"\n{done} written, {failed} failed, {skipped} needed more devices")
+    print(f"\n{done} written, {failed} failed, {over} over cap, {skipped} needed more devices")
+    if stopped_early:
+        i, elapsed = stopped_early
+        print(f"STOPPED at {i}/{len(runnable)} after {elapsed / 3600:.2f} h "
+              f"(budget {args.budget / 3600:.2f} h). Re-run to continue; results resume.")
     return 0
 
 

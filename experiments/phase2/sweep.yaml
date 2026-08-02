@@ -1,0 +1,38 @@
+# The real Phase 2 sweep. Committed before the run and cited by SHA in the results
+# (docs/03, and CLAUDE.md ground rule 2). Do not edit it during a session: a benchmark config
+# changed mid-run produces numbers nobody can reproduce, and the driver stamps the commit into
+# every result precisely so that shows up.
+#
+# Sized for T1, Kaggle TPU v5e-8: 8 chips, 16 GB HBM each, verified 2026-08-01 (docs/06).
+#
+# **Shapes are chosen so D in {1,2,4,8} all fit at the same per-device population.** Otherwise
+# the scaling curve compares different computations at different device counts, which is the
+# failure docs/03 spends most of its guard table preventing.
+#
+# Two model sizes, because M3 needs a (N, d) grid to have a crossover contour at all, and one
+# of the two has to be large enough that a model-size all-reduce (strategy B) stops being
+# free. d=512 matches Phase 0's block, so estimator results and systems results describe the
+# same model.
+modes: [strong, weak]
+devices: [1, 2, 4, 8]
+d_model: [512, 2048]
+
+# Strong: fixed total, divisible by 8 so every device count splits evenly.
+population: [256, 1024]
+
+# Weak: per device, so the totals are 32..1024 across D.
+population_per_device: [32, 128]
+
+# All four, including lowrank_r1 unmirrored: M3's crossover is a property of the contraction
+# strategy, and the structured path is where "never materialized" is supposed to pay off.
+strategies: [iid_gaussian, seed_regenerated, mirrored_lr1, lowrank_r1]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+# docs/03: at least three warm-up generations discarded, at least five timed repeats.
+warmup: 3
+repeats: 5
+
+results_dir: results
