@@ -99,7 +99,11 @@ print(f"{"d":>5} {"N":>5} {"D":>2} {"how":>4} {"strategy":18} {"ms":>9} {"pred G
 total = 0.0
 for r in sorted(rows, key=lambda r: (r["config"]["d_model"], r["config"]["population"])):
     c = r["config"]
-    pred = per_device_bytes(c["d_model"], c["population"], c["devices"], c["how"]) / GB
+    # Pass the strategy. Without it this defaults to iid_gaussian, the largest, and every
+    # other row reads as the model over-predicting by up to 300x: seed_regenerated at
+    # d=512 N=256 showed "3.19 predicted / 0.01 measured" when the model says 0.01.
+    pred = per_device_bytes(c["d_model"], c["population"], c["devices"], c["how"],
+                            c["strategy"]) / GB
     meas = (r.get("peak_bytes_per_device") or 0) / GB
     total += r["wall_seconds"]
     print(f"{c["d_model"]:>5} {c["population"]:>5} {c["devices"]:>2} {c["how"]:>4} "
