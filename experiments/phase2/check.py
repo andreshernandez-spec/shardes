@@ -50,7 +50,12 @@ RTOL = 1e-5
 #: `hostname` is deliberately absent. Two identical nodes are comparable, and requiring it
 #: would fail a legitimate resume, which is the feature this is meant to protect rather
 #: than punish.
-COMPARABLE = ("device_platform", "device_kind", "jax", "jaxlib", "commit")
+#: `xla_flags` is in here for a measured reason. Without
+#: `--xla_gpu_deterministic_ops=true` XLA picks reduction algorithms per shape, so D=1 and
+#: D=2 run different arithmetic; on 2x T4 that produced a 6.3e-03 disagreement on a
+#: configuration that is exactly zero with the flag set. Comparing a flagged run against an
+#: unflagged one is as meaningless as comparing CPU against GPU.
+COMPARABLE = ("device_platform", "device_kind", "jax", "jaxlib", "commit", "xla_flags")
 
 
 def _environment(row: dict) -> tuple:

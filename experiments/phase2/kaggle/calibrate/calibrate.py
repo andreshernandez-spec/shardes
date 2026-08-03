@@ -43,7 +43,14 @@ os.chdir(CHECKOUT)
 run(["git", "checkout", "-q", SHA])
 run(["git", "log", "--oneline", "-1"])
 
-env = {**os.environ, "PYTHONPATH": "src", "JAX_PLATFORMS": "cuda"}
+# `--xla_gpu_deterministic_ops=true` is not optional and run.py now refuses without it.
+# Without it XLA selects reduction algorithms per shape, so D=1 and D=2 run different
+# arithmetic; the first calibration run failed the guard at 6.32e-03 on a configuration that
+# is exactly zero with the flag set. It may cost throughput, and that is the trade: these
+# timings are for deterministic reductions, which is the only configuration whose
+# correctness can be checked. The previous run's numbers are the comparison.
+env = {**os.environ, "PYTHONPATH": "src", "JAX_PLATFORMS": "cuda",
+       "XLA_FLAGS": "--xla_gpu_deterministic_ops=true"}
 
 run([sys.executable, "-c",
      "import jax; d=jax.devices(); print(jax.__version__, len(d), d[0].device_kind);"

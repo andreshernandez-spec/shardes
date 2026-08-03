@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import statistics
 import sys
 import time
@@ -110,6 +111,50 @@ def expand(cfg: dict) -> list[Config]:
                                 Config(mode, devices, d_model, population, strategy, how)
                             )
     return out
+
+
+#: XLA:GPU picks reduction algorithms per shape unless told not to. A vmap over N members
+#: and a vmap over N/D are different shapes, so the same computation is free to use
+#: different arithmetic at different device counts, and the trajectory guard reads that as
+#: the library diverging.
+DETERMINISM_FLAG = "--xla_gpu_deterministic_ops=true"
+
+
+def require_deterministic_gpu() -> int:
+    """Refuse to benchmark on a GPU without `DETERMINISM_FLAG`. Measured, not defensive.
+
+    On 2x T4 at `d=256, N=64`, `lowrank_r1/A`: without the flag `D=1` and `D=2` disagreed by
+    6.3e-03 while every repeat within a process was bitwise identical, so it looked like a
+    logic bug rather than noise. With the flag every comparison is exactly zero. Worse, two
+    processes on the same node disagreed with each other (0.0 and 8.9e-03) for the same
+    configuration, which is consistent with autotuning choosing by measured kernel time:
+    cached within a process, free to differ between them.
+
+    A guard whose verdict depends on which process it ran in cannot certify a sweep, so this
+    is an error rather than a warning. `docs/06`'s G1 cell has always set the flag; the
+    phase 2 kernels never did, which is why `tests/gpu` passed while `check.py` failed on
+    the same property.
+
+    Setting it here is not possible: XLA reads `XLA_FLAGS` once when the backend
+    initialises, and this module imports jax at import time. It has to be in the environment
+    before the process starts.
+    """
+    platform = jax.devices()[0].platform
+    if platform not in ("gpu", "cuda", "rocm"):
+        return 0
+    if DETERMINISM_FLAG in os.environ.get("XLA_FLAGS", ""):
+        return 0
+    print(
+        f"refusing to benchmark on {platform} without {DETERMINISM_FLAG}.\n\n"
+        "Without it XLA picks reduction algorithms per shape, so D=1 and D=2 run different\n"
+        "arithmetic and the trajectory guard fails on configurations where the library is\n"
+        "correct. Re-run with:\n\n"
+        f'    XLA_FLAGS="{DETERMINISM_FLAG}" python run.py ...\n\n'
+        "The timings this produces are with deterministic reductions, which is the only\n"
+        "configuration whose correctness can be checked; say so when quoting them.",
+        file=sys.stderr,
+    )
+    return 2
 
 
 #: Fixed, so a projection is comparable across configs and across machines.
@@ -258,6 +303,10 @@ def main(argv=None) -> int:
     global RESULTS
     RESULTS = HERE / cfg.get("results_dir", "results")
     configs = expand(cfg)
+
+    rc = require_deterministic_gpu()
+    if rc:
+        return rc
 
     available = jax.device_count()
     runnable = [c for c in configs if c.devices <= available]
