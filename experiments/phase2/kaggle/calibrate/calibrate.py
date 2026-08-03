@@ -19,7 +19,6 @@ is a cost *model*, fitted on what fits and extrapolated with its shape stated, n
 simulation of the real run.
 """
 
-import json
 import os
 import subprocess
 import sys
@@ -56,24 +55,9 @@ run([sys.executable, "-c",
      "import jax; d=jax.devices(); print(jax.__version__, len(d), d[0].device_kind);"
      " assert len(d)==2, f'{len(d)} devices, want 2'"], env=env)
 
-# A config the T4s can actually hold, spanning d and N so the cost model has a slope in both.
-# `feasible.py` says A at d=512,N=1024 needs 6.4 GB a device, which fits 16 GB; d=2048 does
-# not, so it is deliberately absent and the extrapolation has to carry that gap.
-cal = {
-    "modes": ["strong"],
-    "devices": [1, 2],
-    "d_model": [256, 512],
-    "population": {256: [64, 256], 512: [64, 256]},
-    "population_per_device": {256: [32], 512: [32]},
-    "strategies": ["iid_gaussian", "seed_regenerated", "mirrored_lr1", "lowrank_r1"],
-    "how": ["A", "B"],
-    "batch": 8, "seq": 32, "warmup": 3, "repeats": 5,
-    "matmul_precision": "highest",
-    "results_dir": "results-calibration",
-}
-with open("experiments/phase2/calibration.yaml", "w") as fh:
-    json.dump(cal, fh)          # YAML is a superset of JSON, so this loads as-is
-
+# The config is committed at the SHA above, not written here. Generating it into the
+# checkout left an untracked file, so every result stamped itself `dirty_worktree` and
+# "reproducible from a committed config" (G2 criterion 4) was false by construction.
 print("\n== feasibility, 16 GB per T4 ==")
 run([sys.executable, "experiments/phase2/feasible.py",
      "--config", "experiments/phase2/calibration.yaml", "--hbm", "16"], env=env, check=False)
