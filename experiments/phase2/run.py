@@ -58,7 +58,11 @@ from shardes.strategies.lowrank import LowRank  # noqa: E402
 from shardes.strategies.mirrored import Mirrored  # noqa: E402
 from shardes.strategies.seed_regenerated import SeedRegenerated  # noqa: E402
 
-OUTPUTS = ("results", "results-rehearsal", "env.json", "figures")
+#: What this driver writes, and therefore what does not count against the worktree being
+#: clean. The config's own `results_dir` is appended in main(): it used to be this hardcoded
+#: list alone, so a config naming anything else (`results-calibration`) had its results
+#: counted as foreign untracked files and every record stamped itself unreproducible.
+OUTPUTS = ("results", "results-rehearsal", "env.json", "figures", "figures-rehearsal")
 
 #: Set from the config in main(). The rehearsal writes elsewhere so its numbers can never be
 #: mistaken for the sweep's: docs/03 is explicit that no rehearsal result goes in a figure.
@@ -253,6 +257,12 @@ def measure(config: Config, cfg: dict) -> dict:
     # tolerance this is compared against (tests/gpu, 1e-5) is a one-generation figure. The
     # rehearsal measured 1.2e-5 after 8 generations and it read like a violation; it was an
     # accumulation. Comparing like with like costs one extra generation.
+    #
+    # `generation` is already compiled by now, under `precision`, so whether this context
+    # can still change it is load-bearing rather than decorative: if it could not, the guard
+    # would silently run at whatever the timing loop used. It can. Matmul precision is part
+    # of jit's cache key, so entering a different context retraces. Checked, not assumed,
+    # and `test_the_guard_gets_its_own_compilation_at_highest_precision` keeps it checked.
     with jax.default_matmul_precision("highest"):
         trajectory = fingerprint(generation(es.init(jax.random.key(SEED), params)).params)
 
@@ -335,7 +345,7 @@ def main(argv=None) -> int:
             print(f"  ... and {len(runnable) - 10} more")
         return 0
 
-    env = harness.capture_env(HERE, OUTPUTS)
+    env = harness.capture_env(HERE, (*OUTPUTS, cfg.get("results_dir", "results")))
     harness.write_atomic(HERE / "env.json", env)
     if env["dirty_worktree"]:
         print("WARNING: dirty worktree, results will be stamped unreproducible")

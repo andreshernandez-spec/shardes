@@ -78,9 +78,17 @@ def worktree_is_dirty(
     # Filtered here rather than with a pathspec: git runs with cwd=here, so a `-- .`
     # pathspec would scope the check to the driver's directory and stop noticing edits
     # under src/, which is the opposite of the point.
+    #
+    # Whole path components, not a string prefix. `startswith` exempted anything merely
+    # *starting* with an output's name, so `results-calibration/` was silently covered by
+    # `results` and `env.json.bak` by `env.json`. That is the wrong direction to be wrong in:
+    # a stray file is exactly the kind of thing that makes a number unreproducible, and it
+    # was being hidden by a name collision.
     def counts(line: str) -> bool:
         path = line[3:].strip().strip('"')
-        return skip is None or not path.startswith(skip)
+        if skip is None:
+            return True
+        return not any(path == o or path.startswith(o + "/") for o in skip)
 
     return any(counts(line) for line in status.splitlines())
 
