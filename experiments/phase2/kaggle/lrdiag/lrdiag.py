@@ -50,7 +50,8 @@ os.chdir(CHECKOUT)
 run(["git", "checkout", "-q", SHA])
 run(["git", "log", "--oneline", "-1"])
 
-env = {**os.environ, "PYTHONPATH": "src", "JAX_PLATFORMS": "cuda"}
+env = {**os.environ, "PYTHONPATH": "src", "JAX_PLATFORMS": "cuda",
+       "XLA_FLAGS": "--xla_gpu_deterministic_ops=true"}
 
 run([sys.executable, "-c",
      "import jax; d=jax.devices(); print(jax.__version__, len(d), d[0].device_kind);"
