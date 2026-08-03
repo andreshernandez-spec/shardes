@@ -299,3 +299,178 @@ def test_the_guard_uses_the_same_measure_as_the_gpu_test():
     src = (PHASE2 / "check.py").read_text()
     assert "np.linalg.norm(a - b) / denom" in src
     assert "1e-30" not in src, "the elementwise divide-by-near-zero metric is back"
+
+
+class _FakeDevice:
+    def __init__(self, platform):
+        self.platform = platform
+
+
+def _fake_devices(monkeypatch, platform):
+    monkeypatch.setattr(run.jax, "devices", lambda: [_FakeDevice(platform)])
+
+
+def test_a_gpu_sweep_without_the_determinism_flag_is_refused(monkeypatch):
+    """The flag is load-bearing, not hygiene.
+
+    Measured on 2x T4: without it `lowrank_r1/A` at d=256 N=64 disagreed between D=1 and
+    D=2 by 6.3e-03 while repeating bitwise within a process, and two processes on the same
+    node gave different answers for the same configuration. With it every comparison is
+    exactly zero. A sweep that runs without it produces a guard verdict that depends on
+    which process it ran in.
+    """
+    _fake_devices(monkeypatch, "gpu")
+    monkeypatch.setenv("XLA_FLAGS", "--xla_force_host_platform_device_count=8")
+    assert run.require_deterministic_gpu() != 0
+
+
+def test_the_determinism_flag_satisfies_the_check_alongside_others(monkeypatch):
+    """XLA_FLAGS is a space-separated list, so the check must not require it to stand alone."""
+    _fake_devices(monkeypatch, "gpu")
+    monkeypatch.setenv(
+        "XLA_FLAGS", f"--xla_force_host_platform_device_count=8 {run.DETERMINISM_FLAG}"
+    )
+    assert run.require_deterministic_gpu() == 0
+
+
+def test_cpu_and_tpu_are_not_asked_for_a_gpu_flag(monkeypatch):
+    """The flag is CUDA-specific. Requiring it off GPU would block the CPU rehearsal and
+    the TPU tier for no reason, and a guard that blocks correct work gets deleted."""
+    monkeypatch.delenv("XLA_FLAGS", raising=False)
+    for platform in ("cpu", "tpu"):
+        _fake_devices(monkeypatch, platform)
+        assert run.require_deterministic_gpu() == 0
+
+
+def _env(**over):
+    base = {"device_platform": "gpu", "device_kind": "Tesla T4", "jax": "0.11.0",
+            "jaxlib": "0.11.0", "commit": "abc1234", "xla_flags": run.DETERMINISM_FLAG}
+    return {**base, **over}
+
+
+def test_the_guard_refuses_results_that_mix_xla_flags(tmp_path, capsys):
+    """Same reason as mixing backends: different flags are different arithmetic, and the
+    flagged/unflagged pair is the one that actually happened."""
+    traj = {"digest": "a", "norm": 1.0, "probe": [1.0, 2.0]}
+    for devices, flags in ((1, run.DETERMINISM_FLAG), (2, "")):
+        row = {
+            "config": {"mode": "strong", "devices": devices, "d_model": 256,
+                       "population": 64, "strategy": "lowrank_r1", "how": "A"},
+            "trajectory": traj, "guard_precision": "highest",
+            "env": _env(xla_flags=flags),
+        }
+        (tmp_path / f"D{devices}.json").write_text(json.dumps(row))
+
+    assert check.main(["--results", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "MIXED ENV" in out and "xla_flags" in out
+
+
+def test_identical_environments_still_compare_normally(tmp_path, capsys):
+    """The comparability check must not swallow the real comparison."""
+    traj = {"digest": "a", "norm": 1.0, "probe": [1.0, 2.0]}
+    for devices in (1, 2):
+        row = {
+            "config": {"mode": "strong", "devices": devices, "d_model": 256,
+                       "population": 64, "strategy": "lowrank_r1", "how": "A"},
+            "trajectory": traj, "guard_precision": "highest", "env": _env(),
+        }
+        (tmp_path / f"D{devices}.json").write_text(json.dumps(row))
+
+    assert check.main(["--results", str(tmp_path)]) == 0
+    assert "MIXED ENV" not in capsys.readouterr().out
+
+
+def test_the_guard_gets_its_own_compilation_at_highest_precision():
+    """`measure` compiles `generation` under the timing precision, then calls it again
+    inside `default_matmul_precision("highest")` for the trajectory fingerprint. That only
+    guards anything if the context can still affect an already-compiled function.
+
+    It can: matmul precision is part of jit's cache key, so the second context retraces.
+    This test exists because the opposite is entirely plausible (jit caches on the function
+    object, which is why fresh lambdas and bound methods miss the cache), and if JAX ever
+    stopped keying on precision the guard would quietly start running at the timing
+    precision with nothing failing.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    traces = []
+
+    @jax.jit
+    def f(x):
+        traces.append(1)  # trace time only, not call time
+        return x @ x
+
+    x = jnp.eye(4)
+    with jax.default_matmul_precision("bfloat16"):
+        f(x)
+    with jax.default_matmul_precision("highest"):
+        f(x)
+
+    assert len(traces) == 2, (
+        "entering a different matmul-precision context did not retrace, so run.py's guard "
+        "runs at the timing precision rather than at highest"
+    )
+
+
+def test_the_results_dir_from_the_config_is_not_counted_as_a_dirty_worktree(tmp_path):
+    """A sweep's own results must not make it stamp itself unreproducible.
+
+    `OUTPUTS` was a hardcoded tuple naming `results` and `results-rehearsal`, so a config
+    writing to `results-calibration` had its own output counted as foreign untracked files.
+    Every one of the 64 calibration records came back `dirty_worktree: true` for that reason,
+    which is exactly the failure `harness.worktree_is_dirty` was written to avoid.
+    """
+    import harness
+
+    status = "?? experiments/phase2/results-calibration/a.json\n"
+
+    def fake_git(*args):
+        if args[0] == "rev-parse" and "--show-toplevel" in args:
+            return str(tmp_path)
+        if args[0] == "status":
+            return status
+        return "deadbeef"
+
+    here = tmp_path / "experiments" / "phase2"
+    here.mkdir(parents=True)
+
+    assert harness.worktree_is_dirty(here, run.OUTPUTS, fake_git), "hardcoded list misses it"
+    assert not harness.worktree_is_dirty(
+        here, (*run.OUTPUTS, "results-calibration"), fake_git
+    ), "the config's own results_dir must be exempt"
+
+
+def test_an_output_name_does_not_exempt_files_that_merely_start_with_it(tmp_path):
+    """`env.json.bak` is not `env.json`, and a sibling of an output directory is not inside it.
+
+    The filter was `path.startswith(output)`, which exempted both. Provenance failing open
+    like that is worse than not recording it: a stray uncommitted file is precisely what
+    makes a result unreproducible, and it was being hidden by a name collision.
+    """
+    import harness
+
+    here = tmp_path / "experiments" / "phase2"
+    here.mkdir(parents=True)
+
+    def status_of(path):
+        def fake_git(*args):
+            if args[0] == "rev-parse" and "--show-toplevel" in args:
+                return str(tmp_path)
+            if args[0] == "status":
+                return f"?? {path}\n"
+            return "deadbeef"
+        return fake_git
+
+    outputs = ("results", "env.json")
+    inside = "experiments/phase2/results/a.json"
+    assert not harness.worktree_is_dirty(here, outputs, status_of(inside)), (
+        "a file genuinely inside an output directory must stay exempt"
+    )
+    for stray in ("experiments/phase2/env.json.bak",
+                  "experiments/phase2/results-calibration/a.json",
+                  "experiments/phase2/results.txt"):
+        assert harness.worktree_is_dirty(here, outputs, status_of(stray)), (
+            f"{stray} is not one of {outputs} and must count as dirty"
+        )
