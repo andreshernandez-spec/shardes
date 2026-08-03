@@ -46,6 +46,11 @@ STRATEGIES = {
     "iid_gaussian": IIDGaussian,
     "seed_regenerated": SeedRegenerated,
     "mirrored_lr1": lambda: Mirrored(LowRank(r=1)),
+    # Unmirrored, and it was missing until 2026-08-03. `mirrored_lr1` wraps it, so the pair
+    # looked like coverage of the low-rank path while the only strategy the phase 2 sweep
+    # ever failed on was the one no invariance test ran. Mirroring is a sign flip over an
+    # inner perturbation, not a different code path, so it does not stand in for this.
+    "lowrank_r1": lambda: LowRank(r=1),
 }
 
 

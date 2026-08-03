@@ -14,7 +14,10 @@ devices: [1, 2, 4, 8]
 d_model: [32, 64]
 population: [32, 64]          # strong: fixed total
 population_per_device: [4, 8] # weak:   times the device count
-strategies: [iid_gaussian, seed_regenerated, mirrored_lr1]
+# Must be the same list as sweep.yaml: a rehearsal that skips a strategy has not rehearsed
+# the sweep. lowrank_r1 was missing here and in tests/gpu while being in sweep.yaml, so the
+# TPU prep run passed its guard without ever running the strategy that fails it.
+strategies: [iid_gaussian, seed_regenerated, mirrored_lr1, lowrank_r1]
 how: [A, B]
 batch: 4
 seq: 8

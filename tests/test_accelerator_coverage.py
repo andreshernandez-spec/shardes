@@ -47,8 +47,47 @@ def test_every_test_in_the_gpu_suite_gates_on_the_shared_predicate():
     assert source.count("_accelerators()") >= 4, "tests should gate on the shared predicate"
 
 
+def test_every_benchmarked_strategy_is_also_guarded():
+    """The sweep and the invariance test must cover the same strategies.
+
+    They did not. `lowrank_r1` was in `sweep.yaml` and in neither `tests/gpu` nor
+    `rehearsal.yaml`, so it was benchmarked on rented hardware by a suite that never
+    checked it was device-count invariant, and the dress rehearsal that certified the
+    driver never ran it. It is also the only strategy the sweep has failed on.
+
+    Subset rather than equality: guarding a strategy the sweep does not run is fine, the
+    reverse is not.
+    """
+    import yaml
+
+    phase2 = GPU_TEST.parent.parent.parent / "experiments" / "phase2"
+    guarded = set(_load().NAMES)
+    for name in ("sweep.yaml", "rehearsal.yaml"):
+        wanted = set(yaml.safe_load((phase2 / name).read_text())["strategies"])
+        assert wanted <= guarded, (
+            f"{name} benchmarks {sorted(wanted - guarded)}, which tests/gpu never checks "
+            "for device-count invariance"
+        )
+
+
+def test_the_reference_artifact_covers_every_guarded_strategy():
+    """`test_one_gpu_matches_the_cpu_reference` reads `reference.json` by key. A name in
+    NAMES with no entry there fails at lookup rather than reporting a missing reference,
+    so regenerating the artifact is part of adding a strategy."""
+    import json
+
+    reference = (GPU_TEST.parent.parent.parent / "experiments" / "phase1" / "reference.json")
+    have = set(json.loads(reference.read_text())["updates"])
+    for name in _load().NAMES:
+        for how in ("A", "B"):
+            assert f"{name}/{how}" in have, (
+                f"reference.json has no {name}/{how}; re-run experiments/phase1/reference.py "
+                "on CPU after adding a strategy"
+            )
+
+
 def test_the_suite_is_not_silently_empty():
-    """16 is the number docs/06 tells a human to check. Keep them agreeing."""
+    """21 is the number docs/06 tells a human to check. Keep them agreeing."""
     import subprocess
 
     out = subprocess.run(
@@ -57,6 +96,6 @@ def test_the_suite_is_not_silently_empty():
         env={"JAX_PLATFORMS": "cpu", "PATH": __import__("os").environ["PATH"],
              "HOME": __import__("os").environ.get("HOME", "")},
     )
-    assert "16 tests collected" in out.stdout, (
-        f"expected 16 collected, docs/06 quotes that number to the operator.\n{out.stdout[-800:]}"
+    assert "21 tests collected" in out.stdout, (
+        f"expected 21 collected, docs/06 quotes that number to the operator.\n{out.stdout[-800:]}"
     )
