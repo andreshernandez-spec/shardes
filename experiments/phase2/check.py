@@ -16,6 +16,15 @@ must match within `RTOL`.
 
 Holding B to exact equality would fail forever; holding A to a tolerance would hide a real
 bug. Both were live possibilities before the rehearsal measured it.
+
+**The comparison is only valid within one execution environment, and that is now enforced
+rather than assumed.** It used to be a comment on `RTOL` saying "same platform", which is
+a precondition nobody checked. The driver resumes by skipping configurations already on
+disk, so a sweep started on one backend and finished on another silently produces a
+results directory whose `D=1` and `D=2` rows never ran the same arithmetic. That happened:
+`lowrank_r1` was read as violating device-count invariance at 6.33e-03 when the `D=1` row
+had come from a GPU and the `D=2` row from CPU. Re-run on one backend it was bitwise
+identical. A guard that can be fooled by its own resume feature is not a guard.
 """
 
 from __future__ import annotations
@@ -33,6 +42,36 @@ HERE = pathlib.Path(__file__).resolve().parent
 #: One generation, same platform, different device counts. Matches
 #: tests/gpu/test_device_invariance_gpu.py's SHARDING_RTOL, deliberately: same claim.
 RTOL = 1e-5
+
+#: What has to match before two device counts are comparable at all. Each of these can
+#: change the arithmetic: the backend and the chip pick different kernels, a JAX version
+#: changes what those kernels are, and a different commit is a different library.
+#:
+#: `hostname` is deliberately absent. Two identical nodes are comparable, and requiring it
+#: would fail a legitimate resume, which is the feature this is meant to protect rather
+#: than punish.
+COMPARABLE = ("device_platform", "device_kind", "jax", "jaxlib", "commit")
+
+
+def _environment(row: dict) -> tuple:
+    env = row.get("env", {})
+    return tuple(str(env.get(k, "?")) for k in COMPARABLE) + (
+        str(row.get("guard_precision", "?")),
+    )
+
+
+def _fields() -> tuple:
+    return COMPARABLE + ("guard_precision",)
+
+
+def _mismatch(rows: list[dict]) -> str:
+    """Only the fields that actually differ, so the failure line names the cause."""
+    out = []
+    for i, name in enumerate(_fields()):
+        seen = sorted({_environment(r)[i] for r in rows})
+        if len(seen) > 1:
+            out.append(f"{name}: {' vs '.join(seen)}")
+    return "; ".join(out)
 
 
 def _rel(a: np.ndarray, b: np.ndarray) -> float:
@@ -76,16 +115,34 @@ def main(argv=None) -> int:
         if "error" in r or c["mode"] != "strong":
             continue  # weak scaling changes N with D on purpose, so it has no such claim
         key = (c["d_model"], c["population"], c["strategy"], c["how"])
-        groups[key][c["devices"]] = r["trajectory"]
+        groups[key][c["devices"]] = r
 
     print(f"{'d':>5} {'N':>6} {'strategy':18s} {'how':4s} {'D':>12}  exact  max rel dev")
     failures = []
     for key, by_devices in sorted(groups.items()):
         d_model, population, strategy, how = key
-        base = by_devices[min(by_devices)]
-        exact = len({t["digest"] for t in by_devices.values()}) == 1
+        here = list(by_devices.values())
+        devices = ",".join(str(d) for d in sorted(by_devices))
+
+        # Comparability first. A number computed across two environments is not a
+        # disagreement between device counts, and reporting it as one sends the
+        # investigation at the library instead of at the results directory.
+        if len({_environment(r) for r in here}) > 1:
+            failures.append(
+                f"{strategy}/{how} d={d_model} N={population} spans environments, "
+                f"so its device counts are not comparable ({_mismatch(here)})"
+            )
+            print(
+                f"{d_model:>5} {population:>6} {strategy:18s} {how:4s} {devices:>12}  "
+                f"{'-':5s}  MIXED ENV"
+            )
+            continue
+
+        trajectories = {d: r["trajectory"] for d, r in by_devices.items()}
+        base = trajectories[min(trajectories)]
+        exact = len({t["digest"] for t in trajectories.values()}) == 1
         worst = 0.0
-        for t in by_devices.values():
+        for t in trajectories.values():
             a, b = np.array(t["probe"]), np.array(base["probe"])
             worst = max(worst, _rel(a, b))
 
@@ -94,13 +151,29 @@ def main(argv=None) -> int:
         if how == "B" and worst > RTOL:
             failures.append(f"{strategy}/B exceeds rtol {RTOL:g} across D ({worst:.2e})")
 
-        devices = ",".join(str(d) for d in sorted(by_devices))
         print(
             f"{d_model:>5} {population:>6} {strategy:18s} {how:4s} {devices:>12}  "
             f"{str(exact):5s}  {worst:.2e}"
         )
 
     print()
+    # Every environment the directory contains, so a mixed sweep is visible even when no
+    # single group straddles the boundary.
+    seen = sorted({(r.get("env", {}).get("device_kind", "?"),
+                    r.get("env", {}).get("commit", "?")[:9]) for r in rows if "error" not in r})
+    if len(seen) > 1:
+        print(f"{len(seen)} environments in this directory:")
+        for kind, commit in seen:
+            print(f"  {kind} @ {commit}")
+        print()
+
+    # Not a failure: `docs/03` wants results traceable to a commit, and run.py already warns
+    # at write time. Repeating it here is what makes it visible to whoever reads the guard.
+    dirty = [r for r in rows if r.get("env", {}).get("dirty_worktree")]
+    if dirty:
+        print(f"note: {len(dirty)}/{len(rows)} results were written from a dirty worktree "
+              "and are not reproducible from a commit alone\n")
+
     if errors:
         print(f"{len(errors)} configuration(s) recorded an error:")
         for r in errors[:5]:
