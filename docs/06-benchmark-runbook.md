@@ -211,11 +211,13 @@ from jax import shard_map; d=jax.devices(); print(v, len(d), d[0].device_kind); 
 
 ```python
 # Cell 3 — the check itself.
-!python -m pytest tests/gpu -m gpu -q -s        # expects 16 passed on 2 GPUs
+!python -m pytest tests/gpu -m gpu -q -s        # expects 21 passed on 2 GPUs
 ```
 
-Sanity-check the count. **16 collected** is the sign the checkout is intact; anything less
-means the delivery is broken, not that the code is fine.
+Sanity-check the count. **21 collected** is the sign the checkout is intact; anything less
+means the delivery is broken, not that the code is fine. It was 16 until 2026-08-03, when
+`lowrank_r1` was added to `NAMES`; the G1 record below is 16 because that is what ran.
+`tests/test_accelerator_coverage.py` asserts this number, so it cannot drift silently.
 
 `experiments/phase1/reference.json` is committed and travels with the checkout, so the CPU-8
 reference does not have to be regenerated on Kaggle — and must not be: the point is to carry

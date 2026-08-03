@@ -100,7 +100,12 @@ def _rel(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.linalg.norm(a - b) / np.linalg.norm(b))
 
 
-NAMES = ["iid_gaussian", "seed_regenerated", "mirrored_lr1"]
+#: Every strategy the phase 2 sweep runs, which is the point: this list and
+#: `experiments/phase2/sweep.yaml` disagreed, and `lowrank_r1` was in the sweep and in
+#: neither this test nor `rehearsal.yaml`. It is also the only strategy the sweep has ever
+#: failed on (2xT4, d=256 N=64, 6.32e-03 across device counts, still unexplained). A
+#: strategy that is benchmarked and not guarded is the worst of both.
+NAMES = ["iid_gaussian", "seed_regenerated", "mirrored_lr1", "lowrank_r1"]
 
 
 @pytest.mark.skipif(not _accelerators(), reason="no real accelerator visible")
