@@ -696,22 +696,28 @@ statistical treatment of ties and makes the weight vector a function of the scor
 rather than of the sort's tie-break. Sketch, `O(n log n)`, jittable with static shapes:
 
 ```python
-def centered_midranks(fitness):
+def centered_ranks(fitness):
     n = fitness.shape[0]
     if n < 2:
         return jnp.zeros_like(fitness)
     order = jnp.argsort(fitness)
     s = fitness[order]
-    # A new group starts wherever the sorted value changes.
+    # A new tie group starts wherever the sorted value changes.
     starts = jnp.concatenate([jnp.array([True]), s[1:] != s[:-1]])
     group = jnp.cumsum(starts) - 1
     positions = jnp.arange(n, dtype=fitness.dtype)
-    total = jax.ops.segment_sum(positions, group, num_segments=n)
+    first = jax.ops.segment_min(positions, group, num_segments=n)
     count = jax.ops.segment_sum(jnp.ones_like(positions), group, num_segments=n)
-    mid = (total / count)[group]                    # average rank within each tie group
+    mid = (first + (count - 1) / 2)[group]          # average rank within each tie group
     ranks = jnp.zeros_like(fitness).at[order].set(mid)
     return ranks / (n - 1) - 0.5
 ```
+
+**`first + (count - 1) / 2`, not `sum(positions) / count`.** The two are equal in exact
+arithmetic and not in float32: summing positions reaches `n^2 / 2`, which passes 2^24 and
+stops being exactly representable. With every member tied, the sum-based form is off by 0.5
+ranks at `n = 2^16` and by 1.4 at `n = 2^18`, which is the population `lowrank.py` cites.
+Taking the group's first position keeps every intermediate below `n`.
 
 Checked before proposing, on the `[3, 1, 1, 2]` example above:
 
