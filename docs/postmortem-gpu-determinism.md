@@ -288,9 +288,9 @@ shapes.
 Better still, the split matched the bug: ties in the low-rank strategies, none in
 `iid_gaussian`, and the failure was in a low-rank strategy.
 
-### 5.3 The hypothesis dies
+### 5.3 The hypothesis appears to die
 
-The diagnostic ran on the actual 2x T4. Every link in the chain broke:
+The diagnostic ran on the actual 2x T4. Every link in the chain looked broken:
 
 | measurement (`lowrank_r1/A`, `d=256`, `N=64`) | result |
 |---|---|
@@ -300,13 +300,23 @@ The diagnostic ran on the actual 2x T4. Every link in the chain broke:
 | shaped weights, relative difference | 0.000e+00 |
 | **resulting parameters after one step** | **0.000e+00** |
 
-The scores were identical. Nothing was reordered. The tie seen on CPU did not exist on the
-GPU. And one clean step produced *bitwise identical parameters* at both device counts.
+The scores were identical, nothing was reordered, and one clean step produced bitwise
+identical parameters at both device counts. I recorded the hypothesis as refuted and moved
+the search elsewhere.
 
-A neat hypothesis that explains the evidence is not the same as the correct one. This one
-predicted five things and was wrong about all five.
+**That was a mistake, and it is the second most instructive error in this investigation.**
 
-### 5.4 The observation that relocated the bug
+Look at the last row. The parameters were identical, which means *this process did not
+exhibit the bug at all*. Every other row in the table is downstream of that: of course no
+rank changed, because nothing differed anywhere. A null result in a run where the failure is
+absent says nothing about a run where it is present.
+
+The right reading was "this process did not reproduce the failure, so this measurement is
+uninformative". The reading I took was "the scores are identical, therefore scores are not
+the mechanism". The evidence could not support that, and it sent the investigation somewhere
+else for no reason.
+
+### 5.4 The observation that should have been the clue
 
 The same run also confirmed the failure was still there: the driver reported 6.32e-03 for
 that cell, on that node, at that commit, in the same session where a single step reported
@@ -314,8 +324,12 @@ that cell, on that node, at that commit, in the same session where a single step
 
 Same hardware, same code, same configuration. One step: identical. The driver: not identical.
 
-**Whatever caused this was something the driver did that a single step did not.** That moved
-the search out of the library and into the harness.
+I read this as "the driver does something a single step does not", and moved the search into
+the harness. That turned out to find the real trigger (section 6), so the detour was not
+wasted. But there was a simpler reading available: **the same computation, run twice on the
+same node, gave two different answers.** Not two device counts. Two runs. That is the
+signature of an arithmetic choice being made per process, and it was visible here, one
+section earlier than I noticed it.
 
 ---
 
@@ -373,37 +387,87 @@ timings vary between processes.
 
 ## 7. Root cause
 
+There are two halves, and conflating them is what made the investigation take as long as it
+did. One is the *trigger*: what perturbs the computation. The other is the *amplifier*: why a
+perturbation that should be invisible turned into 6.32e-03.
+
+### 7.1 The trigger
+
 Without `--xla_gpu_deterministic_ops=true`, XLA:GPU selects reduction algorithms per shape,
 and tunes that selection by measured kernel timing.
 
 A reduction over 64 members and a reduction over 32 members are different shapes, so they can
 get different algorithms, with different summation orders. By section 1.4, different
-summation orders give different roundings of the same exact value. That difference then flows
-through the rest of the step and appears as a 6.32e-03 disagreement between device counts.
-
-The mechanism explains every observation:
+summation orders give different roundings of the same exact value. The scores therefore move
+by roughly one ulp.
 
 | observation | explanation |
 |---|---|
 | repeats within a process are bitwise identical | the choice is made once and cached |
 | `D=1` and `D=2` disagree | different shapes, different algorithms |
 | two processes disagree with each other | autotuning picks by measured time |
-| only some shapes are affected | only some shapes have a divergent choice available |
 | CPU is unaffected | CPU reductions use a fixed order |
 | the flag makes it exactly zero | the flag removes the choice |
 
-**The strategy was never at fault.** `lowrank_r1` was simply the strategy whose shapes
-happened to land on a divergent algorithm choice. Any strategy could, and across 256
-configurations the full benchmark would have hit several.
+### 7.2 The amplifier
 
-To be precise about evidence: the flag fixing the failure and the cross-process disagreement
-are both measured. That algorithm selection specifically is the mechanism is inference, well
-supported by those measurements and by XLA's documented behaviour, but not directly observed
-at the level of emitted kernels.
+One ulp is 1e-7 relative. The failure was 6.32e-03, four orders larger. Something multiplied
+it, and section 5 named the candidate correctly before I discarded it on bad evidence.
+
+Measured directly, on CPU where the arithmetic is fixed, by taking the two closest members
+and exchanging them:
+
+| strategy | shaping | input change | update change | amplification |
+|---|---|---|---|---|
+| `lowrank_r1` | `centered_ranks` | 3.37e-08 | **8.93e-03** | **265,000x** |
+| `lowrank_r1` | `centered` (continuous) | 3.37e-08 | 8.44e-07 | 25x |
+| `iid_gaussian` | `centered_ranks` | 3.54e-07 | 9.06e-03 | 25,600x |
+
+**8.93e-03 is what the unflagged `D=1` versus `D=2` comparison measured, to three
+significant figures.** The divergence was one rank swap.
+
+The remaining question is why *this* configuration. Because its members were unusually close
+together:
+
+| strategy | `d` | closest pair |
+|---|---|---|
+| `lowrank_r1` | **256** | **2.00 ulp** |
+| `iid_gaussian` | 256 | 21 ulp |
+| `lowrank_r1` | 512 | 63 ulp |
+
+At 2 ulp, a one-ulp perturbation is enough to reorder the pair. At 21 or 63 it is not. That
+single number explains every piece of shape- and strategy-specificity that made this look
+like a logic bug: `d=512` always passed because it had 63 ulp of headroom, and `lowrank_r1`
+failed where `iid_gaussian` did not because rank-1 perturbations produce more tightly
+clustered scores.
+
+### 7.3 The full chain
+
+```
+different device count
+  -> different batch shape for scoring
+  -> different reduction algorithm            (removed by the determinism flag)
+  -> scores move by ~1 ulp
+  -> two members 2 ulp apart swap order       (a property of the configuration)
+  -> centered_ranks moves a whole rank step   (a property of rank shaping)
+  -> update moves by 8.93e-03                 (265,000x the input change)
+```
+
+**The perturbation strategy was never at fault.** `lowrank_r1` contributed only tightly
+clustered scores. Any strategy is one rank swap away from a 1e-2 update change: `iid_gaussian`
+measures 9.06e-03 for the same experiment.
+
+On evidence: the amplification, the gap in ulp, and the flag fixing the failure are all
+measured. That XLA's algorithm selection specifically is the trigger is inference, supported
+by those measurements and by XLA's documented behaviour, but not observed at the level of
+emitted kernels.
 
 ---
 
 ## 8. Resolution
+
+The fix removes the trigger. It does not touch the amplifier, and section 8.2 is about why
+that distinction matters more than it first appears.
 
 The fix is configuration, not code:
 
@@ -451,6 +515,68 @@ genuinely slower when a kernel relies on atomics for speed. The point is that it
 A related detail from the same table: at these shapes, compute is **1.8% of wall time**. This
 benchmark is mostly measuring the compiler.
 
+### 8.2 The fix removes the trigger, not the sensitivity
+
+Setting the flag makes `D=1` and `D=2` run identical arithmetic, so the zero is structural
+rather than lucky: under strategy A every device regenerates all `N` members and contracts
+them in the same order, and the per-member scores were measured bitwise equal. It is not a
+coincidence that the deterministic algorithm happens to agree with itself.
+
+But the 265,000x amplification is untouched. Anything else that perturbs the scores by an ulp
+re-triggers the whole chain: a different GPU model, a newer XLA or cuBLAS, TF32 instead of
+fp32, a different batch or sequence length. The flag makes the benchmark **reproducible**,
+not **well conditioned**, and those are different claims.
+
+That prompted a check for the second property, `experiments/phase2/noisefloor.py`, which
+reports how far apart the closest two members are in ulp and fails a configuration whose
+closest pair sits inside 16 of them. Running it against the real sweep is uncomfortable:
+
+| population `N` | 32 | 128 | 256 | 512 | 1024 |
+|---|---|---|---|---|---|
+| adjacent pairs within 16 ulp | 0 | 4 | 18 | 65 | **242 of 1023** |
+
+**19 of 24** configurations at `d=512` fail, and at `N=1024` roughly a quarter of adjacent
+pairs are inside the noise floor, including 5 to 9 pairs that are exactly equal.
+
+The reason is arithmetic rather than anything specific to this library. Separating `N`
+members by `m` ulp needs a relative spread of scores of about `N * m * eps`, which is 5e-4 at
+`N=256, m=16`. Large populations are the hard case, and ES wants large populations.
+
+Raising `sigma` is the obvious remedy and it only half works. Measured:
+
+| configuration | sigma 0.01 | 0.03 | 0.1 | 0.3 |
+|---|---|---|---|---|
+| `lowrank_r1`, `d=256, N=64` | 0 ulp | 56 | 2555 | 4742 |
+| `iid_gaussian`, `d=256, N=256` | 1 ulp | 8 | 6 | 2 |
+
+It rescues small populations and does nothing for large ones, because a larger `sigma` raises
+the loss magnitude too and takes the ulp up with it.
+
+**An exact tie is not the safe case.** `centered_ranks` gives tied members *different*
+weights, chosen by the sort's tie-break, so a pair that ties on one backend and differs by an
+ulp on another can order either way. Midrank shaping, where tied members share the average
+rank, would fix exactly that and nothing else: it addresses the 5 to 9 exact ties at `N=1024`
+and not the other 230-odd near-ties.
+
+The measured alternative that does address near-ties is continuous shaping: `centered` sits
+at 25x amplification against `centered_ranks`'s 265,000x, four orders of magnitude better.
+It is a different optimizer, though. Rank shaping exists to buy robustness to outliers and to
+reward scale, and giving that up to gain reproducibility is a real trade rather than a free
+improvement.
+
+### 8.3 What this does and does not invalidate
+
+Phase 2 measures wall-clock scaling. Timing does not depend on how members are ranked, so the
+strong-scaling, weak-scaling and crossover results stand.
+
+What is narrower than it sounds is the invariance claim. The guard verifies that the same
+program under fixed arithmetic produces the same update at any device count. It does not
+establish that the optimizer is device-count invariant in a way that survives a change of
+hardware, and at `N=1024` it is not: the update there is one rounding decision away from
+moving by 1e-2.
+
+Both halves belong in the limitations section, and appendix A drafts them.
+
 ---
 
 ## 9. What generalises
@@ -481,10 +607,22 @@ done should record the conditions that work was done under.
 in neither the invariance test nor the rehearsal. Three safety nets, and the same strategy
 fell through all three, because a related strategy wrapped it and looked like coverage.
 
-**A hypothesis that explains everything can still be wrong.** The scores-plus-sorting
-explanation accounted for the magnitude, the direction, the shape-specificity and the
-strategy-specificity, and it even predicted a tie pattern that turned up on CPU. It was
-wrong. It made five checkable predictions, which is the only reason that was discoverable.
+**A null result is not a refutation.** The scores-plus-sorting hypothesis was correct, and I
+discarded it on a measurement taken in a process where the bug was not present. Every row of
+that table read "no difference" because the *last* row read "no difference": nothing had
+diverged, so of course nothing was reordered. Before treating a measurement as evidence
+against a mechanism, check that the run you measured actually exhibited the thing you are
+explaining.
+
+**Separate the trigger from the amplifier.** Two questions hid inside one symptom: what
+perturbs the computation, and why a 1e-7 perturbation becomes 1e-2. Fixing the trigger made
+the failure disappear, which is exactly the kind of success that stops an investigation one
+step early. The amplifier is the more interesting half and would have gone unexamined.
+
+**A fix that makes the symptom vanish may not have made the system robust.** Pinning the
+arithmetic gives bitwise agreement because it forces both sides to run the same instructions,
+not because the computation became stable. The distinction is invisible while the pin holds
+and reappears on the next machine.
 
 ---
 
@@ -499,3 +637,111 @@ The two diagnostics are committed so the reasoning can be re-run rather than tak
   determinism flag.
 
 Both run on a free Kaggle 2x T4 node in about 15 minutes.
+
+---
+
+## Appendix A: draft limitations paragraph (G2 criterion 5)
+
+`docs/03` asks for "a limitations paragraph a sceptic would accept". Draft, for Andres to
+rewrite:
+
+> **Reproducibility of the update.** The scaling results in this section were produced with
+> `XLA_FLAGS=--xla_gpu_deterministic_ops=true`, and the driver refuses to run on a GPU
+> without it. This is load-bearing rather than hygienic. Without it XLA selects reduction
+> algorithms per shape, so scoring `N` members on one device and `N/D` on each of `D`
+> devices can use different summation orders and the scores move by about one ulp. Fitness
+> shaping is a rank transform, which is discontinuous: exchanging the two closest members
+> moves the update by 8.9e-03 against a 3.4e-08 change in the scores, an amplification of
+> 2.7e5, measured on a 2x T4. The trajectory guard consequently verifies a specific claim:
+> the same program, on the same hardware, with the same compiler flags, produces the same
+> update at every device count. It does not establish that the update is stable under a
+> change of GPU, of XLA version, or of matmul precision, and at large populations it is not.
+>
+> **Score separation.** `experiments/phase2/noisefloor.py` reports how far apart the closest
+> two members are, in units of the last place of the loss. At `d=512` the closest pair is 37
+> ulp apart at `N=32` and exactly zero at `N=512` and above, with 242 of 1023 adjacent pairs
+> inside 16 ulp at `N=1024`. Separating `N` members by `m` ulp needs a relative spread of
+> scores of about `N * m * eps`, so this is a property of float32 against large populations
+> rather than of any strategy here: `iid_gaussian` and the low-rank strategies both hit it.
+> Where members are within the noise floor their relative ranking is decided by rounding.
+> The resulting update is still a valid ES update, since the members concerned are
+> statistically indistinguishable, but it is not reproducible across a change of arithmetic.
+> The timing results are unaffected: wall clock does not depend on the ranking.
+>
+> **What we did not do.** We did not re-run the sweep in float64, which would raise the
+> resolution but changes the arithmetic being benchmarked. We did not adopt continuous
+> shaping, which measures 25x amplification against the rank transform's 2.7e5 but is a
+> different optimizer. Both are recorded here as the honest alternatives rather than
+> presented as future work.
+
+## Appendix B: proposed midrank shaping
+
+**A proposal, not a change.** Shaping is estimator math, which `CLAUDE.md` ground rule 1
+reserves for Andres. Drafted here with its reasoning and its limits.
+
+`centered_ranks` today:
+
+```python
+ranks = jnp.argsort(jnp.argsort(fitness)).astype(fitness.dtype)
+return ranks / (n - 1) - 0.5
+```
+
+Two members with *exactly equal* scores receive *different* weights, because `argsort` breaks
+the tie by index. At `n=4` with scores `[3, 1, 1, 2]` the tied pair gets `-0.5` and `-0.167`,
+a third of the full weight range apart. Which member gets which is decided by the sort, so a
+pair that ties on one backend and differs by an ulp on another can order either way.
+
+Midrank gives tied members the average of the ranks they span, which is the standard
+statistical treatment of ties and makes the weight vector a function of the score *multiset*
+rather than of the sort's tie-break. Sketch, `O(n log n)`, jittable with static shapes:
+
+```python
+def centered_midranks(fitness):
+    n = fitness.shape[0]
+    if n < 2:
+        return jnp.zeros_like(fitness)
+    order = jnp.argsort(fitness)
+    s = fitness[order]
+    # A new group starts wherever the sorted value changes.
+    starts = jnp.concatenate([jnp.array([True]), s[1:] != s[:-1]])
+    group = jnp.cumsum(starts) - 1
+    positions = jnp.arange(n, dtype=fitness.dtype)
+    total = jax.ops.segment_sum(positions, group, num_segments=n)
+    count = jax.ops.segment_sum(jnp.ones_like(positions), group, num_segments=n)
+    mid = (total / count)[group]                    # average rank within each tie group
+    ranks = jnp.zeros_like(fitness).at[order].set(mid)
+    return ranks / (n - 1) - 0.5
+```
+
+Checked before proposing, on the `[3, 1, 1, 2]` example above:
+
+```
+centered_ranks  : [ 0.5     -0.5     -0.16667  0.16667]
+centered_midrank: [ 0.5     -0.33333 -0.33333  0.16667]
+
+tied members now get the SAME weight
+no ties -> identical to centered_ranks: True
+survives jit: True
+weights invariant to exchanging the tied pair: True
+```
+
+The second line is the one that matters for adopting it: with no ties present it reproduces
+the current shaping exactly, so it is not a change in behaviour anywhere except where the
+current behaviour is arbitrary.
+
+**What it buys, stated honestly.** It removes exactly one failure mode: exact ties. At
+`d=512, N=1024` the noise floor check counts 5 to 9 exact ties and 242 pairs within 16 ulp,
+so this addresses a few percent of the configurations at risk. Members that are one ulp apart
+rather than zero still receive distinct ranks and can still swap.
+
+It is worth doing anyway because it is cheap, it is the statistically standard treatment, and
+it makes the shaping a function of the scores rather than of an implementation detail of the
+sort. It is not a fix for the conditioning problem, and presenting it as one would be the
+same mistake as presenting the determinism flag as one.
+
+**If the conditioning problem itself needs fixing**, the two candidates are continuous
+shaping (measured at 25x amplification, but a different optimizer) and quantising scores to a
+multiple of `k` ulp before ranking, which converts near-ties into exact ties and, combined
+with midranks, would make the update insensitive to perturbations below that scale. The
+second is not standard practice and would need its own bias analysis before it went anywhere
+near a result.
