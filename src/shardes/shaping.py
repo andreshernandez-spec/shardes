@@ -26,6 +26,7 @@ directions, so their bias against grad f will not go to zero and should not be r
 failure.
 """
 
+import jax
 import jax.numpy as jnp
 
 from shardes.types import Array
@@ -69,12 +70,60 @@ def centered_ranks(fitness: Array) -> Array:
 
     The standard ES shaping, and what makes ES robust to outliers and to reward scale. It
     is **not** an estimator of grad f, so the bias check is descriptive here, not a gate.
+
+    **Tied members share a rank.** `argsort(argsort(f))` gives equal fitnesses *different*
+    ranks, ordered by index, so two members that score identically get weights up to a third
+    of the range apart and which one is favoured is decided by the sort rather than by the
+    objective. Nobody chose that; it is what the two-argsort trick does.
+
+    It matters here more than it would elsewhere. `experiments/phase2/noisefloor.py` measures
+    5 to 9 exactly tied pairs at `d=512, N=1024`, because a perturbation at `sigma=0.01`
+    moves the loss by less than one float32 ulp and members collide. A pair that ties on one
+    backend and differs by an ulp on another then orders either way, and one exchange near
+    the middle of the population is worth about 1e-2 in the update
+    (`docs/postmortem-gpu-determinism.md`). Midranks make the weights a function of the
+    fitness multiset instead of the sort's tie-break.
+
+    With no ties this is exactly `argsort(argsort(f))/(n-1) - 0.5`, bitwise. Ties are the
+    only case that changes, and there the old answer was arbitrary.
     """
     n = fitness.shape[0]
     if n < 2:
         return jnp.zeros_like(fitness)
-    ranks = jnp.argsort(jnp.argsort(fitness)).astype(fitness.dtype)
-    return ranks / (n - 1) - 0.5
+    return _midranks(fitness) / (n - 1) - 0.5
+
+
+def _midranks(fitness: Array) -> Array:
+    """Average rank within each group of equal values, along the last axis.
+
+    **Shape-agnostic on purpose, like the `argsort(argsort(x))` it replaces.** The contract
+    at the top of this module is `(n,)` in, `(n,)` out, and an `(n, episodes)` fitness is a
+    caller error. But it is `tell` that reports that error, in the one message that names the
+    fix, so this has to hand the wrong shape *through* rather than die on it. A 1-D-only
+    implementation turns a clear ValueError into a TypeError from inside `concatenate`,
+    which `tests/test_control.py` catches.
+    """
+    m = fitness.shape[-1]
+    rows = fitness.reshape(-1, m)
+
+    def one(row: Array) -> Array:
+        order = jnp.argsort(row)
+        ordered = row[order]
+        # A tie group starts wherever the sorted value changes.
+        starts = jnp.concatenate([jnp.array([True]), ordered[1:] != ordered[:-1]])
+        group = jnp.cumsum(starts) - 1
+        positions = jnp.arange(m, dtype=row.dtype)
+
+        # `first + (count - 1) / 2`, not `sum(positions) / count`. They agree in exact
+        # arithmetic and not in float32: the sum reaches m^2/2, which passes 2^24 and stops
+        # being representable. With every member tied that is 0.5 ranks of error at m = 2^16
+        # and 1.4 at m = 2^18, the population EGGROLL runs. Every intermediate here stays
+        # below m.
+        first = jax.ops.segment_min(positions, group, num_segments=m)
+        count = jax.ops.segment_sum(jnp.ones_like(positions), group, num_segments=m)
+        return jnp.zeros_like(row).at[order].set((first + (count - 1) / 2)[group])
+
+    return jax.vmap(one)(rows).reshape(fitness.shape)
 
 
 def group_relative(fitness: Array) -> Array:
