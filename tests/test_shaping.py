@@ -170,3 +170,69 @@ def test_group_relative_handles_a_degenerate_population():
 
 def test_group_relative_is_registered():
     assert shaping.BY_NAME["group_relative"] is shaping.group_relative
+
+
+# ------------------------------------------------------------------- ties in the ranking
+
+
+def test_centered_ranks_give_tied_members_the_same_weight():
+    """The whole point of midranks.
+
+    `argsort(argsort(f))` ordered ties by index, so `[3, 1, 1, 2]` gave the tied pair -0.5
+    and -0.1667: a third of the range apart, decided by the sort. Which member is favoured
+    was an implementation detail of the tie-break rather than anything about the objective.
+    """
+    w = shaping.centered_ranks(jnp.asarray([3.0, 1.0, 1.0, 2.0], jnp.float32))
+    assert w[1] == w[2]
+
+
+def test_centered_ranks_are_unchanged_when_nothing_is_tied():
+    """Bitwise, not approximately. Midranks reduce to plain ranks with no ties, so this is
+    not a behaviour change anywhere the old answer was well defined, and every committed
+    number produced with distinct fitnesses still reproduces."""
+    for n in (2, 3, 17, 64, 257):
+        f = jax.random.normal(jax.random.key(n), (n,), jnp.float32)
+        order = jnp.argsort(jnp.argsort(f)).astype(f.dtype)
+        assert jnp.array_equal(shaping.centered_ranks(f), order / (n - 1) - 0.5)
+
+
+def test_centered_ranks_still_sum_to_zero_with_heavy_ties():
+    """Averaging within a tie group preserves the total rank, so the mean weight stays 0 and
+    nothing in the estimator's bias moves. A tie treatment that broke this would change the
+    update's scale, not just its tie-breaking."""
+    for n in (4, 64, 1024):
+        f = jnp.asarray(
+            jax.random.randint(jax.random.key(n), (n,), 0, 3), jnp.float32
+        )  # many ties by construction
+        assert abs(float(jnp.sum(shaping.centered_ranks(f)))) < 1e-4
+
+
+def test_centered_ranks_do_not_depend_on_the_order_tied_members_arrive_in():
+    """The property that makes this worth doing: a pair that ties on one backend and differs
+    by an ulp on another must not produce a different update."""
+    f = jnp.asarray([3.0, 1.0, 1.0, 2.0], jnp.float32)
+    swap = jnp.asarray([0, 2, 1, 3])
+    assert jnp.array_equal(shaping.centered_ranks(f)[swap], shaping.centered_ranks(f[swap]))
+
+
+def test_centered_ranks_are_exact_for_a_fully_tied_large_population():
+    """`first + (count - 1) / 2` rather than `sum(positions) / count`.
+
+    The sum form reaches n^2/2, past float32's exact-integer range, and lands 1.4 ranks out
+    at n = 2^18, which is the population EGGROLL runs. Every member tied is the worst case
+    and the answer is exactly the midpoint, so every weight must be exactly 0.
+    """
+    n = 1 << 18
+    w = shaping.centered_ranks(jnp.zeros(n, jnp.float32))
+    assert float(jnp.max(jnp.abs(w))) == 0.0
+
+
+def test_centered_ranks_pass_a_wrong_shape_through_for_tell_to_reject():
+    """`tell` owns the error message for an (n, episodes) fitness, so this must not die first.
+
+    The midrank rewrite was 1-D only at first and raised a TypeError from inside
+    `jnp.concatenate`, replacing the one message that names the fix
+    (`tests/test_control.py::test_a_one_dimensional_shaping_on_multi_episode_fitness_is_refused`).
+    """
+    f = jnp.asarray([[3.0, 1.0], [1.0, 2.0], [2.0, 5.0]], jnp.float32)
+    assert shaping.centered_ranks(f).shape == f.shape
