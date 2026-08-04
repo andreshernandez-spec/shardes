@@ -31,11 +31,23 @@ import numpy as np
 
 
 def git(here: Path, *args: str) -> str:
-    """`git` in `here`, or the string "unknown". Never raises."""
+    """`git` in `here`, or the string "unknown". Never raises.
+
+    **`rstrip`, not `strip`.** `git status --porcelain` puts the index status in column 1 and
+    the worktree status in column 2, so a file modified or deleted but not staged starts with
+    a *space*: `" D path"`. Stripping both ends ate that space on the first line only, and
+    `worktree_is_dirty` then read the path from offset 3 and lost a character, so it matched
+    no output prefix and every run reported dirty.
+
+    It hid for a long time because the case it was written for is untracked files, which
+    start `"?? "` with nothing to strip. It surfaced when a sweep deleted results to
+    regenerate them: 228 deletions, the first one misparsed, and every regenerated result
+    stamped unreproducible.
+    """
     try:
         return subprocess.run(
             ["git", *args], cwd=here, capture_output=True, text=True, timeout=10
-        ).stdout.strip()
+        ).stdout.rstrip()
     except Exception:
         return "unknown"
 
