@@ -10,12 +10,12 @@
     "sigma": 0.01,
     "strategy": "mirrored_sobol_lr1"
   },
-  "cosine_median": 0.22270388156175613,
-  "cosine_q1": 0.2179194614291191,
-  "cosine_q3": 0.22711112350225449,
+  "cosine_median": 0.24203024059534073,
+  "cosine_q1": 0.24149174243211746,
+  "cosine_q3": 0.2425280623137951,
   "d_eff": 6144,
   "env": {
-    "commit": "1fb67433592a2c22729512e0ca5bfd271f53fd09",
+    "commit": "84e432cd1c7f8f0aa17b9822d1396cea528b6df9",
     "device_count": 1,
     "device_kind": "NVIDIA GeForce RTX 3080 Laptop GPU",
     "device_platform": "gpu",
@@ -25,17 +25,17 @@
     "jax": "0.11.0",
     "jax_platforms": "",
     "jaxlib": "0.11.0",
-    "numpy": "2.5.1",
+    "numpy": "2.4.6",
     "platform": "Linux-6.17.0-41-generic-x86_64-with-glibc2.42",
     "python": "3.13.14",
     "scipy": "1.18.0",
     "xla_flags": "--xla_gpu_enable_triton_gemm=false"
   },
-  "relative_bias": 43.737335205078125,
-  "relative_mse_median": 23440.4697265625,
-  "relative_mse_q1": 23017.50634765625,
-  "relative_mse_q3": 24270.2412109375,
+  "relative_bias": 41.751468658447266,
+  "relative_mse_median": 19799.265625,
+  "relative_mse_q1": 19725.89404296875,
+  "relative_mse_q3": 19874.43115234375,
   "replicates_completed": 30,
   "truncated": false,
-  "wall_clock_s": 410.7031807899475
+  "wall_clock_s": 463.0750503540039
 }

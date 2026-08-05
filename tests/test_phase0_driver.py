@@ -696,3 +696,61 @@ def test_a_failing_config_does_not_kill_the_sweep(tmp_path, monkeypatch, capsys)
     # re-run retries exactly those.
     assert len(written) == 2
     assert all("N=256" in name for name in written)
+
+
+def test_deleted_results_do_not_flag_the_sweep_as_dirty(tmp_path, monkeypatch):
+    """Regenerating results means deleting them first, and that must not read as dirty.
+
+    `git()` returned `stdout.strip()`. `git status --porcelain` puts the index status in
+    column 1 and the worktree status in column 2, so a tracked file deleted but not staged
+    prints `" D path"` with a leading space, and stripping both ends ate it on the *first*
+    line only. `worktree_is_dirty` then read the path from offset 3, lost a character, and
+    matched no exemption, so any status output at all reported dirty.
+
+    It hid because the case the exemption was written for is untracked files, which print
+    `"?? "` with nothing to strip. It surfaced regenerating Phase 0 under midrank shaping:
+    228 deleted results, the first misparsed, and every regenerated file would have been
+    stamped unreproducible.
+    """
+    repo = tmp_path / "repo"
+    (repo / "experiments" / "phase0" / "results").mkdir(parents=True)
+    import subprocess as sp  # noqa: PLC0415
+
+    def git(*a):
+        sp.run(["git", *a], cwd=repo, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "t@t")
+    git("config", "user.name", "t")
+    (repo / "src.py").write_text("x = 1\n")
+    results = repo / "experiments" / "phase0" / "results"
+    for i in range(3):
+        (results / f"r{i}.json").write_text("{}")
+    git("add", "-A")
+    git("commit", "-qm", "base")
+
+    monkeypatch.setattr(run, "HERE", repo / "experiments" / "phase0")
+    monkeypatch.setattr(run, "RESULTS", results)
+    assert run.worktree_is_dirty() is False
+
+    # Deleting committed results is what a regeneration does. Still the sweep's own output.
+    for i in range(3):
+        (results / f"r{i}.json").unlink()
+    assert run.worktree_is_dirty() is False, "deleted results flagged the sweep as dirty"
+
+    # And a deleted file outside the outputs must still count.
+    (repo / "src.py").unlink()
+    assert run.worktree_is_dirty() is True, "a deleted source file must count as dirty"
+
+
+def test_git_preserves_the_leading_column_of_porcelain_status():
+    """The unit under the test above. `strip()` here is a one-character bug two layers down."""
+    import subprocess as sp  # noqa: PLC0415
+
+    out = sp.run(["git", "status", "--porcelain"], cwd=run.HERE,
+                 capture_output=True, text=True).stdout
+    lines = [line for line in out.splitlines() if line.startswith(" ")]
+    if not lines:
+        pytest.skip("no unstaged worktree changes to check against")
+    got = run.harness.git(run.HERE, "status", "--porcelain")
+    assert got.splitlines()[0].startswith(" ") is out.splitlines()[0].startswith(" ")
