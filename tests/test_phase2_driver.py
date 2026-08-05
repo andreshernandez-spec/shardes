@@ -474,3 +474,66 @@ def test_an_output_name_does_not_exempt_files_that_merely_start_with_it(tmp_path
         assert harness.worktree_is_dirty(here, outputs, status_of(stray)), (
             f"{stray} is not one of {outputs} and must count as dirty"
         )
+
+
+# ------------------------------------------------------------------- the noise floor
+
+noisefloor = _load("noisefloor")
+
+
+def test_separation_is_reported_in_ulp_not_absolute_units():
+    """A gap only means something next to the resolution of the numbers it separates.
+
+    The same 1e-6 gap is 4 ulp on a loss of 2.5 and comfortable on a loss of 0.001. Reporting
+    absolute gaps would have made the failing configuration look fine.
+    """
+    f = np.array([1.0, 1.0 + 2e-7, 5.0], dtype=np.float32)
+    s = noisefloor.separation(f)
+    assert s["min_gap_ulp"] == pytest.approx(s["min_gap"] / s["ulp"])
+    assert s["ulp"] == pytest.approx(float(np.spacing(np.float32(np.mean(np.abs(f))))))
+
+
+def test_exact_ties_are_counted_and_are_not_treated_as_safe():
+    """A tie is the worst case, not a neutral one.
+
+    `centered_ranks` gives tied members different weights, picked by the sort's tie-break, so
+    a pair that ties on one backend and differs by an ulp on another can order either way.
+    Scoring a zero gap as "maximally close" is the point.
+    """
+    f = np.array([2.0, 2.0, 3.0], dtype=np.float32)
+    s = noisefloor.separation(f)
+    assert s["ties"] == 1
+    assert s["min_gap_ulp"] == 0.0
+
+
+def test_a_configuration_below_the_margin_fails(tmp_path, monkeypatch, capsys):
+    """The check has to fail, not warn. A warning in a 256-config sweep is not read."""
+    monkeypatch.setattr(noisefloor, "scores",
+                        lambda *a, **k: np.array([1.0, 1.0, 2.0], dtype=np.float32))
+    cfg = {"modes": ["strong"], "devices": [1], "d_model": [256], "population": [4],
+           "population_per_device": [4], "strategies": ["lowrank_r1"], "how": ["A"]}
+    (tmp_path / "c.yaml").write_text(json.dumps(cfg))
+    assert noisefloor.main(["--config", str(tmp_path / "c.yaml"), "--seeds", "1"]) == 1
+    assert "TOO CLOSE" in capsys.readouterr().out
+
+
+def test_a_well_separated_configuration_passes(tmp_path, monkeypatch):
+    """And it must not fail everything, or it will be switched off."""
+    monkeypatch.setattr(noisefloor, "scores",
+                        lambda *a, **k: np.array([1.0, 2.0, 3.0], dtype=np.float32))
+    cfg = {"modes": ["strong"], "devices": [1], "d_model": [256], "population": [3],
+           "population_per_device": [3], "strategies": ["lowrank_r1"], "how": ["A"]}
+    (tmp_path / "c.yaml").write_text(json.dumps(cfg))
+    assert noisefloor.main(["--config", str(tmp_path / "c.yaml"), "--seeds", "1"]) == 0
+
+
+def test_the_worst_seed_is_reported_not_the_first(tmp_path, monkeypatch, capsys):
+    """One draw is a sample of the configuration, not a property of it. A configuration that
+    is fine on seed 0 and degenerate on seed 1 is not a configuration to benchmark."""
+    draws = iter([np.array([1.0, 2.0, 3.0], dtype=np.float32),      # seed 0: wide
+                  np.array([1.0, 1.0, 3.0], dtype=np.float32)])     # seed 1: tied
+    monkeypatch.setattr(noisefloor, "scores", lambda *a, **k: next(draws))
+    cfg = {"modes": ["strong"], "devices": [1], "d_model": [256], "population": [3],
+           "population_per_device": [3], "strategies": ["lowrank_r1"], "how": ["A"]}
+    (tmp_path / "c.yaml").write_text(json.dumps(cfg))
+    assert noisefloor.main(["--config", str(tmp_path / "c.yaml"), "--seeds", "2"]) == 1
