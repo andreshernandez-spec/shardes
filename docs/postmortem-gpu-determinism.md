@@ -552,11 +552,24 @@ Raising `sigma` is the obvious remedy and it only half works. Measured:
 It rescues small populations and does nothing for large ones, because a larger `sigma` raises
 the loss magnitude too and takes the ulp up with it.
 
-**An exact tie is not the safe case.** `centered_ranks` gives tied members *different*
-weights, chosen by the sort's tie-break, so a pair that ties on one backend and differs by an
-ulp on another can order either way. Midrank shaping, where tied members share the average
-rank, would fix exactly that and nothing else: it addresses the 5 to 9 exact ties at `N=1024`
-and not the other 230-odd near-ties.
+**Exact ties used to be the worse case, and were fixed separately.** `centered_ranks`
+originally gave tied members *different* weights, chosen by the sort's tie-break, so a pair
+that tied on one backend and differed by an ulp on another could order either way. It now
+gives them the average of the ranks they span, so an exact tie is no longer a source of
+disagreement. Appendix B has the implementation and what it cost.
+
+That fixed one failure mode and left the larger one alone: members one ulp apart still get
+distinct ranks and can still swap, which is 242 of the 1023 adjacent pairs at `N=1024`
+against 5 to 9 exact ties. **The `close` column in the table above is the number to read,
+not `ties`.**
+
+It also turned out to matter far more in Phase 0 than in Phase 2. At `d=512, N=16384,
+sigma=1e-3` two thirds of members share a fitness exactly, and at `N=262144` it is 96%,
+because a perturbation that small moves the loss by less than one float32 ulp. Every one of
+Phase 0's 228 committed rank-shaped results contained ties and had to be regenerated. The
+numbers barely moved (median absolute change in cosine 2.35e-07 against a typical 1.02e-02)
+and relative MSE improved in 218 of 228, which is the expected direction: equal weights for
+tied members add less noise than weights ordered by member index.
 
 The measured alternative that does address near-ties is continuous shaping: `centered` sits
 at 25x amplification against `centered_ranks`'s 265,000x, four orders of magnitude better.
@@ -674,12 +687,13 @@ rewrite:
 > different optimizer. Both are recorded here as the honest alternatives rather than
 > presented as future work.
 
-## Appendix B: proposed midrank shaping
+## Appendix B: midrank shaping, as shipped
 
-**A proposal, not a change.** Shaping is estimator math, which `CLAUDE.md` ground rule 1
-reserves for Andres. Drafted here with its reasoning and its limits.
+**Shipped, having started here as a proposal.** Shaping is estimator math, which `CLAUDE.md`
+ground rule 1 reserves for Andres, so this appendix drafted it with its reasoning and its
+limits and he took it from there. Kept as the record of why, and of what it does not buy.
 
-`centered_ranks` today:
+`centered_ranks` before the change:
 
 ```python
 ranks = jnp.argsort(jnp.argsort(fitness)).astype(fitness.dtype)
@@ -740,10 +754,24 @@ current behaviour is arbitrary.
 so this addresses a few percent of the configurations at risk. Members that are one ulp apart
 rather than zero still receive distinct ranks and can still swap.
 
-It is worth doing anyway because it is cheap, it is the statistically standard treatment, and
-it makes the shaping a function of the scores rather than of an implementation detail of the
-sort. It is not a fix for the conditioning problem, and presenting it as one would be the
+It was worth doing anyway because it is cheap, it is the statistically standard treatment,
+and it makes the shaping a function of the scores rather than of an implementation detail of
+the sort. It is not a fix for the conditioning problem, and presenting it as one would be the
 same mistake as presenting the determinism flag as one.
+
+**What it cost, measured after the fact.** Nothing in wall clock: regenerating Phase 0's 228
+rank-shaped results ran at a median 1.01x of the originals, which is what an `O(n log n)`
+sort either way predicts. It changed every one of those results, because ties are far denser
+in Phase 0 than in Phase 2, and the changes were negligible: median absolute change in cosine
+2.35e-07 against a typical cosine of 1.02e-02, with relative MSE improving in 218 of 228.
+G0's verdict is unaffected by construction, since every comparison `gate.py` makes uses
+`shaping=none`, which does no ranking.
+
+One implementation note that only appeared under test: the first version was 1-D only, and an
+`(n, episodes)` fitness then died with a `TypeError` from inside `concatenate` instead of the
+`ValueError` from `tell` that names the fix. `tests/test_control.py` caught it. The shaping
+contract is `(n,)` in and `(n,)` out, but the wrong shape has to be handed *through* rather
+than rejected early, because `tell` owns that error message.
 
 **If the conditioning problem itself needs fixing**, the two candidates are continuous
 shaping (measured at 25x amplification, but a different optimizer) and quantising scores to a
