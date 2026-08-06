@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import statistics
 import sys
 import time
@@ -123,8 +124,18 @@ def expand(cfg: dict) -> list[Config]:
 #: the library diverging.
 DETERMINISM_FLAG = "--xla_gpu_deterministic_ops=true"
 
+#: XLA:GPU builds its command buffers as CUDA graphs, and on more than one device the
+#: capture fails outright: "Failed to add memset node to a CUDA graph:
+#: CUDA_ERROR_INVALID_VALUE". Setting the flag to the empty value turns command buffers off.
+COMMAND_BUFFER_FLAG = "--xla_gpu_enable_command_buffer="
 
-def require_deterministic_gpu() -> int:
+#: The empty value is the whole point, so a substring test is not enough:
+#: `--xla_gpu_enable_command_buffer=FUSION` contains `COMMAND_BUFFER_FLAG` and leaves command
+#: buffers on. Only an empty value, at the end of the string or before a space, disables them.
+_COMMAND_BUFFER_OFF = re.compile(re.escape(COMMAND_BUFFER_FLAG) + r"(?:\s|$)")
+
+
+def require_gpu_flags() -> int:
     """Refuse to benchmark on a GPU without `DETERMINISM_FLAG`. Measured, not defensive.
 
     On 2x T4 at `d=256, N=64`, `lowrank_r1/A`: without the flag `D=1` and `D=2` disagreed by
@@ -142,20 +153,52 @@ def require_deterministic_gpu() -> int:
     Setting it here is not possible: XLA reads `XLA_FLAGS` once when the backend
     initialises, and this module imports jax at import time. It has to be in the environment
     before the process starts.
+
+    **`COMMAND_BUFFER_FLAG` is required too, and only when the node has more than one
+    device.** Measured on 2x A100-SXM4-80GB (driver 550.127.05, jax 0.11.0): every one of
+    the 16 `D=2` rehearsal configs died with "Failed to add memset node to a CUDA graph",
+    and every `D=1` config passed. It is not the determinism flag's doing, since `D=2` fails
+    with `XLA_FLAGS` empty as well; disabling command buffers fixes it and costs 0.2% of
+    step time (13.00 ms -> 13.03 ms at d=512 N=256).
+
+    That failure mode is why this is an error and not a warning. The driver records a failed
+    config and keeps going, so a sweep on 8 GPUs would run to completion with its 64 `D=1`
+    configs intact and all 192 sharded ones errored, which looks like a finished sweep.
+
+    **It is required on every multi-device GPU, not only where it has been seen to fail.**
+    2x T4 passed `tests/gpu` without it on 2026-08-01 (docs/06 G1), so this is not universal
+    to CUDA and the requirement is broader than the measurement. Kept broad deliberately:
+    there is nothing readable at startup that says whether this node's XLA will capture its
+    graphs, the flag costs 0.2% where it is not needed, and the alternative is finding out
+    on a rented 8-GPU node.
     """
     platform = jax.devices()[0].platform
     if platform not in ("gpu", "cuda", "rocm"):
         return 0
-    if DETERMINISM_FLAG in os.environ.get("XLA_FLAGS", ""):
+
+    flags = os.environ.get("XLA_FLAGS", "")
+    missing = []
+    if DETERMINISM_FLAG not in flags:
+        missing.append(DETERMINISM_FLAG)
+    # Single-GPU runs cannot reach the broken path: a config needing more devices than the
+    # node has is skipped before it runs. Requiring the flag there would block correct work.
+    if len(jax.devices()) > 1 and not _COMMAND_BUFFER_OFF.search(flags):
+        missing.append(COMMAND_BUFFER_FLAG)
+    if not missing:
         return 0
+
     print(
-        f"refusing to benchmark on {platform} without {DETERMINISM_FLAG}.\n\n"
-        "Without it XLA picks reduction algorithms per shape, so D=1 and D=2 run different\n"
-        "arithmetic and the trajectory guard fails on configurations where the library is\n"
-        "correct. Re-run with:\n\n"
-        f'    XLA_FLAGS="{DETERMINISM_FLAG}" python run.py ...\n\n'
-        "The timings this produces are with deterministic reductions, which is the only\n"
-        "configuration whose correctness can be checked; say so when quoting them.",
+        f"refusing to benchmark on {platform} without {' and '.join(missing)}.\n\n"
+        f"{DETERMINISM_FLAG} : without it XLA picks reduction algorithms per shape, so D=1\n"
+        "and D=2 run different arithmetic and the trajectory guard fails on configurations\n"
+        "where the library is correct.\n\n"
+        f"{COMMAND_BUFFER_FLAG} : without it every D>1 config dies in CUDA graph capture,\n"
+        "and the sweep still exits 0 with its single-device configs intact.\n\n"
+        "Re-run with:\n\n"
+        f'    XLA_FLAGS="{DETERMINISM_FLAG} {COMMAND_BUFFER_FLAG}" python run.py ...\n\n'
+        "The timings this produces are with deterministic reductions and no command buffers,\n"
+        "which is the only configuration whose correctness can be checked; say so when\n"
+        "quoting them.",
         file=sys.stderr,
     )
     return 2
@@ -314,7 +357,7 @@ def main(argv=None) -> int:
     RESULTS = HERE / cfg.get("results_dir", "results")
     configs = expand(cfg)
 
-    rc = require_deterministic_gpu()
+    rc = require_gpu_flags()
     if rc:
         return rc
 
