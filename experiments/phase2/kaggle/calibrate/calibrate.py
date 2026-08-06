@@ -48,8 +48,13 @@ run(["git", "log", "--oneline", "-1"])
 # is exactly zero with the flag set. It may cost throughput, and that is the trade: these
 # timings are for deterministic reductions, which is the only configuration whose
 # correctness can be checked. The previous run's numbers are the comparison.
+#
+# `--xla_gpu_enable_command_buffer=` is required by run.py on any multi-GPU node, and this
+# one is 2x T4. T4 does not need it (this kernel ran green without it on 2026-08-01), but
+# 2x A100 does: without it every D>1 config dies in CUDA graph capture. Nothing readable at
+# startup says which node is which, so the driver asks for it everywhere.
 env = {**os.environ, "PYTHONPATH": "src", "JAX_PLATFORMS": "cuda",
-       "XLA_FLAGS": "--xla_gpu_deterministic_ops=true"}
+       "XLA_FLAGS": "--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer="}
 
 run([sys.executable, "-c",
      "import jax; d=jax.devices(); print(jax.__version__, len(d), d[0].device_kind);"

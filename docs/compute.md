@@ -226,6 +226,10 @@ export XLA_PYTHON_CLIENT_PREALLOCATE=false
 
 # Deterministic collectives, for the device-invariance check on real hardware.
 export XLA_FLAGS="$XLA_FLAGS --xla_gpu_deterministic_ops=true"
+
+# More than one real GPU: XLA fails to capture its command buffers as CUDA graphs and every
+# sharded config dies in `jit_generation`. Measured on 2x A100, 2026-08-06. See docs/06.
+export XLA_FLAGS="$XLA_FLAGS --xla_gpu_enable_command_buffer="
 ```
 
 Container: NVIDIA's NGC JAX image is the least surprising base if the host has a matching

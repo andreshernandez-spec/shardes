@@ -242,6 +242,33 @@ def test_naive_mean_subtraction_would_be_biased(strategy, problem):
         assert bias < BIAS_GATE
 
 
+#: float32 has about 1.2e-07 of room next to 1.0, and a good direction lands there. Eight
+#: ulp, because the cosine is a ratio of two sums and each one has already rounded.
+COS_RESOLUTION = 8 * float(jnp.finfo(jnp.float32).eps)
+
+
+def assert_improves_until_saturated(cos):
+    """Each population beats the last, for as long as float32 can still tell.
+
+    Cosine similarity saturates at 1.0 and the strict form of this assertion fails on the
+    *more* accurate hardware. Measured with jax 0.11.0 on the same commit: an A100-SXM4-80GB
+    gives the mirrored high-dimensional strategies 0.97384, 1.0, 0.99999988, so it reaches
+    exactly 1.0 at n=32 and comes back one ulp at n=256; an RTX 3080 gives 0.96988, 0.99688,
+    0.99969 and rises throughout. Asking for `cos[1] < cos[2]` at the top of the range asks
+    the metric to resolve a difference narrower than its own last place.
+
+    So improvement is required only while there is headroom to improve into, and above that
+    the requirement is that nothing falls back. Same class of problem as
+    `experiments/phase2/noisefloor.py`: an assertion below the resolution of float32 is
+    measuring the rounding, not the thing.
+    """
+    for a, b in zip(cos, cos[1:]):
+        if 1.0 - a > COS_RESOLUTION:
+            assert b > a, cos
+        else:
+            assert b >= a - COS_RESOLUTION, cos
+
+
 @strategies
 def test_cosine_improves_with_population(strategy, problem):
     """Sanity: more members, better direction. If this fails nothing else means much."""
@@ -251,4 +278,21 @@ def test_cosine_improves_with_population(strategy, problem):
             jnp.mean(run(strategy, problem, shp.centered, n=n, replicates=64), axis=0), truth))
         for n in (4, 32, 256)
     ]
-    assert cos[0] < cos[1] < cos[2], cos
+    assert_improves_until_saturated(cos)
+
+
+def test_the_cosine_gate_admits_saturation_and_still_catches_a_regression():
+    """Pins the two measured triples, so the gate cannot quietly go back to being exact.
+
+    Without the saturated case this is a test that passes on a laptop and fails on the
+    hardware the sweep is booked on, which is the worst place to find out.
+    """
+    assert_improves_until_saturated([0.9738359451293945, 1.0, 0.9999998807907104])  # A100
+    assert_improves_until_saturated([0.96988, 0.99688, 0.99969])  # RTX 3080
+
+    with pytest.raises(AssertionError):
+        assert_improves_until_saturated([0.99, 0.97, 0.96])  # a bigger population, worse
+    with pytest.raises(AssertionError):
+        assert_improves_until_saturated([0.5, 0.5, 0.9])  # flat with room left to improve
+    with pytest.raises(AssertionError):
+        assert_improves_until_saturated([0.99, 1.0, 0.99])  # saturated, then a real fall
