@@ -161,7 +161,12 @@ def weak_scaling(rows, out: pathlib.Path) -> str | None:
         _style(ax)
     ax1.set_title("M2  weak scaling: fixed population per device", color=INK, loc="left")
     ax2.set_title("M6  peak memory per device", color=INK, loc="left")
-    ax2.legend(frameon=False, fontsize=8, labelcolor=MUTED,
+    # Handles come from ax1, which is where the labelled artists are. Asking ax2 for its own
+    # would silently produce an empty legend, and did: the memory panel plots the same
+    # entities without labels, so this figure shipped with eight series and no key to them.
+    # matplotlib says so on stderr and then draws the figure anyway.
+    handles, labels = ax1.get_legend_handles_labels()
+    ax2.legend(handles, labels, frameon=False, fontsize=8, labelcolor=MUTED,
                loc="center left", bbox_to_anchor=(1.02, 0.5))
 
     if simulated(rows):
@@ -178,6 +183,16 @@ def crossover(rows, out: pathlib.Path) -> str | None:
     Diverging, because the quantity has a meaningful zero: log(t_B / t_A) is negative where
     B wins, positive where A wins, and the contour at 0 is the crossover. That contour is
     the result, so it is drawn explicitly rather than left to the colour scale.
+
+    **One panel per perturbation strategy, and that is not decoration.** The grid used to be
+    keyed on `(N, d, how)` with no strategy in the key, so all four strategies wrote to the
+    same cell and the last one sorted won: every published cell was `seed_regenerated` and
+    the other three were discarded silently. It mattered. Aggregated that way the figure said
+    "B wins everywhere"; per strategy, B wins 10 of 16 cells on the 8x A100 sweep, so A wins
+    a quarter of them and the headline was an artifact of a dict key.
+
+    A shared colour scale across panels, because the comparison between strategies is the
+    point and per-panel scaling would make a 0.003 difference look like a 0.05 one.
     """
     at_max_d = max(r["config"]["devices"] for r in rows)
     grid = {}
@@ -185,50 +200,69 @@ def crossover(rows, out: pathlib.Path) -> str | None:
         c = r["config"]
         if c["mode"] != "strong" or c["devices"] != at_max_d:
             continue
-        grid[(c["population"], c["d_model"], c["how"])] = r["seconds_median"]
+        grid[(c["strategy"], c["population"], c["d_model"], c["how"])] = r["seconds_median"]
 
-    pops = sorted({k[0] for k in grid})
-    dims = sorted({k[1] for k in grid})
+    pops = sorted({k[1] for k in grid})
+    dims = sorted({k[2] for k in grid})
+    strategies = sorted({k[0] for k in grid})
     if len(pops) < 2 or len(dims) < 2:
         return (f"needs a (N, d) grid; have {len(pops)} population(s) x {len(dims)} "
                 "model size(s). The rehearsal config is deliberately one point.")
 
-    z = np.full((len(dims), len(pops)), np.nan)
-    for i, d in enumerate(dims):
-        for j, n in enumerate(pops):
-            a, b = grid.get((n, d, "A")), grid.get((n, d, "B"))
-            if a and b:
-                z[i, j] = np.log10(b / a)
+    panels = {}
+    for s in strategies:
+        z = np.full((len(dims), len(pops)), np.nan)
+        for i, d in enumerate(dims):
+            for j, n in enumerate(pops):
+                a, b = grid.get((s, n, d, "A")), grid.get((s, n, d, "B"))
+                if a and b:
+                    z[i, j] = np.log10(b / a)
+        panels[s] = z
 
-    fig, ax = plt.subplots(figsize=(6.5, 4.8))
-    lim = float(np.nanmax(np.abs(z))) or 1.0
-    im = ax.pcolormesh(pops, dims, z, cmap=CROSSOVER,
-                       norm=TwoSlopeNorm(vmin=-lim, vcenter=0.0, vmax=lim), shading="nearest")
-    # The contour AT ZERO is the result. When the grid does not straddle it there is no
-    # crossover to draw, and an empty contour looks like a forgotten one, so say it in the
-    # title instead of leaving the reader to infer it from the colour bar.
-    straddles = np.nanmin(z) < 0 < np.nanmax(z)
-    if straddles:
-        cs = ax.contour(pops, dims, z, levels=[0.0], colors=[INK], linewidths=2)
-        ax.clabel(cs, fmt={0.0: "A = B"}, fontsize=8)
-        note = ""
-    else:
-        winner = "B" if np.nanmax(z) < 0 else "A"
-        note = f"  (no crossover in range: {winner} wins everywhere)"
+    everything = np.concatenate([z.ravel() for z in panels.values()])
+    lim = float(np.nanmax(np.abs(everything))) or 1.0
+    norm = TwoSlopeNorm(vmin=-lim, vcenter=0.0, vmax=lim)
 
-    fig.colorbar(im, ax=ax, label="$\\log_{10}(t_B / t_A)$    <0 B wins,  >0 A wins")
-    ax.set(xscale="log", yscale="log", xlabel="population N", ylabel="model dimension d",
-           title=f"M3  contraction crossover at D={at_max_d}{note}")
-    ax.set_xticks(pops)
-    ax.set_xticklabels([str(n) for n in pops])
-    ax.set_yticks(dims)
-    ax.set_yticklabels([str(d) for d in dims])
-    ax.xaxis.set_minor_locator(NullLocator())
-    ax.yaxis.set_minor_locator(NullLocator())
-    _style(ax)
+    fig, axes = plt.subplots(1, len(strategies), figsize=(3.6 * len(strategies), 4.0),
+                             sharey=True)
+    axes = np.atleast_1d(axes)
+    for ax, s in zip(axes, strategies):
+        z = panels[s]
+        im = ax.pcolormesh(pops, dims, z, cmap=CROSSOVER, norm=norm, shading="nearest")
+        # **Cell values, not a contour.** `docs/03` asks for a crossover contour, and on this
+        # grid that would be a lie: two model sizes by three populations with holes in it,
+        # so any zero contour is interpolation between four filled cells and moves wherever
+        # the interpolator likes. The numbers are the result at this resolution. Draw the
+        # contour when the grid is dense enough to carry one.
+        for i, d in enumerate(dims):
+            for j, n in enumerate(pops):
+                if not np.isnan(z[i, j]):
+                    ax.text(n, d, f"{z[i, j]:+.3f}", ha="center", va="center",
+                            fontsize=8, color=INK)
+        if np.nanmin(z) < 0 < np.nanmax(z):
+            note = ""
+        else:
+            note = f"\n{'B' if np.nanmax(z) < 0 else 'A'} wins everywhere"
+        ax.set(xscale="log", yscale="log", xlabel="population N", title=f"{s}{note}")
+        # `shading="nearest"` centres each cell on its coordinate, so the outer half of the
+        # edge cells sits outside the data range and the labels in them get clipped.
+        ax.set_ylim(dims[0] / 1.6, dims[-1] * 1.6)
+        ax.set_xlim(pops[0] / 1.6, pops[-1] * 1.6)
+        ax.set_xticks(pops)
+        ax.set_xticklabels([str(n) for n in pops])
+        ax.set_yticks(dims)
+        ax.set_yticklabels([str(d) for d in dims])
+        ax.xaxis.set_minor_locator(NullLocator())
+        ax.yaxis.set_minor_locator(NullLocator())
+        _style(ax)
+    axes[0].set_ylabel("model dimension d")
+
+    fig.colorbar(im, ax=axes.tolist(),
+                 label="$\\log_{10}(t_B / t_A)$    <0 B wins,  >0 A wins")
+    fig.suptitle(f"M3  contraction crossover at D={at_max_d}", color=INK, x=0.02, ha="left",
+                 y=1.04)
     if simulated(rows):
         watermark(fig)
-    fig.tight_layout()
     fig.savefig(out / "m3-crossover.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
     return None
