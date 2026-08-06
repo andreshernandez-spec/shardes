@@ -150,9 +150,9 @@ generation is flat or slightly worse as devices are added. It does not depend mu
 strategy or on the contraction: the best group is `seed_regenerated/B` at 0.142, the worst
 `mirrored_lr1/A` and `lowrank_r1/A` at 0.112.
 
-**M2, weak scaling.** Throughput at `D=8` is **0.99x to 1.55x** of `D=1` against an ideal of
-8x, so the same picture from the other side: adding devices at fixed population per device
-buys almost nothing.
+**M2, weak scaling.** Throughput at `D=8` is **1.01x to 1.58x** of `D=1`, median 1.20x
+across 32 series, against an ideal of 8x. The same picture from the other side: adding
+devices at fixed population per device buys almost nothing.
 
 **The cause is not yet identified, and that matters for the gate.** This section names two
 candidates, the shaping barrier (C1.6) and the contraction strategy (C1.3), and says both
@@ -177,9 +177,19 @@ values are the result at this resolution, and a denser `(N, d)` grid is what a c
 count, against **12810 MiB** for `iid_gaussian/A` at `D=8` in weak mode, which is the
 concrete case for seed regeneration and the clearest systems result in the sweep. Strategy A
 storage does not fall with `D` in weak mode, as designed: every device regenerates the whole
-population, so per-device storage tracks total `N`. One anomaly is unexplained: `iid_gaussian/A`
-reads 1610 MiB at `D=1` and 810 MiB at `D=2` before rising, which is not monotonic and is
-worth a look before the number is quoted.
+population, so per-device storage tracks total `N`. `iid_gaussian/A` at `d=512` doubles
+cleanly, 1610 to 3210 to 6410 to 12810 MiB at `N/device=128`.
+
+An earlier revision of this section reported that series as non-monotonic (1610 at `D=1`,
+810 at `D=2`) and called it unexplained. **It was a plotting bug, not a measurement.**
+`plot.py` keyed weak-scaling series on `(strategy, how)` with neither the model size nor the
+population per device in the key, so four experiments collapsed onto one line and whichever
+sorted last won each device count; the "anomaly" was `N/device=128` and `N/device=32`
+interleaved. Split correctly, 31 of 32 weak-mode memory series are monotonic in `D`. The one
+that is not is `iid_gaussian/B` at `d=512, N/device=32`, which drops 12% from 486 to 426 MiB
+between `D=1` and `D=2` and then doubles. That step is also where the program goes from
+unsharded to sharded, so a different compiler choice is the obvious suspect, and it has not
+been checked.
 
 **Device-count invariance.** 30 of 32 strong-scaling groups clean: 15 of 16 strategy A rows
 bitwise identical across `D`, every B row at ~1e-07 against a 1e-5 tolerance. The exception
