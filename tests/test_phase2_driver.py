@@ -306,8 +306,8 @@ class _FakeDevice:
         self.platform = platform
 
 
-def _fake_devices(monkeypatch, platform):
-    monkeypatch.setattr(run.jax, "devices", lambda: [_FakeDevice(platform)])
+def _fake_devices(monkeypatch, platform, count=1):
+    monkeypatch.setattr(run.jax, "devices", lambda: [_FakeDevice(platform)] * count)
 
 
 def test_a_gpu_sweep_without_the_determinism_flag_is_refused(monkeypatch):
@@ -321,7 +321,7 @@ def test_a_gpu_sweep_without_the_determinism_flag_is_refused(monkeypatch):
     """
     _fake_devices(monkeypatch, "gpu")
     monkeypatch.setenv("XLA_FLAGS", "--xla_force_host_platform_device_count=8")
-    assert run.require_deterministic_gpu() != 0
+    assert run.require_gpu_flags() != 0
 
 
 def test_the_determinism_flag_satisfies_the_check_alongside_others(monkeypatch):
@@ -330,7 +330,7 @@ def test_the_determinism_flag_satisfies_the_check_alongside_others(monkeypatch):
     monkeypatch.setenv(
         "XLA_FLAGS", f"--xla_force_host_platform_device_count=8 {run.DETERMINISM_FLAG}"
     )
-    assert run.require_deterministic_gpu() == 0
+    assert run.require_gpu_flags() == 0
 
 
 def test_cpu_and_tpu_are_not_asked_for_a_gpu_flag(monkeypatch):
@@ -338,8 +338,56 @@ def test_cpu_and_tpu_are_not_asked_for_a_gpu_flag(monkeypatch):
     the TPU tier for no reason, and a guard that blocks correct work gets deleted."""
     monkeypatch.delenv("XLA_FLAGS", raising=False)
     for platform in ("cpu", "tpu"):
-        _fake_devices(monkeypatch, platform)
-        assert run.require_deterministic_gpu() == 0
+        _fake_devices(monkeypatch, platform, count=8)
+        assert run.require_gpu_flags() == 0
+
+
+def test_a_multi_gpu_sweep_without_the_command_buffer_flag_is_refused(monkeypatch):
+    """The failure this prevents is silent at the sweep level, which is why it is an error.
+
+    Measured on 2x A100-SXM4-80GB: all 16 `D=2` rehearsal configs died in CUDA graph capture
+    and all `D=1` configs passed. The driver records a failed config and continues, so an
+    8-GPU sweep would exit 0 with 64 results and 192 errors and still look finished.
+    """
+    _fake_devices(monkeypatch, "gpu", count=2)
+    monkeypatch.setenv("XLA_FLAGS", run.DETERMINISM_FLAG)
+    assert run.require_gpu_flags() != 0
+
+
+def test_both_gpu_flags_together_satisfy_the_check(monkeypatch):
+    _fake_devices(monkeypatch, "gpu", count=8)
+    monkeypatch.setenv(
+        "XLA_FLAGS", f"{run.DETERMINISM_FLAG} {run.COMMAND_BUFFER_FLAG}"
+    )
+    assert run.require_gpu_flags() == 0
+
+
+def test_a_single_gpu_is_not_asked_for_the_command_buffer_flag(monkeypatch):
+    """Only D>1 reaches the broken path, and a config needing more devices than the node has
+    is skipped before it runs. A guard that blocks correct single-GPU work gets deleted."""
+    _fake_devices(monkeypatch, "gpu", count=1)
+    monkeypatch.setenv("XLA_FLAGS", run.DETERMINISM_FLAG)
+    assert run.require_gpu_flags() == 0
+
+
+def test_a_non_empty_command_buffer_value_does_not_satisfy_the_check(monkeypatch):
+    """`--xla_gpu_enable_command_buffer=FUSION` contains the flag string and leaves command
+    buffers on. The empty value is the whole point, so a substring test is not enough."""
+    _fake_devices(monkeypatch, "gpu", count=2)
+    monkeypatch.setenv(
+        "XLA_FLAGS", f"{run.DETERMINISM_FLAG} {run.COMMAND_BUFFER_FLAG}FUSION"
+    )
+    assert run.require_gpu_flags() != 0
+
+
+def test_the_command_buffer_flag_is_recognised_before_another_flag(monkeypatch):
+    """It is disabling, so it is normally last in the string. It must still count when it is
+    not: the empty value is followed by a space rather than the end of XLA_FLAGS."""
+    _fake_devices(monkeypatch, "gpu", count=2)
+    monkeypatch.setenv(
+        "XLA_FLAGS", f"{run.COMMAND_BUFFER_FLAG} {run.DETERMINISM_FLAG}"
+    )
+    assert run.require_gpu_flags() == 0
 
 
 def _env(**over):

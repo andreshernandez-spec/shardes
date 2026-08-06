@@ -50,8 +50,10 @@ os.chdir(CHECKOUT)
 run(["git", "checkout", "-q", SHA])
 run(["git", "log", "--oneline", "-1"])
 
+# The command buffer flag is what run.py now requires on a multi-GPU node. It changes
+# nothing on 2x T4; on 2x A100 it is the difference between a sweep and 192 errors.
 env = {**os.environ, "PYTHONPATH": "src", "JAX_PLATFORMS": "cuda",
-       "XLA_FLAGS": "--xla_gpu_deterministic_ops=true"}
+       "XLA_FLAGS": "--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer="}
 
 run([sys.executable, "-c",
      "import jax; d=jax.devices(); print(jax.__version__, len(d), d[0].device_kind);"
