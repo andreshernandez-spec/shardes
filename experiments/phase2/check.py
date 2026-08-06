@@ -3,19 +3,35 @@
 
     python check.py --results results-rehearsal      # non-zero exit if anything diverged
 
-`docs/03`: "Fixed seed; assert the optimizer trajectory is identical across D" — because a
+`docs/03`: "Fixed seed; assert the optimizer trajectory is identical across D", because a
 scaling number for two different computations is not a scaling number. This is that
 assertion, run over whatever a sweep wrote.
 
-**Identical does not mean bitwise, and which one it is depends on the contraction strategy.**
-Strategy A regenerates and contracts the whole population on every device in the same order,
-so the update is bitwise identical at D=1 and D=8. Strategy B `psum`s a partial update per
-device, so the summation order *is* the device count. B is expected to differ in the last
-ulp and A is not, so the two are held to different standards here: A must match exactly, B
-must match within `RTOL`.
+**Identical does not mean bitwise, and which one it is depends on the contraction strategy
+and on the shaping.** Strategy A regenerates and contracts the whole population on every
+device in the same order; strategy B `psum`s a partial update per device, so the summation
+order *is* the device count. A must match exactly, B within `RTOL`.
 
 Holding B to exact equality would fail forever; holding A to a tolerance would hide a real
 bug. Both were live possibilities before the rehearsal measured it.
+
+**A's exactness is not free-standing, and an 8x A100 run is what showed why.** The fitness is
+*not* bitwise identical across device counts even under A: 1024 members in one batch and 128
+on each of eight are different shapes, and XLA reduces different shapes with different trees.
+Measured at `d=512, N=1024`: 189 of 1024 entries differ, by up to 2.00 ulp.
+`--xla_gpu_deterministic_ops=true` does not help, because it fixes the algorithm for a given
+shape rather than across shapes.
+
+What makes A exact is `centered_ranks`. The update is a function of the ordering alone, so a
+sub-rank difference never reaches it, and every group that passes carries that same ulp of
+disagreement. Two things follow, and both are enforced below rather than assumed:
+
+- the exact standard is conditional on a rank shaping, so `shaping` is recorded and
+  `RANK_SHAPINGS` gates it. Under `centered` or `none` the fitness reaches the update and A
+  is held to B's tolerance instead;
+- a configuration whose members are close enough for an ulp to reorder them fails A with
+  nothing wrong in the contraction. That is the noise floor, `ranks` is how this tells it
+  from a real bug, and `noisefloor.py` predicts it.
 
 **The comparison is only valid within one execution environment, and that is now enforced
 rather than assumed.** It used to be a comment on `RTOL` saying "same platform", which is
@@ -57,16 +73,51 @@ RTOL = 1e-5
 #: unflagged one is as meaningless as comparing CPU against GPU.
 COMPARABLE = ("device_platform", "device_kind", "jax", "jaxlib", "commit", "xla_flags")
 
+#: Shapings whose output depends only on the *ordering* of the fitnesses. Under one of these
+#: an ulp of arithmetic difference is discarded unless it moves a rank, which is the entire
+#: reason strategy A comes out bitwise identical across device counts. Under `centered` or
+#: `none` the fitness reaches the update directly and A is expected to differ in the last
+#: ulp exactly like B, so holding it to exact equality would fail every group.
+#:
+#: Measured on 8x A100: the fitness is *not* bitwise identical across device counts even
+#: under A (189 of 1024 entries at `d=512, N=1024`). Every passing group has that same
+#: sub-rank difference and the rank transform throws it away.
+RANK_SHAPINGS = ("centered_ranks",)
+
 
 def _environment(row: dict) -> tuple:
     env = row.get("env", {})
     return tuple(str(env.get(k, "?")) for k in COMPARABLE) + (
         str(row.get("guard_precision", "?")),
+        # Two device counts shaped differently did not run the same computation, so this
+        # belongs with the environment rather than as a separate check.
+        str(row.get("shaping", "?")),
     )
 
 
 def _fields() -> tuple:
-    return COMPARABLE + ("guard_precision",)
+    return COMPARABLE + ("guard_precision", "shaping")
+
+
+def _exactness_expected(rows: list[dict]) -> bool:
+    """Is strategy A supposed to be bitwise identical for these rows?
+
+    Only under a rank shaping. Results written before `shaping` was recorded do not say, and
+    every sweep that produced them ran the `centered_ranks` default, so absent means yes:
+    the alternative is invalidating results that are still perfectly good.
+    """
+    seen = {r.get("shaping") for r in rows}
+    if seen == {None}:
+        return True
+    return all(s in RANK_SHAPINGS for s in seen if s is not None)
+
+
+def _ranks_moved(by_devices: dict) -> bool | None:
+    """Did any member change rank across device counts? None when nothing recorded it."""
+    digests = {d: r.get("ranks", {}).get("digest") for d, r in by_devices.items()}
+    if any(v is None for v in digests.values()):
+        return None
+    return len(set(digests.values())) > 1
 
 
 def _mismatch(rows: list[dict]) -> str:
@@ -122,8 +173,9 @@ def main(argv=None) -> int:
         key = (c["d_model"], c["population"], c["strategy"], c["how"])
         groups[key][c["devices"]] = r
 
-    print(f"{'d':>5} {'N':>6} {'strategy':18s} {'how':4s} {'D':>12}  exact  max rel dev")
+    print(f"{'d':>5} {'N':>6} {'strategy':18s} {'how':4s} {'D':>12}  exact  max rel dev  ranks")
     failures = []
+    floored = []
     for key, by_devices in sorted(groups.items()):
         d_model, population, strategy, how = key
         here = list(by_devices.values())
@@ -143,6 +195,8 @@ def main(argv=None) -> int:
             )
             continue
 
+        moved = _ranks_moved(by_devices)
+
         trajectories = {d: r["trajectory"] for d, r in by_devices.items()}
         base = trajectories[min(trajectories)]
         exact = len({t["digest"] for t in trajectories.values()}) == 1
@@ -151,14 +205,44 @@ def main(argv=None) -> int:
             a, b = np.array(t["probe"]), np.array(base["probe"])
             worst = max(worst, _rel(a, b))
 
+        where = f"{strategy}/{how} d={d_model} N={population}"
         if how == "A" and not exact:
-            failures.append(f"{strategy}/A is not bitwise identical across D ({worst:.2e})")
+            if not _exactness_expected(here):
+                # Not a rank shaping, so the fitness reaches the update and A is no more
+                # exact than B. Hold it to B's standard rather than to one it cannot meet.
+                shaping = sorted({str(r.get("shaping")) for r in here})
+                if worst > RTOL:
+                    failures.append(
+                        f"{where} exceeds rtol {RTOL:g} across D ({worst:.2e}) under "
+                        f"shaping {'/'.join(shaping)}"
+                    )
+            elif moved is False:
+                # The discriminator. Same ordering, different update, under a shaping that
+                # reads nothing but the ordering. Nothing about the noise floor explains it.
+                failures.append(
+                    f"{where} is not bitwise identical across D ({worst:.2e}) with the "
+                    "SAME ranks on every device count, so the contraction itself differs"
+                )
+            elif moved is True:
+                floored.append((where, worst))
+            else:
+                failures.append(
+                    f"{where} is not bitwise identical across D ({worst:.2e}); no rank "
+                    "digest was recorded, so re-run to tell a contraction bug from the "
+                    "noise floor"
+                )
         if how == "B" and worst > RTOL:
-            failures.append(f"{strategy}/B exceeds rtol {RTOL:g} across D ({worst:.2e})")
+            # B is allowed its last ulp, so exceeding RTOL is either a real problem or the
+            # same reordering that breaks A. Same discriminator, same split.
+            if moved is True:
+                floored.append((where, worst))
+            else:
+                failures.append(f"{where} exceeds rtol {RTOL:g} across D ({worst:.2e})")
 
         print(
             f"{d_model:>5} {population:>6} {strategy:18s} {how:4s} {devices:>12}  "
-            f"{str(exact):5s}  {worst:.2e}"
+            f"{str(exact):5s}  {worst:.2e}  "
+            f"{'?' if moved is None else ('MOVED' if moved else 'same')}"
         )
 
     print()
@@ -185,7 +269,26 @@ def main(argv=None) -> int:
             print(f"  {r['config']} -> {r['error']}")
     for f in failures:
         print(f"FAIL: {f}")
-    if failures:
+
+    if floored:
+        # Separated from FAIL on purpose. These configurations did compute different things
+        # across device counts, so no scaling number may be quoted from them, but the cause
+        # is the population rather than the library and the response is to write it down.
+        print(f"\nNOISE FLOOR: {len(floored)} group(s) reordered their population across "
+              "device counts.")
+        for where, worst in floored:
+            print(f"  {where} ({worst:.2e})")
+        print()
+        print("Members changed rank, so the update changed. The fitness differs by an ulp or")
+        print("so at every device count, including the groups that pass; a rank transform")
+        print("normally discards that, and here the population is packed tightly enough that")
+        print("it does not. This is a property of the configuration, not a contraction bug.")
+        print()
+        print("  python noisefloor.py --config <the sweep config>")
+        print()
+        print("Quote no scaling number from these groups without saying which they are.")
+
+    if failures or floored:
         print("\nA scaling number from these results would compare different computations.")
         return 1
     print(f"OK: {len(groups)} strong-scaling groups, every device count ran the same thing.")

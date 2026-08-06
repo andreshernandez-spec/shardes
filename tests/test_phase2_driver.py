@@ -113,7 +113,10 @@ def _write(results: pathlib.Path, devices: int, how: str, trajectory: dict, stra
 
 
 def test_strategy_a_must_be_bitwise_identical_across_devices(tmp_path, capsys):
-    """A regenerates and contracts in the same order everywhere, so anything else is a bug."""
+    """A's update is bitwise identical across device counts, so anything else has to be
+    explained. Not because the arithmetic matches: the fitness differs by an ulp at every
+    device count, and `centered_ranks` reads only the ordering and discards it. Which is why
+    the guard reaches for the rank digest before calling this a contraction bug."""
     _write(tmp_path, 1, "A", _fingerprint(1.0, [1.0, 2.0], digest="same"))
     _write(tmp_path, 2, "A", _fingerprint(1.0, [1.0, 2.0], digest="different"))
     assert check.main(["--results", str(tmp_path)]) == 1
@@ -585,3 +588,122 @@ def test_the_worst_seed_is_reported_not_the_first(tmp_path, monkeypatch, capsys)
            "population_per_device": [3], "strategies": ["lowrank_r1"], "how": ["A"]}
     (tmp_path / "c.yaml").write_text(json.dumps(cfg))
     assert noisefloor.main(["--config", str(tmp_path / "c.yaml"), "--seeds", "2"]) == 1
+
+
+def _floor_row(devices, how="A", digest="a", ranks="r", shaping="centered_ranks",
+               probe=(1.0, 2.0)):
+    """A strong-scaling row aimed at the A-exactness branch of the guard."""
+    row = {
+        "config": {"mode": "strong", "devices": devices, "d_model": 512,
+                   "population": 1024, "strategy": "lowrank_r1", "how": how},
+        "trajectory": {"digest": digest, "norm": 1.0, "probe": list(probe)},
+        "guard_precision": "highest", "env": _env(),
+    }
+    if ranks is not None:
+        row["ranks"] = {"digest": ranks, "n": 1024, "ties": 0}
+    if shaping is not None:
+        row["shaping"] = shaping
+    return row
+
+
+def _write_floor_rows(tmp_path, rows):
+    for i, row in enumerate(rows):
+        (tmp_path / f"{i}.json").write_text(json.dumps(row))
+
+
+def test_an_a_failure_with_unchanged_ranks_is_a_contraction_bug(tmp_path, capsys):
+    """The alarm the guard exists for. Under a rank shaping the update is a function of the
+    ordering alone, so the same ordering producing a different update means the contraction
+    differs, and no property of the population explains it."""
+    _write_floor_rows(tmp_path, [_floor_row(1, digest="a"),
+                      _floor_row(2, digest="b", probe=(1.0, 2.0001))])
+
+    assert check.main(["--results", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "contraction itself differs" in out
+    assert "NOISE FLOOR" not in out
+
+
+def test_an_a_failure_with_moved_ranks_is_the_noise_floor(tmp_path, capsys):
+    """The other half of the split, and the one measured on 8x A100 at d=512 N=1024: the
+    population reordered, so the update changed. Still exit 1, because no scaling number may
+    be quoted from it, but it is a fact about the configuration rather than a bug."""
+    _write_floor_rows(tmp_path, [_floor_row(1, digest="a", ranks="r1"),
+                      _floor_row(2, digest="b", ranks="r2", probe=(1.0, 2.0001))])
+
+    assert check.main(["--results", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "NOISE FLOOR" in out and "noisefloor.py" in out
+    assert "contraction itself differs" not in out
+
+
+def test_an_a_failure_without_a_rank_digest_says_to_re_run(tmp_path, capsys):
+    """Results predating the digest are still checked, and the guard says what it cannot
+    tell rather than guessing. Invalidating good results would cost a rented node."""
+    _write_floor_rows(tmp_path, [_floor_row(1, digest="a", ranks=None, shaping=None),
+                      _floor_row(2, digest="b", ranks=None, shaping=None,
+                                 probe=(1.0, 2.0001))])
+
+    assert check.main(["--results", str(tmp_path)]) == 1
+    assert "no rank digest" in capsys.readouterr().out
+
+
+def test_a_non_rank_shaping_is_not_held_to_bitwise_equality(tmp_path, capsys):
+    """`centered` passes the fitness through to the update, so the sub-rank differences that
+    device count introduces reach it and A is no more exact than B. Holding it to exact
+    equality would fail every group for a reason that is not a bug."""
+    _write_floor_rows(tmp_path, [_floor_row(1, digest="a", shaping="centered"),
+                      _floor_row(2, digest="b", shaping="centered",
+                                 probe=(1.0, 2.00001))])
+
+    assert check.main(["--results", str(tmp_path)]) == 0
+
+
+def test_a_non_rank_shaping_still_fails_beyond_rtol(tmp_path, capsys):
+    """Relaxing A to B's standard is not relaxing it to no standard."""
+    _write_floor_rows(tmp_path, [_floor_row(1, digest="a", shaping="centered"),
+                      _floor_row(2, digest="b", shaping="centered", probe=(1.0, 2.1))])
+
+    assert check.main(["--results", str(tmp_path)]) == 1
+    assert "exceeds rtol" in capsys.readouterr().out
+
+
+def test_two_device_counts_shaped_differently_are_not_comparable(tmp_path, capsys):
+    """A different shaping is a different computation, so it belongs with the backend and
+    the commit rather than as something the numeric comparison tries to absorb."""
+    _write_floor_rows(tmp_path, [_floor_row(1, shaping="centered_ranks"),
+                      _floor_row(2, shaping="centered")])
+
+    assert check.main(["--results", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "MIXED ENV" in out and "shaping" in out
+
+
+def test_rank_digest_depends_on_the_ordering_and_not_on_the_values():
+    """The whole point: it has to see what `centered_ranks` sees."""
+    import numpy as np
+
+    assert (run.rank_digest(np.array([1.0, 2.0, 3.0]))["digest"]
+            == run.rank_digest(np.array([10.0, 200.0, 3000.0]))["digest"])
+    assert (run.rank_digest(np.array([1.0, 2.0, 3.0]))["digest"]
+            != run.rank_digest(np.array([1.0, 3.0, 2.0]))["digest"])
+
+
+def test_rank_digest_gives_tied_members_one_rank():
+    """Midranks, not `argsort(argsort(f))`. Exactly tied members share a weight since the
+    midrank change, so permuting them does not change the update and must not read as a
+    reordering. `[1, 1, 2]` has to match itself whichever tie the sort happened to put first,
+    which `argsort(argsort(f))` does not guarantee."""
+    import numpy as np
+
+    assert run.rank_digest(np.array([1.0, 1.0, 2.0]))["ties"] == 1
+
+    # The case that separates the two. `argsort(argsort(f))` gives BOTH of these `[0, 1, 2]`,
+    # so it calls them the same ordering; they are not, and `centered_ranks` weights them
+    # differently. Midranks give [1.5, 1.5, 3] and [1, 2.5, 2.5].
+    assert (run.rank_digest(np.array([1.0, 1.0, 2.0]))["digest"]
+            != run.rank_digest(np.array([1.0, 2.0, 2.0]))["digest"])
+
+    # Where the tie sits is what matters, not the values it takes.
+    assert (run.rank_digest(np.array([1.0, 1.0, 2.0]))["digest"]
+            == run.rank_digest(np.array([0.5, 0.5, 9.0]))["digest"])

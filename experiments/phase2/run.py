@@ -39,6 +39,7 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
+from scipy.stats import rankdata
 import yaml
 
 HERE = Path(__file__).resolve().parent
@@ -213,11 +214,15 @@ def fingerprint(tree) -> dict:
     """What the trajectory-identity guard compares across device counts.
 
     **A hash cannot be the guard, and the dress rehearsal is what proved it.** `docs/03` says
-    to "assert the optimizer trajectory is identical across D". For contraction strategy A
-    that is literally true: every device regenerates and contracts the whole population in
-    the same order, so the update is bitwise identical at D=1 and D=8. Strategy B `psum`s a
-    partial update per device, so the summation order *is* the device count and the last ulp
-    moves. On the rehearsal all three strategies matched under A and none matched under B.
+    to "assert the optimizer trajectory is identical across D". Under strategy A the update
+    is bitwise identical at D=1 and D=8, but not because the arithmetic is: the fitness
+    differs by an ulp or so at every device count, since a vmap over N members and one over
+    N/D are different shapes and XLA reduces them differently. `centered_ranks` reads only
+    the ordering, so it discards that, and a configuration whose members are close enough for
+    an ulp to reorder them breaks A with nothing wrong in the contraction. `rank_digest` is
+    what tells those two apart. Strategy B `psum`s a partial update per device, so the
+    summation order *is* the device count and the last ulp moves. On the rehearsal all three
+    strategies matched under A and none matched under B.
 
     That is physics, not a bug, and `tests/gpu/test_device_invariance_gpu.py` already prices
     it at `rtol=1e-5`. So this records a digest (exact, useful when it does match) plus a
@@ -233,6 +238,41 @@ def fingerprint(tree) -> dict:
         "digest": hashlib.sha256(np.round(flat, 9).tobytes()).hexdigest()[:16],
         "norm": float(np.linalg.norm(flat)),
         "probe": (projection @ flat).tolist(),
+    }
+
+
+def rank_digest(fitness) -> dict:
+    """The ordering the shaping actually sees, so a guard failure can name its own cause.
+
+    `fingerprint` records the update. When strategy A's update is *not* bitwise identical
+    across device counts, that on its own cannot say which of two things happened, and they
+    want opposite responses:
+
+    - the contraction is wrong, which is a bug and the reason the guard exists;
+    - the configuration cannot separate its members, so an ulp of arithmetic noise reorders
+      them and the rank transform turns that into a different update. That is the documented
+      noise floor (`noisefloor.py`), a limitation to write down rather than a bug to fix.
+
+    Recording the ordering splits them. Same ranks with a different update is the first;
+    different ranks is the second.
+
+    **Midranks, not `argsort(argsort(f))`**, because midranks are what `centered_ranks` uses.
+    Exactly tied members share a rank, so permuting them does not change the update, and
+    counting that as a reordering would report a divergence the shaping already absorbed.
+
+    Measured on 8x A100 at `d=512, N=1024, lowrank_r1`: 189 of 1024 fitness entries differ
+    between `D=1` and `D=8` by up to 2.00 ulp, 4 members change rank, and the update moves
+    4.41e-05. The fitness differing is **not** the anomaly. It differs in the configurations
+    that pass too, and rank shaping discards it. Ranks moving is the anomaly.
+    """
+    f = np.asarray(jax.device_get(fitness), dtype=np.float64).ravel()
+    mid = rankdata(f, method="average")
+    return {
+        "digest": hashlib.sha256(mid.tobytes()).hexdigest()[:16],
+        "n": int(f.size),
+        # Exact ties are harmless under midranks and informative anyway: a configuration
+        # producing them is one where float32 has run out of room to order the population.
+        "ties": int((np.diff(np.sort(f)) == 0.0).sum()),
     }
 
 
@@ -282,6 +322,21 @@ def measure(config: Config, cfg: dict) -> dict:
         fitness = es.apply(transformer_block.loss, state, pert)(batch)
         return es.tell(state, pert, fitness)
 
+    # The guard gets its own jitted function, identical except that it also returns the
+    # fitness, because `rank_digest` needs the ordering and `generation` does not expose it.
+    # Deliberately not folded into `generation`: that is the function being *timed*, and
+    # adding an output to it would mean the timed program is no longer the one the library
+    # runs. Benchmark fidelity is worth more here than the compilation.
+    #
+    # It costs one extra compile per configuration when `matmul_precision` is already
+    # "highest", which is what sweep.yaml sets. Measured at ~8-13 s against a ~40 s
+    # per-config wall time on 8x A100, so budget roughly +25% on a full re-run.
+    @jax.jit
+    def guard_generation(state):
+        pert, state = es.ask(state)
+        fitness = es.apply(transformer_block.loss, state, pert)(batch)
+        return es.tell(state, pert, fitness), fitness
+
     with jax.default_matmul_precision(precision):
         # Warm-up. The first call compiles; `docs/03` says discard at least three.
         for _ in range(warmup):
@@ -301,13 +356,17 @@ def measure(config: Config, cfg: dict) -> dict:
     # rehearsal measured 1.2e-5 after 8 generations and it read like a violation; it was an
     # accumulation. Comparing like with like costs one extra generation.
     #
-    # `generation` is already compiled by now, under `precision`, so whether this context
-    # can still change it is load-bearing rather than decorative: if it could not, the guard
-    # would silently run at whatever the timing loop used. It can. Matmul precision is part
-    # of jit's cache key, so entering a different context retraces. Checked, not assumed,
-    # and `test_the_guard_gets_its_own_compilation_at_highest_precision` keeps it checked.
+    # `guard_generation` is only ever called here, inside this context, so the guard's
+    # precision does not depend on jit's cache key the way it used to. That is why it is a
+    # separate function and not just a second call: the previous form relied on entering a
+    # different precision context retracing an already-compiled `generation`, which is true
+    # but is a subtle thing for a correctness guard to rest on.
     with jax.default_matmul_precision("highest"):
-        trajectory = fingerprint(generation(es.init(jax.random.key(SEED), params)).params)
+        guard_state, guard_fitness = guard_generation(
+            es.init(jax.random.key(SEED), params)
+        )
+        trajectory = fingerprint(guard_state.params)
+        ranks = rank_digest(guard_fitness)
 
     compiled = generation.lower(state).compile()
     try:
@@ -334,6 +393,15 @@ def measure(config: Config, cfg: dict) -> dict:
         # the device count beyond summation order. The report asserts it; recording it is
         # what makes that possible.
         "trajectory": trajectory,
+        # The ordering behind that update, so `check.py` can tell a contraction bug from a
+        # configuration sitting under the noise floor. See `rank_digest`.
+        "ranks": ranks,
+        # Which shaping ran, because strategy A's *bitwise* invariance is a property of rank
+        # shaping rather than of the contraction: `centered_ranks` reads only the ordering,
+        # so it discards the sub-rank fitness differences that device count introduces. Under
+        # `centered` or `none` those differences reach the update and A stops being exact.
+        # Nobody passes this, so nothing recorded it, so the guard could not know.
+        "shaping": getattr(es.shaping, "__name__", repr(es.shaping)),
         "generations_run": warmup + repeats,
     }
 
