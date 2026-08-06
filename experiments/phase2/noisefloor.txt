@@ -1,0 +1,80 @@
+# experiments/phase2/noisefloor.py --config sweep.yaml
+# 2026-08-06  NVIDIA A100-SXM4-80GB, 595.71.05
+# jax 0.11.0  commit 96333c8
+# XLA_FLAGS=--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer=
+
+sweep.yaml, margin 16 ulp, worst of 3 seeds (sweep runs seed 0)
+
+     d     N  strategy                loss    min gap      ulp  ties  close
+   512    32  iid_gaussian          2.5555   1.43e-06     6.00     0      1   TOO CLOSE
+   512    32  lowrank_r1            2.5582   9.06e-06    38.00     0      0
+   512    32  mirrored_lr1          2.5737   9.06e-06    38.00     0      0
+   512    32  seed_regenerated      2.5555   1.19e-06     5.00     0      1   TOO CLOSE
+   512    64  iid_gaussian          2.5555   1.43e-06     6.00     0      1   TOO CLOSE
+   512    64  lowrank_r1            2.5562   5.01e-06    21.00     0      0
+   512    64  mirrored_lr1          2.5715   3.34e-06    14.00     0      1   TOO CLOSE
+   512    64  seed_regenerated      2.5555   1.19e-06     5.00     0      1   TOO CLOSE
+   512   128  iid_gaussian          2.5730   0.00e+00     0.00     1      3   TOO CLOSE
+   512   128  lowrank_r1            2.5735   1.19e-06     5.00     0      4   TOO CLOSE
+   512   128  mirrored_lr1          2.5696   2.15e-06     9.00     0      2   TOO CLOSE
+   512   128  seed_regenerated      2.5730   0.00e+00     0.00     1      3   TOO CLOSE
+   512   256  iid_gaussian          2.5732   0.00e+00     0.00     1     17   TOO CLOSE
+   512   256  lowrank_r1            2.5740   0.00e+00     0.00     1     14   TOO CLOSE
+   512   256  mirrored_lr1          2.5687   0.00e+00     0.00     1     10   TOO CLOSE
+   512   256  seed_regenerated      2.5732   0.00e+00     0.00     1     18   TOO CLOSE
+   512   512  iid_gaussian          2.5733   0.00e+00     0.00     4     63   TOO CLOSE
+   512   512  lowrank_r1            2.5742   0.00e+00     0.00     1     45   TOO CLOSE
+   512   512  mirrored_lr1          2.5741   0.00e+00     0.00     1     40   TOO CLOSE
+   512   512  seed_regenerated      2.5733   0.00e+00     0.00     3     64   TOO CLOSE
+   512  1024  iid_gaussian          2.5734   0.00e+00     0.00    10    244   TOO CLOSE
+   512  1024  lowrank_r1            2.5738   0.00e+00     0.00     4    146   TOO CLOSE
+   512  1024  mirrored_lr1          2.5743   0.00e+00     0.00     3    130   TOO CLOSE
+   512  1024  seed_regenerated      2.5734   0.00e+00     0.00    12    243   TOO CLOSE
+  2048    16  iid_gaussian          2.7861   6.44e-05   270.00     0      0
+  2048    16  lowrank_r1            2.7683   2.00e-05    84.00     0      0
+  2048    16  mirrored_lr1          2.7787   1.55e-05    65.00     0      0
+  2048    16  seed_regenerated      2.7861   6.44e-05   270.00     0      0
+  2048    32  iid_gaussian          2.7850   1.29e-05    54.00     0      0
+  2048    32  lowrank_r1            2.7874   1.29e-05    54.00     0      0
+  2048    32  mirrored_lr1          2.7740   1.55e-05    65.00     0      0
+  2048    32  seed_regenerated      2.7850   1.34e-05    56.00     0      0
+  2048    64  iid_gaussian          2.7857   3.81e-06    16.00     0      0
+  2048    64  lowrank_r1            2.7716   8.11e-06    34.00     0      0
+  2048    64  mirrored_lr1          2.7789   1.67e-06     7.00     0      1   TOO CLOSE
+  2048    64  seed_regenerated      2.7857   3.81e-06    16.00     0      0
+  2048   128  iid_gaussian          2.7860   2.38e-07     1.00     0      2   TOO CLOSE
+  2048   128  lowrank_r1            2.7723   3.34e-06    14.00     0      1   TOO CLOSE
+  2048   128  mirrored_lr1          2.7803   4.29e-06    18.00     0      0
+  2048   128  seed_regenerated      2.7860   4.77e-07     2.00     0      2   TOO CLOSE
+  2048   256  iid_gaussian          2.7860   0.00e+00     0.00     1      9   TOO CLOSE
+  2048   256  lowrank_r1            2.7745   2.38e-07     1.00     0      2   TOO CLOSE
+  2048   256  mirrored_lr1          2.7844   2.38e-07     1.00     0      2   TOO CLOSE
+  2048   256  seed_regenerated      2.7860   0.00e+00     0.00     1      9   TOO CLOSE
+
+29 of 44 configurations cannot separate their closest two members by 16 ulp.
+
+Their ranking of those members is decided by rounding, so the update is not
+reproducible across anything that perturbs the scores: a different GPU, a
+newer XLA, TF32 instead of fp32. One swap is worth ~1e-2 in the update.
+
+`centered_ranks` gives exactly tied members the same weight since the midrank
+change, so an exact tie is no longer a source of disagreement. A pair one ulp
+apart still gets distinct ranks and can still swap, and that is most of the
+count above: the `close` column is what to read, not `ties`.
+
+Remedies, in the order they were measured rather than the order they occur:
+  - Raising sigma works when N is small and does NOT work when N is large.
+    lowrank_r1 at d=256 N=64 goes 0 -> 56 ulp from sigma 0.01 -> 0.03, but
+    iid_gaussian at d=256 N=256 goes 1 -> 8 -> 6 -> 2 ulp across 0.01 -> 0.3,
+    because the loss magnitude grows with sigma and takes the ulp with it.
+  - The binding constraint is N against float32 resolution. Separating N
+    members by m ulp needs a relative loss spread of about N*m*eps, which is
+    5e-4 at N=256, m=16. Large populations are the hard case, and this sweep
+    goes to N=1024.
+  - Continuous shaping measures 25x amplification against the rank
+    transform's 2.65e5, so it does address near-ties. It is a different
+    optimizer, not a free improvement: rank shaping is what buys robustness
+    to outliers and to reward scale.
+  - Or keep the configuration, pin the arithmetic, and state in the
+    limitations that invariance holds under fixed arithmetic only.
+# exit 1
