@@ -160,7 +160,22 @@ passes there. That is the whole reason docs/02 asks for this before Phase 2.
 
 **Set `jax_default_matmul_precision="highest"`.** The test fixture does it, but know why: an
 Ampere GPU defaults to TF32 for matmuls, which is ~1e-3 relative and reads exactly like a
-device-invariance failure. Also pass `XLA_FLAGS=--xla_gpu_deterministic_ops=true`.
+device-invariance failure. Also pass
+`XLA_FLAGS="--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer="`.
+
+**The second flag is only needed on more than one device, and `run.py` refuses without it
+there.** Without it XLA:GPU fails to capture its command buffers as CUDA graphs and every
+`D>1` config dies with `Failed to add memset node to a CUDA graph:
+CUDA_ERROR_INVALID_VALUE`. Measured on 2x A100-SXM4-80GB (driver 550.127.05, jax 0.11.0,
+2026-08-06): all 16 `D=2` rehearsal configs failed, all `D=1` configs passed, and disabling
+command buffers fixed it at a cost of 0.2% of step time (13.00 ms to 13.03 ms at `d=512,
+N=256`). 2x T4 passed without it on 2026-08-01, so it is not universal, which is exactly why
+the driver requires it rather than trusting the node.
+
+`experiments/phase2/cudagraph.py` is that measurement, and it is the **first thing to run on
+a rented multi-GPU node**, before the sweep. It compiles and steps one generation at every
+power-of-two device count and exits non-zero if any of them cannot compile, so a node that
+would have produced 192 errors says so in under a minute instead of after four hours.
 
 **Getting the code onto Kaggle.** The repo is public as of 2026-08-01:
 `github.com/andreshernandez-spec/shardes`, Apache 2.0. Clone it, anonymously, and check out
@@ -204,7 +219,7 @@ os.chdir("/kaggle/working/shardes")
 !git checkout -q $SHA && git log --oneline -1
 os.environ["PYTHONPATH"] = "src"
 os.environ["JAX_PLATFORMS"] = "cuda"
-os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
+os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer="
 !python -c "import jax; v=jax.__version__; assert tuple(map(int,v.split('.')[:2]))>=(0,11), f'jax {v} < 0.11'; \
 from jax import shard_map; d=jax.devices(); print(v, len(d), d[0].device_kind); assert len(d)==2, f'{len(d)} devices, want 2'"
 ```
