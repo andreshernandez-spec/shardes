@@ -224,15 +224,21 @@ export XLA_FLAGS="--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buff
 cd experiments/phase2
 ARGS="--config sweep.yaml --d-model 512 --population 256 --strategies lowrank_r1 --repeats 5"
 
-# 1. control first. Pre-fix code, so D=2 is expected to show no speedup. If this hangs,
+# 1. control first. Pre-fix code, so D=2 is expected to show no speedup. If this TIMES OUT,
 #    the node cannot run D=2 at all and nothing below means anything.
 git checkout 3e617ed -- ../../src/shardes/core.py
-timeout 600 python profile.py $ARGS || echo "NODE CANNOT RUN D>1, stop here"
+timeout 600 python profile.py $ARGS; rc=$?
+[ $rc -eq 124 ] && echo "CONTROL TIMED OUT: this node cannot run D>1, stop here"
 
 # 2. then the change.
 git checkout HEAD -- ../../src/shardes/core.py
 timeout 600 python profile.py $ARGS
 ```
+
+**Test the exit code, do not use `||`.** `profile.py` returns 1 when it finds a configuration
+that does not distribute, and that is exactly what the control is *supposed* to find. A bare
+`|| echo "failed"` fires on the control's success and reads as a broken node. Only 124, the
+timeout's code, means the node could not run it.
 
 `--population 256` rather than the config's 1024, and `lowrank_r1` rather than
 `iid_gaussian`: the cheapest shape that still exercises the sharded path. `iid_gaussian` at
@@ -241,3 +247,33 @@ Scale up only once `D=2` is known to work at all.
 
 Read the `full` column's `D1 -> D2` ratio. 1.00 is the old behaviour, 0.50 is the fix
 working.
+
+### Result, 2026-08-07
+
+Run on 2x A100-SXM4-80GB with NVLink (`nvidia-smi topo` reports `NV12`), both arms on one
+node, control first. Full output in `experiments/phase2/wallclock.txt`.
+
+| | T1 | T2 | efficiency `T1/(2 T2)` |
+|---|---|---|---|
+| control, `lowrank_r1/A` | 11.46 ms | 11.95 ms | **0.48** |
+| control, `lowrank_r1/B` | 11.45 ms | 12.13 ms | **0.47** |
+| fixed, `lowrank_r1/A` | 9.46 ms | 6.76 ms | **0.70** |
+| fixed, `lowrank_r1/B` | 11.46 ms | 6.75 ms | **0.85** |
+
+Pre-fix, `D=2` is *slower* than `D=1`: the second device is pure overhead, and 0.47 to 0.48
+matches the committed sweep's 0.50 exactly. Post-fix the wall clock drops, `eval` falls to
+0.56 to 0.57 against an ideal 0.50, and `evalFLOP` reads 1.000 in the control against 0.500
+with the fix. **The stopwatch and the compiled program now agree.**
+
+B stopping at 0.85 rather than 1.00 is accounted for: the dispatch floor grows from 0.08 to
+0.31 ms at `D=2`, about 4.5% of a 6.75 ms generation, plus the shaping barrier. A sits at
+0.70 because its contraction stays replicated by design.
+
+**The A40 was the node.** The control arm ran here without trouble, which is the question
+that arm exists to answer.
+
+**One number is unexplained.** Strategy A's `D=1` went 11.46 to 9.46 ms with the fix, a 17%
+speedup at a device count where the constraint is semantically a no-op, and it is outside
+the IQR of 0.01 so it is not run-to-run noise. A sharding constraint changing XLA's fusion
+at one device is plausible; it has not been checked. B's `D=1` was unchanged, 11.45 to
+11.46.
