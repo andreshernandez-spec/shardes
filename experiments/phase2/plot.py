@@ -124,50 +124,76 @@ def strong_scaling(rows, out: pathlib.Path) -> str | None:
 
 
 def weak_scaling(rows, out: pathlib.Path) -> str | None:
-    """M2. Throughput, and per-device memory beside it."""
-    thr = collections.defaultdict(dict)
-    mem = collections.defaultdict(dict)
+    """M2 throughput over M6 memory, one column per (model size, population per device).
+
+    **A weak-scaling series is only a series within one experiment**, and this used to key on
+    `(strategy, how)` alone. The sweep runs two model sizes and two per-device populations,
+    so four experiments collapsed onto every line and whichever sorted last won each device
+    count. That is what produced the "non-monotonic memory" in the first committed figure:
+    `iid_gaussian/A` read 1610, 810, 6410, 12810 MiB, which is not a measurement, it is
+    `d=512, N=128` and `d=512, N=32` interleaved. Split out, both are clean doublings
+    (1610, 3210, 6410, 12810 and 486, 810, 1610, 3210), which is what strategy A should do
+    in weak mode: every device regenerates the whole population, so per-device storage
+    tracks total N.
+
+    Same bug as the one M3 had. Worth stating twice because it is silent both times: a
+    dict key that is missing a factor of the design produces a plausible line, not an error.
+
+    Memory on a log axis because the range is 15 MiB to 50 GB, and the small end is the
+    result worth seeing.
+    """
+    series: dict = collections.defaultdict(lambda: collections.defaultdict(dict))
     for r in rows:
         c = r["config"]
         if c["mode"] != "weak":
             continue
-        thr[(c["strategy"], c["how"])][c["devices"]] = c["population"] / r["seconds_median"]
-        if r.get("peak_bytes_per_device"):
-            mem[(c["strategy"], c["how"])][c["devices"]] = r["peak_bytes_per_device"] / 2**20
-    if not thr:
+        per_device = c["population"] // c["devices"]
+        series[(c["d_model"], per_device)][(c["strategy"], c["how"])][c["devices"]] = (
+            c["population"] / r["seconds_median"],
+            (r.get("peak_bytes_per_device") or 0) / 2**20,
+        )
+    if not series:
         return "no weak-scaling rows"
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.4))
-    for (strategy, how), by_d in sorted(thr.items()):
-        ds = sorted(by_d)
-        ax1.plot(ds, [by_d[d] for d in ds], marker=MARKERS[how], ms=8, lw=2,
-                 color=HUES[strategy], label=f"{strategy} / {how}")
-    for (strategy, how), by_d in sorted(mem.items()):
-        ds = sorted(by_d)
-        ax2.plot(ds, [by_d[d] for d in ds], marker=MARKERS[how], ms=8, lw=2,
-                 color=HUES[strategy])
+    cells = sorted(series)
+    fig, axes = plt.subplots(2, len(cells), figsize=(3.7 * len(cells), 7.4), squeeze=False)
+    for j, cell in enumerate(cells):
+        d_model, per_device = cell
+        ax_t, ax_m = axes[0][j], axes[1][j]
+        for (strategy, how), by_d in sorted(series[cell].items()):
+            ds = sorted(by_d)
+            ax_t.plot(ds, [by_d[d][0] for d in ds], marker=MARKERS[how], ms=7, lw=2,
+                      color=HUES[strategy], label=f"{strategy} / {how}")
+            mem = [by_d[d][1] for d in ds]
+            if any(mem):
+                ax_m.plot(ds, mem, marker=MARKERS[how], ms=7, lw=2, color=HUES[strategy])
 
-    ds = sorted({d for by_d in thr.values() for d in by_d})
-    first = next(iter(thr.values()))
-    ax1.plot(ds, [first[min(first)] * d for d in ds], ls="--", lw=1.5, color=MUTED,
-             label="ideal (linear)")
+        ds = sorted({d for by_d in series[cell].values() for d in by_d})
+        first = next(iter(series[cell].values()))
+        ax_t.plot(ds, [first[min(first)][0] * d for d in ds], ls="--", lw=1.5, color=MUTED,
+                  label="ideal (linear)")
 
-    ax1.set(xscale="log", yscale="log", xlabel="devices", ylabel="members / second")
-    ax2.set(xscale="log", xlabel="devices", ylabel="peak MiB / device")
-    for ax in (ax1, ax2):
-        ax.set_xticks(ds)
-        ax.set_xticklabels([str(d) for d in ds])
-        ax.xaxis.set_minor_locator(NullLocator())
-        _style(ax)
-    ax1.set_title("M2  weak scaling: fixed population per device", color=INK, loc="left")
-    ax2.set_title("M6  peak memory per device", color=INK, loc="left")
-    # Handles come from ax1, which is where the labelled artists are. Asking ax2 for its own
-    # would silently produce an empty legend, and did: the memory panel plots the same
-    # entities without labels, so this figure shipped with eight series and no key to them.
-    # matplotlib says so on stderr and then draws the figure anyway.
-    handles, labels = ax1.get_legend_handles_labels()
-    ax2.legend(handles, labels, frameon=False, fontsize=8, labelcolor=MUTED,
-               loc="center left", bbox_to_anchor=(1.02, 0.5))
+        ax_t.set(xscale="log", yscale="log", xlabel="devices",
+                 title=f"d={d_model}, N/device={per_device}")
+        ax_m.set(xscale="log", yscale="log", xlabel="devices")
+        for ax in (ax_t, ax_m):
+            ax.set_xticks(ds)
+            ax.set_xticklabels([str(d) for d in ds])
+            ax.xaxis.set_minor_locator(NullLocator())
+            _style(ax)
+    axes[0][0].set_ylabel("members / second")
+    axes[1][0].set_ylabel("peak MiB / device")
+
+    # Handles come from a throughput panel, which is where the labelled artists are. Asking
+    # a memory panel for its own would silently produce an empty legend, and did: this
+    # figure once shipped with eight series and no key to any of them. matplotlib says so on
+    # stderr and then draws it anyway.
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    fig.legend(handles, labels, frameon=False, fontsize=8, labelcolor=MUTED,
+               loc="center left", bbox_to_anchor=(1.0, 0.5))
+    fig.suptitle("M2  weak scaling: fixed population per device      "
+                 "M6  peak memory per device (lower row)",
+                 color=INK, x=0.02, ha="left", y=1.0)
 
     if simulated(rows):
         watermark(fig)
