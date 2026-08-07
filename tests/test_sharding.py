@@ -145,32 +145,29 @@ def test_pairing_check_is_opt_in():
 # --------------------------------------------------------------------------------------
 
 
-def test_the_four_shardings_have_the_specs_they_claim():
+def test_the_two_shardings_have_the_specs_they_claim():
     mesh = sharding.make_mesh(4)
     assert sharding.replicated(mesh).spec == P()
     assert sharding.members(mesh).spec == P(sharding.POP)
-    assert sharding.per_member(mesh, 0).spec == P(sharding.POP)
-    assert sharding.per_member(mesh, 2).spec == P(sharding.POP, None, None)
 
 
-@pytest.mark.parametrize("d", DEVICE_COUNTS)
-def test_shard_perturbation_splits_member_axes_and_replicates_the_rest(d):
-    """A materialized perturbation shards on its leading axis; a `like` reference does not.
+@pytest.mark.parametrize("shape", [(16,), (16, 5), (16, 5, 3)])
+def test_members_shards_the_leading_axis_at_any_rank(shape):
+    """`members` is `P(POP)` with no trailing entries, and that has to hold at every rank.
 
-    SeedRegenerated carries unbatched params alongside batched state, so both cases live in
-    one tree and placement has to be decided per leaf.
+    `ShardedES.apply` constrains its output with it, and that output is `(n,)` for a scalar
+    fitness and `(n, episodes)` for `group_relative`. If the short spec did not pad, the
+    multi-episode case would place wrongly rather than fail.
+
+    It is also why `per_member(mesh, rank)` was deleted rather than kept: it returned
+    `P(POP, None * rank)`, JAX pads a short spec with None, and the two place identically.
+    This test is what makes that a fact rather than a belief.
     """
-    mesh = sharding.make_mesh(d)
-    n = 16
-    tree = {
-        "eps": jnp.zeros((n, 5, 3)),     # per member
-        "like": jnp.zeros((5, 3)),       # replicated reference, no member axis
-        "scalar": jnp.float32(1.0),
-    }
-    out = sharding.shard_perturbation(tree, mesh, n)
-    assert out["eps"].sharding.spec == P(sharding.POP, None, None)
-    assert out["like"].sharding.spec == P()
-    assert out["scalar"].sharding.spec == P()
+    mesh = sharding.make_mesh(4)
+    x = jax.device_put(jnp.zeros(shape), sharding.members(mesh))
+    assert x.sharding.spec == P(sharding.POP)
+    # The member axis is split four ways and nothing else is touched.
+    assert x.addressable_shards[0].data.shape == (shape[0] // 4, *shape[1:])
 
 
 # --------------------------------------------------------------------------------------

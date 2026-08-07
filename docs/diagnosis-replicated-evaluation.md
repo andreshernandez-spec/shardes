@@ -79,10 +79,11 @@ Constraining the input does nothing because the consumer is free to gather it an
 everywhere, which is what it does. Constraining the *output* forces the `vmap` to be
 partitioned, and that back-propagates to shard `eps` on its own.
 
-This also explains a piece of dead code. `sharding.shard_perturbation` and
-`sharding.per_member` are called **only from `tests/test_sharding.py`** and from nowhere in
+This also explained a piece of dead code. `sharding.shard_perturbation` and
+`sharding.per_member` were called **only from `tests/test_sharding.py`** and from nowhere in
 `src/`. They were written for exactly this job and they constrain the wrong end, so the
-suite reads as though the perturbation is sharded while the pipeline never places it.
+suite read as though the perturbation was being placed while the pipeline never placed it.
+Both are now removed; see the open-items list below.
 
 ---
 
@@ -165,9 +166,15 @@ Still open:
 1. **Whether `tell` should still replicate**, and what `group_relative`'s `(n, g)` fitness
    should do. `P("pop")` is correct at any rank, verified for `(n,)`, `(n, g)` and
    `(n, g, h)`, but the layout deserves its own thought.
-2. **`sharding.shard_perturbation` and `sharding.per_member` are now provably dead.**
-   They constrain the producer, which is measured to do nothing, and they are called only
-   from `tests/test_sharding.py`. Left in place rather than deleted in the same change.
+2. ~~`shard_perturbation` and `per_member` are dead.~~ **Removed.** Two independent
+   reasons, both checked before deleting: `per_member(mesh, rank)` returned
+   `P(POP, None * rank)` and JAX pads a short spec with None, so it placed rank-1, rank-2
+   and rank-3 arrays identically to `members(mesh)`; and `shard_perturbation` constrained
+   the producer, which is measured to do nothing. Nothing outside their own tests referenced
+   them, `__init__.py` exports nothing and there is no `__all__`, so there was no API to
+   break. `tests/test_sharding.py::test_members_shards_the_leading_axis_at_any_rank` now
+   pins the padding behaviour that made `per_member` redundant, because `ShardedES.apply`
+   depends on it for an `(n, episodes)` fitness.
 3. **The sweep's numbers do not change retroactively.** `docs/03` records what the library
    did on 2026-08-06. Re-running it would now produce a different scaling curve, and that is
    a new measurement rather than a correction.
