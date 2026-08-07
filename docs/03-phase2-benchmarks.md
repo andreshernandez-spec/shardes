@@ -154,14 +154,29 @@ strategy or on the contraction: the best group is `seed_regenerated/B` at 0.142,
 across 32 series, against an ideal of 8x. The same picture from the other side: adding
 devices at fixed population per device buys almost nothing.
 
-**M5 rules out communication volume, and does not identify the cause.** See below: the
-worst configuration in the sweep needs 1.9 GB/s to keep up, which is 0.3% of an A100's
-NVLink. Whatever the seven-fold shortfall is, it is not bytes on the wire. That eliminates
-one of the two candidates this section names and leaves the other, the shaping barrier
-(C1.6), still a candidate but as a **synchronization** cost rather than a communication
-one. M5 measures bytes, and bytes are not latency, so it cannot settle that. A per-device
-overhead floor, at these shapes a generation is 11 to 445 ms, is the other live explanation
-and is not addressed either.
+**The cause is identified: the evaluation is not distributed at all.**
+`experiments/phase2/profile.py --static` reports the FLOPs of the compiled per-device
+program, and under SPMD that is what a device actually executes, so a computation that
+distributes has them fall as `1/D`. They do not fall. In **all 16 configurations**, across
+every strategy, both contractions and both model sizes, per-device eval FLOPs at `D=8` are
+**identical** to `D=1`, ratio 1.000. Every device evaluates the whole population.
+
+That accounts for the magnitude and not merely the direction. If per-device work does not
+fall then `T_D = T_1`, and parallel efficiency `T_1/(D·T_D)` is exactly `1/D`. M1 measured
+**0.112 to 0.142** at `D=8` against `1/8 = 0.125`. There is nothing else left to explain.
+
+It also explains why the two contraction strategies barely differ (M3, within 14%) and why
+communication is irrelevant (M5, 0.3% of NVLink): both describe what happens *after* an
+evaluation that was already replicated `D` times.
+
+**What this does not say.** Why `apply` is not sharding the population is a question about
+the sharding logic, and `experiments/` is the wrong place to answer it. The measurement is
+here; the diagnosis belongs with the library. Table in `experiments/phase2/profile.txt`.
+
+`profile.py` also carries wall-clock columns, isolating `eval`, `tell`, the shaping barrier
+and a dispatch floor. Those need real devices and were not run: 8-GPU stock was out on the
+day, and the FLOPs result settles the question without them. Run them on the sweep hardware
+if a breakdown of the remaining time is wanted.
 
 **M3, the contraction crossover.** `log10(t_B/t_A)` at `D=8` spans **-0.057 to +0.034**, so
 the two strategies are within ~14% of each other everywhere in this grid. B is faster in 10
@@ -270,22 +285,27 @@ breakdown of where the other 29% goes" is a better artifact than an unexplained 
 
 | | criterion | status |
 |---|---|---|
-| 1 | strong and weak curves, efficiency stated | **met** |
+| 1 | strong and weak curves, efficiency stated | **met**, with the cause of the shortfall identified |
 | 2 | crossover measured, phase diagram | **met**, without a contour: the grid is too coarse to carry one |
 | 3 | one comparison against an external reference | **not met**, M4 was not run |
 | 4 | reproducible from a committed config plus a recorded environment | **met** |
 | 5 | a limitations paragraph a skeptic would accept as fair | drafted above, needs rewriting |
 
-**The gate is still not passed**, on 3 and on the clause above. Scaling came in at 0.11 to
-0.14 efficiency and the escape hatch that makes that acceptable is conditional on
-identifying the cause.
+**Criterion 1's clause is now satisfied.** Scaling came in at 0.11 to 0.14 efficiency, far
+worse than expected, and the gate forgives that only when the cause is identified and
+measured. It is: per-device eval FLOPs are unchanged from `D=1` to `D=8` in all 16
+configurations, so every device evaluates the whole population and `1/D` efficiency is the
+arithmetic consequence. "ES scales at 71% and here is where the other 29% goes" was the
+standard this section set; "it scales at 1/D because the evaluation is replicated rather
+than sharded" meets it, even though the answer is worse than hoped.
 
-M5 has now run and it **narrows the question without answering it**. Communication volume is
-0.3% of the interconnect, so the contraction is not where the time goes, and A versus B
-differing by at most 14% (M3) already said the same thing from another direction. What is
-left is the shaping barrier as a synchronization cost, and a per-device overhead floor. Both
-are latency, and neither is measured by counting bytes.
+Three measurements agree and are worth reading together: the evaluation does not distribute
+(profile), the contraction barely matters (M3, within 14%), and communication is negligible
+(M5, 0.3% of NVLink). The last two are consequences of the first.
 
-The measurement that would close it is a profile: where the wall clock goes inside one
-generation, at `D=1` against `D=8`. That is a smaller job than M5 was, and it is the last
-thing between here and a defensible G2 on criterion 1. M4 remains untouched.
+**The gate still does not pass, on criterion 3.** M4 has not been run, so there is no
+comparison against an external reference. That is now the only outstanding measurement.
+
+Whether to fix the sharding before or after M4 is a judgement call, not a gate question. A
+scaling curve measured against EGGROLL while the evaluation is replicated `D` times
+measures the defect, not the design.

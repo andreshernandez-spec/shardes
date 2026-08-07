@@ -1,0 +1,103 @@
+# experiments/phase2/profile.py --config sweep.yaml --static     (G2 criterion 1)
+#
+# Per-device FLOPs of the compiled generation. Under SPMD the compiled module IS the
+# per-device program, so a computation that distributes has these fall as 1/D.
+#
+# Simulated devices are legitimate here: FLOPs are a property of the compiled program,
+# not of the hardware. The timing columns, which are not, are omitted rather than faked.
+#
+# Instrument validated against N at d=512, D=1: eval FLOPs are 246.4e9, 492.9e9 and
+# 985.7e9 for N of 256, 512, 1024. Exactly linear.
+#
+# commit f22dbcb,  jax 0.11.0
+
+     d     N  strategy          how  D   evalGFLOP   fullGFLOP
+   512  1024  iid_gaussian        A  1       985.7      1032.5
+   512  1024  iid_gaussian        A  2       985.7      1032.5
+   512  1024  iid_gaussian        A  4       985.7      1032.5
+   512  1024  iid_gaussian        A  8       985.7      1032.5
+   512  1024  iid_gaussian        B  1       985.7      1032.5
+   512  1024  iid_gaussian        B  2       985.7      1057.4
+   512  1024  iid_gaussian        B  4       985.7      1021.6
+   512  1024  iid_gaussian        B  8       985.7      1003.7
+   512  1024  seed_regenerated    A  1         1.0         1.1
+   512  1024  seed_regenerated    A  2         1.0         1.1
+   512  1024  seed_regenerated    A  4         1.0         1.1
+   512  1024  seed_regenerated    A  8         1.0         1.1
+   512  1024  seed_regenerated    B  1         1.0         1.1
+   512  1024  seed_regenerated    B  2         1.0         1.1
+   512  1024  seed_regenerated    B  4         1.0         1.1
+   512  1024  seed_regenerated    B  8         1.0         1.1
+   512  1024  mirrored_lr1        A  1       435.8       437.5
+   512  1024  mirrored_lr1        A  2       435.8       437.5
+   512  1024  mirrored_lr1        A  4       435.8       437.5
+   512  1024  mirrored_lr1        A  8       435.8       437.5
+   512  1024  mirrored_lr1        B  1       435.8       437.5
+   512  1024  mirrored_lr1        B  2       435.8       436.8
+   512  1024  mirrored_lr1        B  4       435.8       436.3
+   512  1024  mirrored_lr1        B  8       435.8       436.1
+   512  1024  lowrank_r1          A  1       436.7       440.1
+   512  1024  lowrank_r1          A  2       436.7       440.1
+   512  1024  lowrank_r1          A  4       436.7       440.1
+   512  1024  lowrank_r1          A  8       436.7       440.1
+   512  1024  lowrank_r1          B  1       436.7       440.1
+   512  1024  lowrank_r1          B  2       436.7       438.6
+   512  1024  lowrank_r1          B  4       436.7       437.6
+   512  1024  lowrank_r1          B  8       436.7       437.1
+  2048   256  iid_gaussian        A  1      3884.9      4071.8
+  2048   256  iid_gaussian        A  2      3884.9      4071.8
+  2048   256  iid_gaussian        A  4      3884.9      4071.8
+  2048   256  iid_gaussian        A  8      3884.9      4071.8
+  2048   256  iid_gaussian        B  1      3884.9      4071.8
+  2048   256  iid_gaussian        B  2      3884.9      4171.7
+  2048   256  iid_gaussian        B  4      3884.9      4028.4
+  2048   256  iid_gaussian        B  8      3884.9      3956.7
+  2048   256  seed_regenerated    A  1        15.2        17.5
+  2048   256  seed_regenerated    A  2        15.2        17.5
+  2048   256  seed_regenerated    A  4        15.2        17.5
+  2048   256  seed_regenerated    A  8        15.2        17.5
+  2048   256  seed_regenerated    B  1        15.2        17.5
+  2048   256  seed_regenerated    B  2        15.2        17.5
+  2048   256  seed_regenerated    B  4        15.2        17.5
+  2048   256  seed_regenerated    B  8        15.2        17.5
+  2048   256  mirrored_lr1        A  1      1678.8      1685.3
+  2048   256  mirrored_lr1        A  2      1678.8      1685.3
+  2048   256  mirrored_lr1        A  4      1678.8      1685.3
+  2048   256  mirrored_lr1        A  8      1678.8      1685.3
+  2048   256  mirrored_lr1        B  1      1678.8      1685.3
+  2048   256  mirrored_lr1        B  2      1678.8      1682.2
+  2048   256  mirrored_lr1        B  4      1678.8      1680.5
+  2048   256  mirrored_lr1        B  8      1678.8      1679.7
+  2048   256  lowrank_r1          A  1      1679.6      1692.7
+  2048   256  lowrank_r1          A  2      1679.6      1692.7
+  2048   256  lowrank_r1          A  4      1679.6      1692.7
+  2048   256  lowrank_r1          A  8      1679.6      1692.7
+  2048   256  lowrank_r1          B  1      1679.6      1692.8
+  2048   256  lowrank_r1          B  2      1679.6      1686.4
+  2048   256  lowrank_r1          B  4      1679.6      1683.1
+  2048   256  lowrank_r1          B  8      1679.6      1681.4
+
+how each part scales, D=1 -> D=max (a part that distributes should fall)
+  config                                        evalFLOP  fullFLOP
+  d=2048 N=256 iid_gaussian/A D1->D8               1.000     1.000
+  d=2048 N=256 iid_gaussian/B D1->D8               1.000     0.972
+  d=2048 N=256 lowrank_r1/A D1->D8                 1.000     1.000
+  d=2048 N=256 lowrank_r1/B D1->D8                 1.000     0.993
+  d=2048 N=256 mirrored_lr1/A D1->D8               1.000     1.000
+  d=2048 N=256 mirrored_lr1/B D1->D8               1.000     0.997
+  d=2048 N=256 seed_regenerated/A D1->D8           1.000     1.000
+  d=2048 N=256 seed_regenerated/B D1->D8           1.000     1.000
+  d=512 N=1024 iid_gaussian/A D1->D8               1.000     1.000
+  d=512 N=1024 iid_gaussian/B D1->D8               1.000     0.972
+  d=512 N=1024 lowrank_r1/A D1->D8                 1.000     1.000
+  d=512 N=1024 lowrank_r1/B D1->D8                 1.000     0.993
+  d=512 N=1024 mirrored_lr1/A D1->D8               1.000     1.000
+  d=512 N=1024 mirrored_lr1/B D1->D8               1.000     0.997
+  d=512 N=1024 seed_regenerated/A D1->D8           1.000     1.000
+  d=512 N=1024 seed_regenerated/B D1->D8           1.000     1.000
+
+1.00 means the part did not change. Strong scaling wants eval near 1/D = 0.125.
+
+16 of 16 configurations do not distribute their evaluation at all:
+per-device FLOPs are unchanged from D=1 to D=max, so every device evaluates the whole
+population and wall clock cannot fall. Parallel efficiency is then exactly 1/D (0.125).
