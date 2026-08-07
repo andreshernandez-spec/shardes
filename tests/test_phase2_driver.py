@@ -33,6 +33,7 @@ def _load(name: str):
 
 run = _load("run")
 check = _load("check")
+comms = _load("comms")
 
 
 CFG = {
@@ -707,3 +708,65 @@ def test_rank_digest_gives_tied_members_one_rank():
     # Where the tie sits is what matters, not the values it takes.
     assert (run.rank_digest(np.array([1.0, 1.0, 2.0]))["digest"]
             == run.rank_digest(np.array([0.5, 0.5, 9.0]))["digest"])
+
+
+# --------------------------------------------------------------------------------------
+# M5. comms.py parses HLO text, so the parser is the thing that can silently lie.
+# --------------------------------------------------------------------------------------
+
+
+
+def test_payload_bytes_sums_a_tuple_shape():
+    """A psum over a pytree compiles to one tuple-shaped collective, so the payload is the
+    sum of its elements. A `(\\S+)` shape pattern stops at the first comma and reports
+    nothing, which read as "strategy B performs no collective at all"."""
+    assert comms.payload_bytes("f32[32,32]{1,0}") == 32 * 32 * 4
+    assert comms.payload_bytes("(f32[32,32]{1,0}, f32[8]{0})") == 32 * 32 * 4 + 8 * 4
+    # Rank zero is one element, not zero.
+    assert comms.payload_bytes("f32[]") == 4
+
+
+def test_an_async_collective_is_counted_once_at_its_result_size():
+    """The bug a GPU found and CPU could not.
+
+    XLA:GPU splits a collective into `-start`/`-done`, and the `-start` output is a nested
+    tuple of *(operand, result)*. Summing its shapes counts the buffer twice: measured
+    exactly 2.00x the prediction for every strategy B configuration, and 1.50x for A, where
+    the all-gather operand is `N/D` and the result is `N`. The `-done` output is the result
+    alone, so that is what gets counted.
+    """
+    hlo = (
+        "%all-reduce-start = ((f32[1572864]{0}), f32[1572864]{0}) "
+        "all-reduce-start(%wrapped_concatenate), channel_id=1\n"
+        "%all-reduce-done = f32[1572864]{0} all-reduce-done(%all-reduce-start)\n"
+    )
+    assert comms.collective_bytes(hlo) == {"all-reduce": 1572864 * 4}
+
+
+def test_an_unsuffixed_collective_is_counted():
+    """XLA:CPU emits the plain opcode with only the result shape."""
+    hlo = "%all-reduce = (f32[32,32]{1,0}, f32[32,32]{1,0}) all-reduce(%x), replica_groups={}\n"
+    assert comms.collective_bytes(hlo) == {"all-reduce": 2 * 32 * 32 * 4}
+
+
+def test_a_get_tuple_element_off_a_collective_is_not_a_collective():
+    """Every element of a tuple-valued psum is read back by name, so the HLO mentions
+    `all-reduce` once per leaf. Counting those would multiply the figure by the leaf count."""
+    hlo = (
+        "%all-reduce = (f32[4]{0}) all-reduce(%x)\n"
+        "%get-tuple-element.1 = f32[4]{0} get-tuple-element(%all-reduce), index=0\n"
+        "%get-tuple-element.2 = f32[4]{0} get-tuple-element(%all-reduce), index=1\n"
+    )
+    assert comms.collective_bytes(hlo) == {"all-reduce": 4 * 4}
+
+
+def test_the_docs_02_prediction_is_what_comms_compares_against():
+    """A gathers N fitness scalars, B all-reduces one params-sized array (docs/02 C1.3).
+    Pinned because the whole table is a ratio against these two lines."""
+    assert comms.predicted("A", population=256, d_model=512) == 4 * 256
+    assert comms.predicted("B", population=256, d_model=512) == comms.params_bytes(512)
+    # B does not depend on the population, A does not depend on the model.
+    assert comms.predicted("B", population=1024, d_model=512) == comms.predicted(
+        "B", population=16, d_model=512)
+    assert comms.predicted("A", population=256, d_model=2048) == comms.predicted(
+        "A", population=256, d_model=512)
