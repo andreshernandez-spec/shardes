@@ -1,18 +1,29 @@
 # experiments/phase2/comms.py --config sweep.yaml        (M5)
 # payload bytes per generation, from the compiled HLO; not wire bytes
 #
-# Two runs. The GPU one is the authority on how XLA lowers the collectives; the CPU
-# one covers every device count, which 8-GPU stock did not allow on the day. They
-# agree exactly where they overlap (D=2), and both match docs/02 C1.3 to the byte.
+# RE-RUN 2026-08-07, after ShardedES.apply began constraining its output. The earlier
+# table was taken when the evaluation was replicated, and it is stale: with a genuinely
+# sharded fitness the constraints that gather it now cost real traffic.
 #
-# D=1 has no ratio: one device has nothing to communicate, so the prediction does not
-# apply. Strategy A emits no collective at all there, which is its own result.
+# What moved:
+#   A  4N -> 8N bytes, ratio 2.00 against the docs/02 C1.3 prediction. TWO all-gathers
+#      of N scalars, not one: tell replicates the fitness for centered_ranks' global
+#      sort, and contraction.py replicates ids and weights for strategy A. Both were
+#      free when everything was already replicated.
+#   B  gains an all-gather of 4N on top of its params-sized all-reduce. Ratio still
+#      1.00 because 4N is nothing against the model.
 #
-# jax 0.11.0
-
-=============================== CPU, 8 simulated devices ===============================
-# --xla_force_host_platform_device_count=8, D in {1,2,4,8}
+# The 'shaping' column still reads 0 everywhere, and that is now MISLEADING rather
+# than informative. It is measured by compiling against shaping=none and subtracting,
+# but tell replicates unconditionally, so shaping=none pays the same gather. The barrier does
+# cost 4N now; this method cannot see it. See docs/03 M5.
+#
+# CPU, 8 simulated devices. Collective payloads are a property of the compiled program.
+# The GPU cross-check in the previous table settled how XLA lowers these (async -start
+# / -done pairs); the parser has not changed since.
+#
 # Linux-6.17.0-41-generic-x86_64-with-glibc2.42
+# commit 1c75045,  jax 0.11.0
 
      d     N  strategy          how  D    measured   predicted   ratio   shaping  ops
    512   256  iid_gaussian        A  1           0       1,024     -           0  none
@@ -31,54 +42,54 @@
    512  1024  mirrored_lr1        B  1   6,291,456   6,291,456     -           0  all-reduce
    512  1024  lowrank_r1          A  1           0       4,096     -           0  none
    512  1024  lowrank_r1          B  1   6,291,456   6,291,456     -           0  all-reduce
-   512   256  iid_gaussian        A  2       1,024       1,024    1.00         0  all-gather
-   512   256  iid_gaussian        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  seed_regenerated    A  2       1,024       1,024    1.00         0  all-gather
-   512   256  seed_regenerated    B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  mirrored_lr1        A  2       1,024       1,024    1.00         0  all-gather
-   512   256  mirrored_lr1        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  lowrank_r1          A  2       1,024       1,024    1.00         0  all-gather
-   512   256  lowrank_r1          B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  iid_gaussian        A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  iid_gaussian        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  seed_regenerated    A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  seed_regenerated    B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  mirrored_lr1        A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  mirrored_lr1        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  lowrank_r1          A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  lowrank_r1          B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  iid_gaussian        A  4       1,024       1,024    1.00         0  all-gather
-   512   256  iid_gaussian        B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  seed_regenerated    A  4       1,024       1,024    1.00         0  all-gather
-   512   256  seed_regenerated    B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  mirrored_lr1        A  4       1,024       1,024    1.00         0  all-gather
-   512   256  mirrored_lr1        B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  lowrank_r1          A  4       1,024       1,024    1.00         0  all-gather
-   512   256  lowrank_r1          B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  iid_gaussian        A  4       4,096       4,096    1.00         0  all-gather
-   512  1024  iid_gaussian        B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  seed_regenerated    A  4       4,096       4,096    1.00         0  all-gather
-   512  1024  seed_regenerated    B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  mirrored_lr1        A  4       4,096       4,096    1.00         0  all-gather
-   512  1024  mirrored_lr1        B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  lowrank_r1          A  4       4,096       4,096    1.00         0  all-gather
-   512  1024  lowrank_r1          B  4   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  iid_gaussian        A  8       1,024       1,024    1.00         0  all-gather
-   512   256  iid_gaussian        B  8   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  seed_regenerated    A  8       1,024       1,024    1.00         0  all-gather
-   512   256  seed_regenerated    B  8   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  mirrored_lr1        A  8       1,024       1,024    1.00         0  all-gather
-   512   256  mirrored_lr1        B  8   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  lowrank_r1          A  8       1,024       1,024    1.00         0  all-gather
-   512   256  lowrank_r1          B  8   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  iid_gaussian        A  8       4,096       4,096    1.00         0  all-gather
-   512  1024  iid_gaussian        B  8   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  seed_regenerated    A  8       4,096       4,096    1.00         0  all-gather
-   512  1024  seed_regenerated    B  8   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  mirrored_lr1        A  8       4,096       4,096    1.00         0  all-gather
-   512  1024  mirrored_lr1        B  8   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  lowrank_r1          A  8       4,096       4,096    1.00         0  all-gather
-   512  1024  lowrank_r1          B  8   6,291,456   6,291,456    1.00         0  all-reduce
+   512   256  iid_gaussian        A  2       2,048       1,024    2.00         0  all-gather
+   512   256  iid_gaussian        B  2   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  seed_regenerated    A  2       2,048       1,024    2.00         0  all-gather
+   512   256  seed_regenerated    B  2   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  mirrored_lr1        A  2       2,048       1,024    2.00         0  all-gather
+   512   256  mirrored_lr1        B  2   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  lowrank_r1          A  2       2,048       1,024    2.00         0  all-gather
+   512   256  lowrank_r1          B  2   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  iid_gaussian        A  2       8,192       4,096    2.00         0  all-gather
+   512  1024  iid_gaussian        B  2   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  seed_regenerated    A  2       8,192       4,096    2.00         0  all-gather
+   512  1024  seed_regenerated    B  2   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  mirrored_lr1        A  2       8,192       4,096    2.00         0  all-gather
+   512  1024  mirrored_lr1        B  2   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  lowrank_r1          A  2       8,192       4,096    2.00         0  all-gather
+   512  1024  lowrank_r1          B  2   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  iid_gaussian        A  4       2,048       1,024    2.00         0  all-gather
+   512   256  iid_gaussian        B  4   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  seed_regenerated    A  4       2,048       1,024    2.00         0  all-gather
+   512   256  seed_regenerated    B  4   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  mirrored_lr1        A  4       2,048       1,024    2.00         0  all-gather
+   512   256  mirrored_lr1        B  4   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  lowrank_r1          A  4       2,048       1,024    2.00         0  all-gather
+   512   256  lowrank_r1          B  4   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  iid_gaussian        A  4       8,192       4,096    2.00         0  all-gather
+   512  1024  iid_gaussian        B  4   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  seed_regenerated    A  4       8,192       4,096    2.00         0  all-gather
+   512  1024  seed_regenerated    B  4   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  mirrored_lr1        A  4       8,192       4,096    2.00         0  all-gather
+   512  1024  mirrored_lr1        B  4   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  lowrank_r1          A  4       8,192       4,096    2.00         0  all-gather
+   512  1024  lowrank_r1          B  4   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  iid_gaussian        A  8       2,048       1,024    2.00         0  all-gather
+   512   256  iid_gaussian        B  8   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  seed_regenerated    A  8       2,048       1,024    2.00         0  all-gather
+   512   256  seed_regenerated    B  8   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  mirrored_lr1        A  8       2,048       1,024    2.00         0  all-gather
+   512   256  mirrored_lr1        B  8   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512   256  lowrank_r1          A  8       2,048       1,024    2.00         0  all-gather
+   512   256  lowrank_r1          B  8   6,292,480   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  iid_gaussian        A  8       8,192       4,096    2.00         0  all-gather
+   512  1024  iid_gaussian        B  8   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  seed_regenerated    A  8       8,192       4,096    2.00         0  all-gather
+   512  1024  seed_regenerated    B  8   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  mirrored_lr1        A  8       8,192       4,096    2.00         0  all-gather
+   512  1024  mirrored_lr1        B  8   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
+   512  1024  lowrank_r1          A  8       8,192       4,096    2.00         0  all-gather
+   512  1024  lowrank_r1          B  8   6,295,552   6,291,456    1.00         0  all-gather,all-reduce
   2048   128  iid_gaussian        A  1           0         512     -           0  none
   2048   128  iid_gaussian        B  1 100,663,296 100,663,296     -           0  all-reduce
   2048   128  seed_regenerated    A  1           0         512     -           0  none
@@ -95,106 +106,57 @@
   2048   256  mirrored_lr1        B  1 100,663,296 100,663,296     -           0  all-reduce
   2048   256  lowrank_r1          A  1           0       1,024     -           0  none
   2048   256  lowrank_r1          B  1 100,663,296 100,663,296     -           0  all-reduce
-  2048   128  iid_gaussian        A  2         512         512    1.00         0  all-gather
-  2048   128  iid_gaussian        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  seed_regenerated    A  2         512         512    1.00         0  all-gather
-  2048   128  seed_regenerated    B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  mirrored_lr1        A  2         512         512    1.00         0  all-gather
-  2048   128  mirrored_lr1        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  lowrank_r1          A  2         512         512    1.00         0  all-gather
-  2048   128  lowrank_r1          B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  iid_gaussian        A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  iid_gaussian        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  seed_regenerated    A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  seed_regenerated    B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  mirrored_lr1        A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  mirrored_lr1        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  lowrank_r1          A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  lowrank_r1          B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  iid_gaussian        A  4         512         512    1.00         0  all-gather
-  2048   128  iid_gaussian        B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  seed_regenerated    A  4         512         512    1.00         0  all-gather
-  2048   128  seed_regenerated    B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  mirrored_lr1        A  4         512         512    1.00         0  all-gather
-  2048   128  mirrored_lr1        B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  lowrank_r1          A  4         512         512    1.00         0  all-gather
-  2048   128  lowrank_r1          B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  iid_gaussian        A  4       1,024       1,024    1.00         0  all-gather
-  2048   256  iid_gaussian        B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  seed_regenerated    A  4       1,024       1,024    1.00         0  all-gather
-  2048   256  seed_regenerated    B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  mirrored_lr1        A  4       1,024       1,024    1.00         0  all-gather
-  2048   256  mirrored_lr1        B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  lowrank_r1          A  4       1,024       1,024    1.00         0  all-gather
-  2048   256  lowrank_r1          B  4 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  iid_gaussian        A  8         512         512    1.00         0  all-gather
-  2048   128  iid_gaussian        B  8 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  seed_regenerated    A  8         512         512    1.00         0  all-gather
-  2048   128  seed_regenerated    B  8 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  mirrored_lr1        A  8         512         512    1.00         0  all-gather
-  2048   128  mirrored_lr1        B  8 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  lowrank_r1          A  8         512         512    1.00         0  all-gather
-  2048   128  lowrank_r1          B  8 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  iid_gaussian        A  8       1,024       1,024    1.00         0  all-gather
-  2048   256  iid_gaussian        B  8 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  seed_regenerated    A  8       1,024       1,024    1.00         0  all-gather
-  2048   256  seed_regenerated    B  8 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  mirrored_lr1        A  8       1,024       1,024    1.00         0  all-gather
-  2048   256  mirrored_lr1        B  8 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  lowrank_r1          A  8       1,024       1,024    1.00         0  all-gather
-  2048   256  lowrank_r1          B  8 100,663,296 100,663,296    1.00         0  all-reduce
+  2048   128  iid_gaussian        A  2       1,024         512    2.00         0  all-gather
+  2048   128  iid_gaussian        B  2 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  seed_regenerated    A  2       1,024         512    2.00         0  all-gather
+  2048   128  seed_regenerated    B  2 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  mirrored_lr1        A  2       1,024         512    2.00         0  all-gather
+  2048   128  mirrored_lr1        B  2 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  lowrank_r1          A  2       1,024         512    2.00         0  all-gather
+  2048   128  lowrank_r1          B  2 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  iid_gaussian        A  2       2,048       1,024    2.00         0  all-gather
+  2048   256  iid_gaussian        B  2 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  seed_regenerated    A  2       2,048       1,024    2.00         0  all-gather
+  2048   256  seed_regenerated    B  2 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  mirrored_lr1        A  2       2,048       1,024    2.00         0  all-gather
+  2048   256  mirrored_lr1        B  2 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  lowrank_r1          A  2       2,048       1,024    2.00         0  all-gather
+  2048   256  lowrank_r1          B  2 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  iid_gaussian        A  4       1,024         512    2.00         0  all-gather
+  2048   128  iid_gaussian        B  4 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  seed_regenerated    A  4       1,024         512    2.00         0  all-gather
+  2048   128  seed_regenerated    B  4 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  mirrored_lr1        A  4       1,024         512    2.00         0  all-gather
+  2048   128  mirrored_lr1        B  4 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  lowrank_r1          A  4       1,024         512    2.00         0  all-gather
+  2048   128  lowrank_r1          B  4 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  iid_gaussian        A  4       2,048       1,024    2.00         0  all-gather
+  2048   256  iid_gaussian        B  4 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  seed_regenerated    A  4       2,048       1,024    2.00         0  all-gather
+  2048   256  seed_regenerated    B  4 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  mirrored_lr1        A  4       2,048       1,024    2.00         0  all-gather
+  2048   256  mirrored_lr1        B  4 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  lowrank_r1          A  4       2,048       1,024    2.00         0  all-gather
+  2048   256  lowrank_r1          B  4 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  iid_gaussian        A  8       1,024         512    2.00         0  all-gather
+  2048   128  iid_gaussian        B  8 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  seed_regenerated    A  8       1,024         512    2.00         0  all-gather
+  2048   128  seed_regenerated    B  8 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  mirrored_lr1        A  8       1,024         512    2.00         0  all-gather
+  2048   128  mirrored_lr1        B  8 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   128  lowrank_r1          A  8       1,024         512    2.00         0  all-gather
+  2048   128  lowrank_r1          B  8 100,663,808 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  iid_gaussian        A  8       2,048       1,024    2.00         0  all-gather
+  2048   256  iid_gaussian        B  8 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  seed_regenerated    A  8       2,048       1,024    2.00         0  all-gather
+  2048   256  seed_regenerated    B  8 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  mirrored_lr1        A  8       2,048       1,024    2.00         0  all-gather
+  2048   256  mirrored_lr1        B  8 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
+  2048   256  lowrank_r1          A  8       2,048       1,024    2.00         0  all-gather
+  2048   256  lowrank_r1          B  8 100,664,320 100,663,296    1.00         0  all-gather,all-reduce
 
-A: 512 to 4,096 bytes
-B: 6,291,456 to 100,663,296 bytes
+A: 1,024 to 8,192 bytes
+B: 6,292,480 to 100,664,320 bytes
 shaping barrier contributes bytes in 0/96 configurations
 
 every configuration is within 4x of the docs/02 prediction
-
-================================ GPU, 2x A100-SXM4-80GB ================================
-# experiments/phase2/comms.py --config sweep.yaml --devices 2
-# 2026-08-07  NVIDIA A100-SXM4-80GB, 590.48.01
-# jax 0.11.0  commit 6ed8f83
-# XLA_FLAGS=--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer=
-# exit 0
-
-     d     N  strategy          how  D    measured   predicted   ratio   shaping  ops
-   512   256  iid_gaussian        A  2       1,024       1,024    1.00         0  all-gather
-   512   256  iid_gaussian        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  seed_regenerated    A  2       1,024       1,024    1.00         0  all-gather
-   512   256  seed_regenerated    B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  mirrored_lr1        A  2       1,024       1,024    1.00         0  all-gather
-   512   256  mirrored_lr1        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512   256  lowrank_r1          A  2       1,024       1,024    1.00         0  all-gather
-   512   256  lowrank_r1          B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  iid_gaussian        A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  iid_gaussian        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  seed_regenerated    A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  seed_regenerated    B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  mirrored_lr1        A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  mirrored_lr1        B  2   6,291,456   6,291,456    1.00         0  all-reduce
-   512  1024  lowrank_r1          A  2       4,096       4,096    1.00         0  all-gather
-   512  1024  lowrank_r1          B  2   6,291,456   6,291,456    1.00         0  all-reduce
-  2048   128  iid_gaussian        A  2         512         512    1.00         0  all-gather
-  2048   128  iid_gaussian        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  seed_regenerated    A  2         512         512    1.00         0  all-gather
-  2048   128  seed_regenerated    B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  mirrored_lr1        A  2         512         512    1.00         0  all-gather
-  2048   128  mirrored_lr1        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   128  lowrank_r1          A  2         512         512    1.00         0  all-gather
-  2048   128  lowrank_r1          B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  iid_gaussian        A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  iid_gaussian        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  seed_regenerated    A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  seed_regenerated    B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  mirrored_lr1        A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  mirrored_lr1        B  2 100,663,296 100,663,296    1.00         0  all-reduce
-  2048   256  lowrank_r1          A  2       1,024       1,024    1.00         0  all-gather
-  2048   256  lowrank_r1          B  2 100,663,296 100,663,296    1.00         0  all-reduce
-
-wrote /root/comms-gpu.json
-A: 512 to 4,096 bytes
-B: 6,291,456 to 100,663,296 bytes
-shaping barrier contributes bytes in 0/32 configurations
-
-every configuration is within 4x of the docs/02 prediction
-# exit 0
