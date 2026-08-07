@@ -1,0 +1,58 @@
+# The wall-clock confirmation for docs/diagnosis-replicated-evaluation.md
+#
+# Both arms on ONE node, so node and change cannot be confused. Control first.
+# 2 x NVIDIA A100-SXM4-80GB, NVLink (nvidia-smi topo: NV12), jax 0.11.0, 2026-08-07.
+# XLA_FLAGS=--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer=
+#
+# Control is core.py at 3e617ed, everything else identical. Fix is the branch head.
+# profile.py exits 1 when it finds a configuration that does not distribute, which is
+# the CONTROL's expected result, so the 'CONTROL DID NOT COMPLETE' line below is the
+# harness misreading that exit code and not a failure. The control's table is complete.
+#
+#   parallel efficiency T1/(2*T2)      control      fixed
+#     lowrank_r1/A                        0.48       0.70
+#     lowrank_r1/B                        0.47       0.85
+#
+# Pre-fix, D=2 is slower than D=1: the second device is pure overhead, matching the
+# committed sweep's 0.50. Post-fix eval falls to 0.56-0.57 against an ideal 0.50.
+
+######## CONTROL: pre-fix core.py (3e617ed). D=2 should show no speedup ########
+2 x NVIDIA A100-SXM4-80GB (gpu), jax 0.11.0
+
+milliseconds per generation, median of 5 after 3 warm-up
+
+     d     N  strategy          how  D     full     +-     eval     tell  shaping   floor  evalGFLOP
+   512   256  lowrank_r1          A  1    11.46   0.01    11.10     0.36     0.09    0.08        1.7
+   512   256  lowrank_r1          A  2    11.95   0.03    11.54     0.41     0.13    0.29        1.7
+   512   256  lowrank_r1          B  1    11.45   0.01    11.11     0.34     0.09    0.07        1.7
+   512   256  lowrank_r1          B  2    12.13   0.08    11.52     0.62     0.13    0.32        1.7
+
+how each part scales, D=1 -> D=max (a part that distributes should fall)
+  config                                          full    eval    tell  shaping   floor  evalFLOP
+  d=512 N=256 lowrank_r1/A D1->D2                 1.04    1.04    1.13     1.42    3.50     1.000
+  d=512 N=256 lowrank_r1/B D1->D2                 1.06    1.04    1.81     1.47    4.48     1.000
+
+1.00 means the part did not change. Strong scaling wants eval near 1/D = 0.500.
+
+2 of 2 configurations do not distribute their evaluation at all:
+per-device FLOPs are unchanged from D=1 to D=max, so every device evaluates the whole
+population and wall clock cannot fall. Parallel efficiency is then exactly 1/D (0.500).
+CONTROL DID NOT COMPLETE
+
+######## FIX: core.py back to the branch head ########
+2 x NVIDIA A100-SXM4-80GB (gpu), jax 0.11.0
+
+milliseconds per generation, median of 5 after 3 warm-up
+
+     d     N  strategy          how  D     full     +-     eval     tell  shaping   floor  evalGFLOP
+   512   256  lowrank_r1          A  1     9.46   0.01    11.10    -1.64    -1.90    0.08        1.7
+   512   256  lowrank_r1          A  2     6.76   0.04     6.37     0.38     0.13    0.31        0.9
+   512   256  lowrank_r1          B  1    11.46   0.03    11.10     0.36     0.09    0.09        1.7
+   512   256  lowrank_r1          B  2     6.75   0.04     6.24     0.52     0.13    0.29        0.9
+
+how each part scales, D=1 -> D=max (a part that distributes should fall)
+  config                                          full    eval    tell  shaping   floor  evalFLOP
+  d=512 N=256 lowrank_r1/A D1->D2                 0.71    0.57   -0.23    -0.07    4.10     0.500
+  d=512 N=256 lowrank_r1/B D1->D2                 0.59    0.56    1.45     1.42    3.38     0.500
+
+1.00 means the part did not change. Strong scaling wants eval near 1/D = 0.500.

@@ -285,11 +285,23 @@ breakdown of where the other 29% goes" is a better artifact than an unexplained 
 
 | | criterion | status |
 |---|---|---|
-| 1 | strong and weak curves, efficiency stated | **met**, with the cause of the shortfall identified |
+| 1 | strong and weak curves, efficiency stated | **met**, cause identified and since fixed |
 | 2 | crossover measured, phase diagram | **met**, without a contour: the grid is too coarse to carry one |
 | 3 | one comparison against an external reference | **not met**, M4 was not run |
 | 4 | reproducible from a committed config plus a recorded environment | **met** |
 | 5 | a limitations paragraph a skeptic would accept as fair | drafted above, needs rewriting |
+
+**The cause has since been fixed, and the sweep's numbers are now history rather than
+current behaviour.** `ShardedES.apply` constrains its output to the member axis, which is
+what forces the evaluation to partition. Measured on 2x A100 with both code versions on one
+node (`experiments/phase2/wallclock.txt`), parallel efficiency at `D=2` for `lowrank_r1`
+goes from **0.48 to 0.70** under strategy A and **0.47 to 0.85** under B. Pre-fix `D=2` was
+slower than `D=1`; post-fix the wall clock drops and `eval` falls to 0.56 against an ideal
+0.50. `docs/diagnosis-replicated-evaluation.md` carries the account.
+
+Everything in this section describes the run of 2026-08-06 and stays valid as a record of
+it. **Re-running the sweep would now produce a materially different scaling curve, and that
+is a new measurement rather than a correction.**
 
 **Criterion 1's clause is now satisfied.** Scaling came in at 0.11 to 0.14 efficiency, far
 worse than expected, and the gate forgives that only when the cause is identified and
