@@ -172,6 +172,13 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--config", type=pathlib.Path, default=HERE / "sweep.yaml")
     ap.add_argument("--devices", type=int, default=None)
+    ap.add_argument("--d-model", type=int, default=None,
+                    help="only this model size. The sweep's largest shape needs ~50 GB, so "
+                         "on a smaller card this is what lets the rest of the grid run")
+    ap.add_argument("--population", type=int, default=None,
+                    help="override the population. The default is the largest in the config, "
+                         "which is the slowest thing to compile; a smaller one is what you "
+                         "want when the question is whether D>1 runs at all")
     ap.add_argument("--strategies", default="iid_gaussian,seed_regenerated",
                     help="comma separated; the default is the two extremes of the memory "
                          "range, since M1 found the efficiency barely depends on this axis")
@@ -212,9 +219,13 @@ def main(argv=None) -> int:
 
     rows = []
     for d_model in cfg["d_model"]:
+        if args.d_model and d_model != args.d_model:
+            continue
         # The largest population per model size: the noise floor and the memory ceiling both
-        # bind there, and it is where a barrier would show up most clearly.
-        population = max(populations(cfg, "strong", d_model, 1))
+        # bind there, and it is where a barrier would show up most clearly. Overridable
+        # because that is also the slowest shape to compile, and a first run on unfamiliar
+        # hardware wants to know whether D>1 works before it wants the hardest case.
+        population = args.population or max(populations(cfg, "strong", d_model, 1))
         for strategy in strategies:
             for how in cfg["how"]:
                 for devices in cfg["devices"]:

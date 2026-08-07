@@ -213,32 +213,40 @@ bytes: a ring all-reduce moves roughly `2(D-1)/D` times the payload on the physi
 so the wire figure is a constant factor away and depends on the algorithm XLA picks. The
 payload is the part that is a property of the design.
 
-**`docs/02` C1.3 is confirmed to the byte.** Every one of 128 configurations comes in at
-exactly the predicted volume, ratio 1.00:
+**`docs/02` C1.3 is confirmed for B and undercounts A.** The table was re-measured on
+2026-08-07 after `ShardedES.apply` began constraining its output; the numbers below are the
+current ones, and the pre-fix table they replace is described in `comms.txt`'s header.
 
-| | measured per generation | prediction |
-|---|---|---|
-| strategy A | 512 B to 4,096 B | `4N`, the fitness scalars, all-gathered |
-| strategy B | 6.29 MB to 100.66 MB | one params-sized all-reduce |
+| | measured per generation | prediction | ratio |
+|---|---|---|---|
+| strategy A | 1,024 B to 8,192 B | `4N`, the fitness scalars | **2.00** |
+| strategy B | 6.29 MB to 100.66 MB | one params-sized all-reduce, plus `4N` | 1.00 |
 
-So the folk claim that ES only all-reduces scalars is now measured rather than repeated,
-and it is true of A and false of B by four orders of magnitude, which is the thing
-`docs/02` said not to assert without measuring.
+**A needs two all-gathers of `N` scalars, not one.** `tell` replicates the fitness so
+`centered_ranks` can sort it globally, and `contraction.py` replicates ids and weights
+because strategy A contracts the whole population on every device. Both gathers are visible
+in the HLO, both `f32[N]`, both from `sharding_constraint`. They were free while the
+evaluation was replicated, because there was nothing to gather; the sharding fix made them
+real. So the folk claim that ES only all-reduces scalars remains true of A in order of
+magnitude, and the constant is 2, not 1.
 
-**The shaping barrier costs zero additional bytes**, in all 96 multi-device configurations.
-Measured by difference: the same configuration compiled with `centered_ranks` and with
-`none` contains the same collectives at the same sizes, and the sort appears in the HLO only
-in the first, so the argument is wired and the difference is real. The global sort runs on a
-fitness vector the contraction has already made available, so it adds a synchronization
-point and no traffic. `docs/02` predicted "cheap in bytes, not free in latency", and this is
-the first half of that; the second half is not measured here.
+**The shaping barrier is no longer measurable by difference, and the `shaping` column now
+reads 0 for the wrong reason.** `comms.py` compiles each configuration against
+`shaping=none` and subtracts. `tell` replicates unconditionally, so `none` pays the same
+gather, and the difference is 0 while the cost is `4N`. Before the sharding fix that 0 was
+correct: the fitness was replicated anyway and the barrier genuinely added nothing. Now it
+is an artifact of the method. Attributing it properly means either making `tell`'s replicate
+conditional on the shaping, which `core.py` argues against, or measuring the barrier some
+other way.
 
-**Against the clock, communication is negligible.** Dividing the measured bytes by the
-measured generation time, the most demanding configuration in the sweep needs **1.894 GB/s**
-(`d=2048, N=128, mirrored_lr1/B` at `D=2`, 100.7 MB per 53.2 ms). An A100 SXM4 has roughly
-600 GB/s of NVLink, so that is **0.3%** of it. Strategy A's worst case is 4 KB per
-generation and rounds to zero. This is the measurement that says the flat scaling curve is
-not a communication problem.
+**Against the clock, communication is still negligible.** The pre-fix figure was 1.894 GB/s
+at the most demanding configuration, 0.3% of an A100's ~600 GB/s NVLink. Post-fix the bytes
+roughly double for A and are unchanged for B, while generations get faster (6.75 ms against
+11.46 ms at `D=2` for `lowrank_r1`), so the requirement rises by something under 2x and
+stays under 1% of the interconnect. That figure is an extrapolation rather than a
+measurement: recomputing it exactly needs post-fix generation times for every configuration,
+which means re-running the sweep. This is the measurement that says the flat scaling curve
+was not a communication problem.
 
 **Device-count invariance.** 30 of 32 strong-scaling groups clean: 15 of 16 strategy A rows
 bitwise identical across `D`, every B row at ~1e-07 against a 1e-5 tolerance. The exception
@@ -285,11 +293,23 @@ breakdown of where the other 29% goes" is a better artifact than an unexplained 
 
 | | criterion | status |
 |---|---|---|
-| 1 | strong and weak curves, efficiency stated | **met**, with the cause of the shortfall identified |
+| 1 | strong and weak curves, efficiency stated | **met**, cause identified and since fixed |
 | 2 | crossover measured, phase diagram | **met**, without a contour: the grid is too coarse to carry one |
 | 3 | one comparison against an external reference | **not met**, M4 was not run |
 | 4 | reproducible from a committed config plus a recorded environment | **met** |
 | 5 | a limitations paragraph a skeptic would accept as fair | drafted above, needs rewriting |
+
+**The cause has since been fixed, and the sweep's numbers are now history rather than
+current behaviour.** `ShardedES.apply` constrains its output to the member axis, which is
+what forces the evaluation to partition. Measured on 2x A100 with both code versions on one
+node (`experiments/phase2/wallclock.txt`), parallel efficiency at `D=2` for `lowrank_r1`
+goes from **0.48 to 0.70** under strategy A and **0.47 to 0.85** under B. Pre-fix `D=2` was
+slower than `D=1`; post-fix the wall clock drops and `eval` falls to 0.56 against an ideal
+0.50. `docs/diagnosis-replicated-evaluation.md` carries the account.
+
+Everything in this section describes the run of 2026-08-06 and stays valid as a record of
+it. **Re-running the sweep would now produce a materially different scaling curve, and that
+is a new measurement rather than a correction.**
 
 **Criterion 1's clause is now satisfied.** Scaling came in at 0.11 to 0.14 efficiency, far
 worse than expected, and the gate forgives that only when the cause is identified and
