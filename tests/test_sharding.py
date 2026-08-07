@@ -18,10 +18,15 @@ Still to come, from docs/02-phase1-sharded-core.md:
     test_state_sharding             distribution state carries the intended NamedSharding,
                                     not replicated
 
-What is here now is C1.2: the mesh, the four shardings, and the seed contract at the layout
+What is here now is C1.2: the mesh, the two shardings, and the seed contract at the layout
 level. The property that matters is `test_member_ids_are_global_*` — sharding partitions an
 array without renumbering it, so global member indices are a consequence of the data layout
 rather than something the code must remember to do.
+
+There were four shardings until `per_member` and `shard_perturbation` were removed, both
+dead: one was a spelling of `members`, the other constrained the producer, which does not
+distribute anything. `test_the_evaluation_distributes_across_devices` is what covers the
+property they appeared to cover and did not.
 
 What simulated devices do not model is interconnect bandwidth or latency. Every correctness
 claim is answerable here; no timing claim is.
@@ -231,8 +236,23 @@ def test_the_deprecated_shard_map_path_is_not_used():
 # --------------------------------------------------------------------------------------
 
 
+def _one_score_per_episode(params, x):
+    """A model scoring several episodes per member, so the fitness is `(n, episodes)`.
+
+    `group_relative` is the shaping that consumes this shape. Its correctness through the
+    sharded path is covered in `tests/test_core.py`; what is covered here is that the shape
+    still *distributes*, which no correctness test can see.
+    """
+    return jnp.stack([transformer_block.loss(params, x)] * 3)
+
+
 @pytest.mark.parametrize("d", [2, 4, 8])
-def test_the_evaluation_distributes_across_devices(d):
+@pytest.mark.parametrize(
+    "model, fitness_shape",
+    [(transformer_block.loss, "(n,)"),
+     (_one_score_per_episode, "(n, episodes)")],
+)
+def test_the_evaluation_distributes_across_devices(d, model, fitness_shape):
     """Per-device FLOPs of the compiled evaluation fall as 1/D, or nothing was sharded.
 
     **This is the test the project did not have, and its absence cost a rented 8-GPU
@@ -247,6 +267,13 @@ def test_the_evaluation_distributes_across_devices(d):
 
     `docs/diagnosis-replicated-evaluation.md` has the full account. `ShardedES.apply` now
     constrains its output to the member axis, which is what forces the vmap to partition.
+
+    **Both fitness shapes, because the constraint is `P("pop")` with no trailing entries.**
+    A scalar fitness is `(n,)` and `group_relative`'s is `(n, episodes)`, and the short spec
+    covers the second only because JAX pads it with None. A regression that replicated the
+    multi-episode path would otherwise pass every test in the suite: `test_core.py` checks
+    that `group_relative` survives sharding and stays device-count invariant, and both of
+    those are true of a computation that runs whole on every device.
 
     Asserted on the compiled program rather than on wall clock, so it holds on simulated
     devices and cannot go quiet on a machine with one GPU.
@@ -265,7 +292,7 @@ def test_the_evaluation_distributes_across_devices(d):
 
         def evaluate(s):
             pert, scaled = es.ask(s)
-            return es.apply(transformer_block.loss, scaled, pert)(data)
+            return es.apply(model, scaled, pert)(data)
 
         analysis = jax.jit(evaluate).lower(state).compile().cost_analysis()
         analysis = analysis[0] if isinstance(analysis, list) else analysis
@@ -274,7 +301,8 @@ def test_the_evaluation_distributes_across_devices(d):
     one, many = eval_flops(1), eval_flops(d)
     ratio = many / one
     assert ratio < 1.5 / d, (
-        f"per-device evaluation FLOPs went {one:,.0f} -> {many:,.0f} from D=1 to D={d}, a "
-        f"ratio of {ratio:.3f} against an ideal of {1 / d:.3f}. The population is not being "
-        "divided: every device is evaluating all of it, so wall clock cannot fall with D."
+        f"per-device evaluation FLOPs went {one:,.0f} -> {many:,.0f} from D=1 to D={d} with "
+        f"a {fitness_shape} fitness, a ratio of {ratio:.3f} against an ideal of "
+        f"{1 / d:.3f}. The population is not being divided: every device is evaluating all "
+        "of it, so wall clock cannot fall with D."
     )
