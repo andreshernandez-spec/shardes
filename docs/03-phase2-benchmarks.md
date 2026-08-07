@@ -154,13 +154,14 @@ strategy or on the contraction: the best group is `seed_regenerated/B` at 0.142,
 across 32 series, against an ideal of 8x. The same picture from the other side: adding
 devices at fixed population per device buys almost nothing.
 
-**The cause is not yet identified, and that matters for the gate.** This section names two
-candidates, the shaping barrier (C1.6) and the contraction strategy (C1.3), and says both
-are instrumented so it will be possible to say which. Neither has been measured: **M5 was
-not run.** Until it is, "scaling is flat" is an observation without a mechanism, which is
-exactly what the gate below says is not good enough. The contraction is unlikely to be the
-whole story, since A and B differ by at most 14% (M3) while the shortfall is a factor of
-seven.
+**M5 rules out communication volume, and does not identify the cause.** See below: the
+worst configuration in the sweep needs 1.9 GB/s to keep up, which is 0.3% of an A100's
+NVLink. Whatever the seven-fold shortfall is, it is not bytes on the wire. That eliminates
+one of the two candidates this section names and leaves the other, the shaping barrier
+(C1.6), still a candidate but as a **synchronization** cost rather than a communication
+one. M5 measures bytes, and bytes are not latency, so it cannot settle that. A per-device
+overhead floor, at these shapes a generation is 11 to 445 ms, is the other live explanation
+and is not addressed either.
 
 **M3, the contraction crossover.** `log10(t_B/t_A)` at `D=8` spans **-0.057 to +0.034**, so
 the two strategies are within ~14% of each other everywhere in this grid. B is faster in 10
@@ -190,6 +191,39 @@ that is not is `iid_gaussian/B` at `d=512, N/device=32`, which drops 12% from 48
 between `D=1` and `D=2` and then doubles. That step is also where the program goes from
 unsharded to sharded, so a different compiler choice is the obvious suspect, and it has not
 been checked.
+
+**M5, communication.** `experiments/phase2/comms.py` counts the payload of every collective
+in the compiled HLO, and `experiments/phase2/comms.txt` is the table. Payload, not wire
+bytes: a ring all-reduce moves roughly `2(D-1)/D` times the payload on the physical links,
+so the wire figure is a constant factor away and depends on the algorithm XLA picks. The
+payload is the part that is a property of the design.
+
+**`docs/02` C1.3 is confirmed to the byte.** Every one of 128 configurations comes in at
+exactly the predicted volume, ratio 1.00:
+
+| | measured per generation | prediction |
+|---|---|---|
+| strategy A | 512 B to 4,096 B | `4N`, the fitness scalars, all-gathered |
+| strategy B | 6.29 MB to 100.66 MB | one params-sized all-reduce |
+
+So the folk claim that ES only all-reduces scalars is now measured rather than repeated,
+and it is true of A and false of B by four orders of magnitude, which is the thing
+`docs/02` said not to assert without measuring.
+
+**The shaping barrier costs zero additional bytes**, in all 96 multi-device configurations.
+Measured by difference: the same configuration compiled with `centered_ranks` and with
+`none` contains the same collectives at the same sizes, and the sort appears in the HLO only
+in the first, so the argument is wired and the difference is real. The global sort runs on a
+fitness vector the contraction has already made available, so it adds a synchronization
+point and no traffic. `docs/02` predicted "cheap in bytes, not free in latency", and this is
+the first half of that; the second half is not measured here.
+
+**Against the clock, communication is negligible.** Dividing the measured bytes by the
+measured generation time, the most demanding configuration in the sweep needs **1.894 GB/s**
+(`d=2048, N=128, mirrored_lr1/B` at `D=2`, 100.7 MB per 53.2 ms). An A100 SXM4 has roughly
+600 GB/s of NVLink, so that is **0.3%** of it. Strategy A's worst case is 4 KB per
+generation and rounds to zero. This is the measurement that says the flat scaling curve is
+not a communication problem.
 
 **Device-count invariance.** 30 of 32 strong-scaling groups clean: 15 of 16 strategy A rows
 bitwise identical across `D`, every B row at ~1e-07 against a 1e-5 tolerance. The exception
@@ -242,8 +276,16 @@ breakdown of where the other 29% goes" is a better artifact than an unexplained 
 | 4 | reproducible from a committed config plus a recorded environment | **met** |
 | 5 | a limitations paragraph a skeptic would accept as fair | drafted above, needs rewriting |
 
-**The gate is not passed**, on 3 and on the clause above. Scaling came in at 0.11 to 0.14
-efficiency, far worse than expected, and the escape hatch that makes that acceptable is
-conditional on identifying the cause. The cause is not identified, because M5 was not run.
-Two measurements stand between here and G2: M5, which says where the time goes, and M4,
-which says whether any of this is competitive.
+**The gate is still not passed**, on 3 and on the clause above. Scaling came in at 0.11 to
+0.14 efficiency and the escape hatch that makes that acceptable is conditional on
+identifying the cause.
+
+M5 has now run and it **narrows the question without answering it**. Communication volume is
+0.3% of the interconnect, so the contraction is not where the time goes, and A versus B
+differing by at most 14% (M3) already said the same thing from another direction. What is
+left is the shaping barrier as a synchronization cost, and a per-device overhead floor. Both
+are latency, and neither is measured by counting bytes.
+
+The measurement that would close it is a profile: where the wall clock goes inside one
+generation, at `D=1` against `D=8`. That is a smaller job than M5 was, and it is the last
+thing between here and a defensible G2 on criterion 1. M4 remains untouched.
