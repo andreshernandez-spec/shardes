@@ -158,22 +158,50 @@ class ShardedES:
     ) -> Callable[[Array], Array]:
         """`model(params, x) -> y` becomes `g(x) -> (n, ...)`, one output per member.
 
-        The strategy owns this because the perturbation scheme determines how the forward
-        pass is structured: full rank materializes per member, low rank rewrites the matmul
-        and never does.
+        The strategy owns the forward pass because the perturbation scheme determines how it
+        is structured: full rank materializes per member, low rank rewrites the matmul and
+        never does. This owns the *placement*, because the strategies are deliberately
+        sharding-agnostic and the mesh lives here.
+
+        **The output is constrained to the member axis, and that is what makes the design
+        distribute.** The mesh is `AxisType.Auto`, so GSPMD propagates sharding outward from
+        wherever the program constrains it, and until this line the fitness was constrained
+        in exactly one place: `tell`, to *replicated*, because `centered_ranks` needs a
+        global sort. That propagates backwards. The cheapest way to have the whole fitness on
+        every device is to compute it on every device, needing no collective at all, so the
+        evaluation was replicated `D` times and the sharded `member_ids` was gathered and
+        ignored. Per-device FLOPs did not fall with `D` at all, and parallel efficiency was
+        therefore exactly `1/D`: measured 0.112 to 0.142 at `D=8` against `1/8 = 0.125`
+        (`docs/diagnosis-replicated-evaluation.md`).
+
+        It has to be the *output*. Constraining `pert.eps` instead does nothing, measured:
+        the consumer is free to gather it and compute everywhere, which it does. Constraining
+        what the vmap produces forces the vmap to be partitioned, and that back-propagates
+        and shards `eps` on its own.
+
+        `members(mesh)` is `P("pop")` with no trailing entries, which is correct at any rank:
+        an `(n, episodes)` fitness for `group_relative` shards its member axis and leaves the
+        rest replicated.
 
         **`x` is replicated to match `params`, and that is a correctness fix rather than a
-        convenience.** Every member of a generation must be evaluated on the *same* data —
-        common random numbers — or the fitness differences report which member drew an easy
+        convenience.** Every member of a generation must be evaluated on the *same* data,
+        common random numbers, or the fitness differences report which member drew an easy
         batch rather than which perturbation was good. Sharding `x` across members would
         break that comparison silently.
 
-        It is also a real footgun without this line. `init` commits `params` to the mesh,
-        while a freshly built batch is committed to device 0, and any `lax.scan` inside the
-        model that carries both raises "Received incompatible devices" from deep inside the
-        user's rollout. The MuJoCo adapter hit exactly that.
+        It is also a real footgun without this line: a freshly built batch is committed to
+        device 0 while `params` live on the mesh, and any `lax.scan` inside the model that
+        carries both raises "Received incompatible devices" from deep inside the user's
+        rollout. The MuJoCo adapter hit exactly that. This paragraph described the line for
+        some time before the line existed.
         """
-        return self.strategy.apply(model, state.params, pert, state.sigma)
+        g = self.strategy.apply(model, state.params, pert, state.sigma)
+
+        def evaluate(x: Array) -> Array:
+            x = jax.lax.with_sharding_constraint(x, sharding.replicated(self.mesh))
+            return jax.lax.with_sharding_constraint(g(x), sharding.members(self.mesh))
+
+        return evaluate
 
     def tell(self, state: State, pert: Perturbation, fitness: Array) -> State:
         """Shape the fitnesses, contract into an update, step the mean.
@@ -183,6 +211,27 @@ class ShardedES:
         wait, every generation. Cheap in bytes, not free in latency (docs/02 C1.6). Phase 2
         measures what it costs; it is written here as one line so that measurement has
         something unambiguous to point at.
+
+        **The gather stays even though `apply` now pins the fitness sharded**, and it is
+        deliberate. It is what lets every shaping be a plain function of an array:
+        `centered_ranks` calls `argsort`, `group_relative` calls `mean(axis=0)`, and neither
+        can see a mesh. Removing it would either push sharding awareness into the shapings,
+        which is the trade `sharding.AXIS_TYPE_NOTE` already declined for the strategies, or
+        leave the compiler to insert the gather implicitly and take the barrier back out of
+        view. It is no longer load-bearing for the *bug* it once caused: `apply` constrains
+        the fitness on the way in, so this cannot propagate backwards past it
+        (`docs/diagnosis-replicated-evaluation.md`).
+
+        It is unconditional, so `shaping=none` pays a gather it has no use for. Measured at
+        `4N` bytes, 4 KB at `n=1024`, against the 6.29 MB model all-reduce strategy B
+        performs at `d=512`. Making it conditional means shapings declaring their
+        communication needs, which is a protocol change to save 4 KB.
+
+        For `group_relative` the fitness is `(n, g)` and the gather is `4Ng` rather than
+        `4N`, so the barrier grows with the task count. It only matters where `Ng` approaches
+        the parameter count: at `d=512` that is `Ng = 1.57e6`, or 1536 tasks at `n=1024`.
+        A `psum` of the per-task statistics would be `O(g)` instead, and would cost the same
+        sharding awareness this paragraph just declined.
 
         The `1/(n*sigma)` factor lives here rather than in `contract`, so partial
         contractions over disjoint members still sum to the whole. That is what makes both
