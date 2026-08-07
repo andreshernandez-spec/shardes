@@ -1,7 +1,12 @@
 # Why the evaluation is replicated instead of sharded
 
-**Status: diagnosis, drafted by Claude Code for Andres to rewrite. No fix is applied.**
-`src/` is untouched. Everything below is measured, and every measurement runs on CPU with
+**Status: diagnosis plus the fix, drafted by Claude Code for Andres to review and rewrite.**
+The constraint described under "What the fix looks like" is now in `ShardedES.apply`, and
+`tests/test_sharding.py::test_the_evaluation_distributes_across_devices` holds it. This is
+sharding logic, which ground rule 1 puts in Andres's hands; it was written here on his
+explicit instruction and still wants reading line by line.
+
+Everything below is measured, and every measurement runs on CPU with
 `XLA_FLAGS=--xla_force_host_platform_device_count=8`, because all of it is a property of the
 compiled program rather than of hardware.
 
@@ -124,21 +129,48 @@ which is not a saving anyone would want.
 
 ---
 
-## Questions this diagnosis does not answer
+## What was done, and what is still open
 
-1. **Where the constraint belongs.** `ShardedES.apply` returns a *callable*, so the
-   constraint has to go on the value that callable produces, which means wrapping it. That
-   touches the seam between core and the strategy protocol, and the protocol is deliberately
-   sharding-agnostic. Putting it in `apply` keeps strategies clean; putting it in the caller
-   makes every caller responsible for it.
-2. **Whether `tell` should still replicate.** With the fitness sharded at production, the
-   `replicated` constraint in `tell` becomes an explicit gather rather than a statement about
-   the whole pipeline. That reads correctly, but `group_relative` consumes an `(n, g)`
-   fitness and its layout deserves its own thought.
-3. **Whether a test can hold this.** A test asserting per-device FLOPs fall as `1/D` would
-   catch a regression, and `experiments/phase2/profile.py --static` already computes the
-   number. It belongs in `tests/` rather than `experiments/` if invariant 2's neighbour
-   ("the design actually distributes") is to be enforced rather than measured once.
+**Applied.** The constraint went in `ShardedES.apply`, on the value the returned callable
+produces, because that is where the guarantee belongs: `apply` is public API, and someone
+scoring a population without calling `tell` should still get a distributed evaluation. It
+keeps the strategy protocol sharding-agnostic, since `apply` is a method on `ShardedES`
+which already owns the mesh. `tell`'s `replicated` constraint is unchanged and now reads as
+what it always was, an explicit gather of `4N` bytes for the sort.
+
+Measured after the change, per-device eval FLOPs from `D=1` to `D=8`:
+
+| | eval | full generation |
+|---|---|---|
+| `iid_gaussian/A` | 0.125 | 0.258 |
+| `iid_gaussian/B` | 0.125 | **0.125** |
+| `lowrank_r1/A` | 0.126 | 0.133 |
+| `lowrank_r1/B` | 0.126 | 0.126 |
+
+**Also applied: the `x` replication this docstring had described for some time without the
+line existing.** It is required by the common-random-numbers argument and it is inert
+(verified below), but the "Received incompatible devices" failure the docstring describes
+could **not** be reproduced on simulated devices, with or without it. It is restoring a
+documented contract, not a demonstrated fix, and that distinction should survive into
+whatever this file becomes.
+
+**Verified numerically inert.** Old code against new, same backend, 4 strategies x A/B x
+`D` in {1,2,4,8}: **32 of 32 trajectory digests identical**. An earlier attempt compared the
+new code on CPU against the committed A100 digests and found 32 of 32 *differing*, including
+at `D=1` where the change cannot do anything. That was the backend, not the change, and it
+is the same mixed-environment error `check.py` exists to refuse.
+
+Still open:
+
+1. **Whether `tell` should still replicate**, and what `group_relative`'s `(n, g)` fitness
+   should do. `P("pop")` is correct at any rank, verified for `(n,)`, `(n, g)` and
+   `(n, g, h)`, but the layout deserves its own thought.
+2. **`sharding.shard_perturbation` and `sharding.per_member` are now provably dead.**
+   They constrain the producer, which is measured to do nothing, and they are called only
+   from `tests/test_sharding.py`. Left in place rather than deleted in the same change.
+3. **The sweep's numbers do not change retroactively.** `docs/03` records what the library
+   did on 2026-08-06. Re-running it would now produce a different scaling curve, and that is
+   a new measurement rather than a correction.
 
 `docs/03`'s M1 result and the `1/D` reading stand either way. They describe what the library
 did on 2026-08-06, and that does not change retroactively when the cause is fixed.

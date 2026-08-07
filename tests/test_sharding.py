@@ -38,6 +38,9 @@ from jax import shard_map
 from jax.sharding import PartitionSpec as P
 
 from shardes import sharding
+from shardes.core import ShardedES
+from shardes.problems import transformer_block
+from shardes.strategies.iid_gaussian import IIDGaussian
 
 DEVICE_COUNTS = [1, 2, 4, 8]
 
@@ -222,3 +225,59 @@ def test_the_deprecated_shard_map_path_is_not_used():
                 if any(a.name == "shard_map" for a in node.names):
                     bad.append(f"{path.relative_to(src)}:{node.lineno}")
     assert not bad, f"deprecated shard_map import: {bad}. Use `from jax import shard_map`."
+
+
+# --------------------------------------------------------------------------------------
+# The evaluation has to actually distribute. Invariant 2 says the update is the same on
+# 1 and 8 devices; it says nothing about the work being divided, and for a long time it
+# was not.
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("d", [2, 4, 8])
+def test_the_evaluation_distributes_across_devices(d):
+    """Per-device FLOPs of the compiled evaluation fall as 1/D, or nothing was sharded.
+
+    **This is the test the project did not have, and its absence cost a rented 8-GPU
+    session.** The mesh is `AxisType.Auto`, so sharding is propagated rather than declared,
+    and for a long time the only constraint on the fitness was `tell`'s `replicated`, needed
+    for the global sort in `centered_ranks`. That propagates backwards: the cheapest way to
+    have the whole fitness on every device is to compute it on every device, needing no
+    collective at all. So every device evaluated the whole population, per-device FLOPs did
+    not move with `D`, and parallel efficiency was exactly `1/D`. The 2026-08-06 sweep
+    measured 0.112 to 0.142 at `D=8` against `1/8 = 0.125` and nothing failed, because every
+    correctness test still passed: the update was right, it was just computed eight times.
+
+    `docs/diagnosis-replicated-evaluation.md` has the full account. `ShardedES.apply` now
+    constrains its output to the member axis, which is what forces the vmap to partition.
+
+    Asserted on the compiled program rather than on wall clock, so it holds on simulated
+    devices and cannot go quiet on a machine with one GPU.
+    """
+    mesh = sharding.make_mesh(d)
+    key = jax.random.key(0)
+    params = transformer_block.init(key, d_model=16)
+    data = transformer_block.make_batch(jax.random.fold_in(key, 1), d_model=16,
+                                        batch=2, seq=4)
+    n = 8 * d
+
+    def eval_flops(devices):
+        m = sharding.make_mesh(devices)
+        es = ShardedES(IIDGaussian(), n=n, sigma=0.01, lr=0.05, mesh=m, how="A")
+        state = es.init(key, params)
+
+        def evaluate(s):
+            pert, scaled = es.ask(s)
+            return es.apply(transformer_block.loss, scaled, pert)(data)
+
+        analysis = jax.jit(evaluate).lower(state).compile().cost_analysis()
+        analysis = analysis[0] if isinstance(analysis, list) else analysis
+        return float(analysis["flops"])
+
+    one, many = eval_flops(1), eval_flops(d)
+    ratio = many / one
+    assert ratio < 1.5 / d, (
+        f"per-device evaluation FLOPs went {one:,.0f} -> {many:,.0f} from D=1 to D={d}, a "
+        f"ratio of {ratio:.3f} against an ideal of {1 / d:.3f}. The population is not being "
+        "divided: every device is evaluating all of it, so wall clock cannot fall with D."
+    )
