@@ -4,9 +4,14 @@
 
 Layout (docs/02-phase1-sharded-core.md C1.2):
   params        replicated across the "pop" axis, every device holds the full model
-  perturbations sharded on the member axis, P("pop", None, None)
+  perturbations sharded on the member axis, P("pop")
   fitnesses     sharded, P("pop")
   state         see docs/02 C1.4, the decision is open
+
+The perturbation layout is not placed by hand. `ShardedES.apply` constrains what it
+*produces* to the member axis, and GSPMD propagates that backwards to shard the perturbation
+behind it. Placing the perturbation directly does not distribute the evaluation, which is
+why the helper that used to do it is gone (`docs/diagnosis-replicated-evaluation.md`).
 
 Parameters are never sharded. ES's advantage is that every device holds the model and runs
 inference independently; sharding parameters reintroduces the communication ES avoids.
@@ -35,7 +40,7 @@ import jax
 import jax.numpy as jnp
 from jax.sharding import AxisType, Mesh, NamedSharding, PartitionSpec as P
 
-from shardes.types import Array, PyTree
+from shardes.types import Array
 
 #: The one mesh axis. Members and their rollouts split along it; nothing else does.
 POP = "pop"
@@ -126,7 +131,23 @@ def member_ids(n: int, mesh: Mesh) -> Array:
 
 # --------------------------------------------------------------------------------------
 # Shardings. Named rather than inlined: a P() in the wrong place is a silent correctness
-# bug, and these four are all of them.
+# bug, and these two are all of them.
+#
+# There were four. `per_member(mesh, rank)` returned `P(POP, None * rank)` and
+# `shard_perturbation(pert, mesh, n)` walked a materialized perturbation placing leaves with
+# it. Both are gone, for two independent reasons:
+#
+#   - `per_member` was a spelling of `members`. JAX pads a short PartitionSpec with None, so
+#     `P("pop")` and `P("pop", None, None)` place a rank-3 array identically. Verified for
+#     ranks 1, 2 and 3 before removal.
+#   - `shard_perturbation` constrained the wrong end. Placing the perturbation does not make
+#     the evaluation distribute: the consumer is free to gather it and compute everywhere,
+#     and measured, it does. What distributes the evaluation is constraining what `apply`
+#     *produces*, which back-propagates and shards the perturbation on its own
+#     (`docs/diagnosis-replicated-evaluation.md`).
+#
+# Neither was ever called from `src/`. They were called only by their own tests, which made
+# the suite read as though the perturbation was being placed while nothing placed it.
 # --------------------------------------------------------------------------------------
 
 
@@ -136,39 +157,10 @@ def replicated(mesh: Mesh) -> NamedSharding:
 
 
 def members(mesh: Mesh) -> NamedSharding:
-    """Fitness and member ids: one scalar per member, split on the member axis."""
+    """Anything with a leading member axis: fitness, member ids, a materialized perturbation.
+
+    `P(POP)` with no trailing entries, which is correct at any rank: JAX pads the spec with
+    None, so an `(n, episodes)` fitness or an `(n, m, k)` perturbation leaf shards its member
+    axis and leaves the rest replicated.
+    """
     return NamedSharding(mesh, P(POP))
-
-
-def per_member(mesh: Mesh, rank: int) -> NamedSharding:
-    """A materialized per-member array: leading member axis, everything else whole.
-
-    `rank` counts trailing dimensions, so an (n, m, k) perturbation leaf is `rank=2`.
-    """
-    return NamedSharding(mesh, P(POP, *([None] * rank)))
-
-
-def shard_perturbation(pert: PyTree, mesh: Mesh, n: int) -> PyTree:
-    """Place a materialized perturbation's leaves on the member axis.
-
-    `n` is the population, and it is required rather than inferred. Leaves carrying no member
-    axis have to be replicated instead — `SeedRegenerated` holds `like`, a reference to the
-    unbatched params — and the only way to tell them apart is whether the leading axis is
-    `n`. A divisibility test looks like it works and silently degrades to "shard everything"
-    at one device, where `x.shape[0] % 1` is zero for every array.
-
-    `Mirrored` is why this takes `n` rather than reading it off the largest leaf: its inner
-    perturbation has a leading axis of `n/2`, which is a legitimate member axis at half
-    resolution. Callers pass the count the leaves were built with.
-
-    Deciding by shape rather than by strategy keeps this from having to know which strategy
-    produced the tree, which is the same reason `contract` never asks.
-    """
-    check_population(n, mesh)
-
-    def place(x):
-        if jnp.ndim(x) and x.shape[0] == n:
-            return jax.device_put(x, per_member(mesh, jnp.ndim(x) - 1))
-        return jax.device_put(x, replicated(mesh))
-
-    return jax.tree.map(place, pert)
