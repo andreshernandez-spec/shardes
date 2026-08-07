@@ -181,3 +181,63 @@ Still open:
 
 `docs/03`'s M1 result and the `1/D` reading stand either way. They describe what the library
 did on 2026-08-06, and that does not change retroactively when the cause is fixed.
+
+---
+
+## Queued: the wall-clock confirmation
+
+**Nobody has yet seen the wall clock halve.** Everything above is the compiled program:
+FLOPs, digests, collectives. Those are exact and they are not a stopwatch, and
+`docs/03`'s M1 is a stopwatch measurement.
+
+**The post-fix code has never compiled at `D>1` on a real GPU.** Every A100 session predates
+the fix. One attempt was made on 2x A40 (2026-08-07) and `D=2` did not complete: 15 minutes
+on a single configuration in `profile.py`, and a stripped two-compile version timed out at 9
+minutes, while `D=1` finished in 4. The same code did `D=2` in ~40 s per configuration on
+the 8x A100 node. That node was `PXB`, PCIe bridge with no NVLink, so the interconnect is
+the likely cause, **but the control was never run**: the A/B script's pre-fix arm never
+started because the post-fix arm hung first. So node-versus-change is currently
+unresolved, and the one thing that changed is the one thing that only appears at `D>1`.
+
+### The baseline to beat
+
+From the committed sweep, `experiments/phase2/results/`, 8x A100:
+
+| config | T1 | T2 | efficiency |
+|---|---|---|---|
+| `d=512 N=1024 iid_gaussian/A` | 80.8 ms | 80.8 ms | 0.50 |
+| `d=512 N=1024 seed_regenerated/A` | 432.0 ms | 433.7 ms | 0.50 |
+| `d=2048 N=256 iid_gaussian/A` | 284.7 ms | 284.9 ms | 0.50 |
+| `d=2048 N=256 seed_regenerated/A` | 445.4 ms | 445.4 ms | 0.50 |
+
+`T1/(2 T2)`. Exactly 0.50 means the second device contributed nothing. Post-fix, strategy B
+should approach 1.0 and A should land between, because A's contraction stays replicated.
+
+### How to run it, in this order
+
+Two A100s, roughly 15 minutes and under a dollar. The ordering is the point: the arm that
+tells you whether the *node* works runs first, so a bad node costs four minutes rather than
+an hour.
+
+```sh
+export XLA_FLAGS="--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer="
+cd experiments/phase2
+ARGS="--config sweep.yaml --d-model 512 --population 256 --strategies lowrank_r1 --repeats 5"
+
+# 1. control first. Pre-fix code, so D=2 is expected to show no speedup. If this hangs,
+#    the node cannot run D=2 at all and nothing below means anything.
+git checkout 3e617ed -- ../../src/shardes/core.py
+timeout 600 python profile.py $ARGS || echo "NODE CANNOT RUN D>1, stop here"
+
+# 2. then the change.
+git checkout HEAD -- ../../src/shardes/core.py
+timeout 600 python profile.py $ARGS
+```
+
+`--population 256` rather than the config's 1024, and `lowrank_r1` rather than
+`iid_gaussian`: the cheapest shape that still exercises the sharded path. `iid_gaussian` at
+`N=1024` materializes a 6.4 GB perturbation and was what made the A40 attempt unaffordable.
+Scale up only once `D=2` is known to work at all.
+
+Read the `full` column's `D1 -> D2` ratio. 1.00 is the old behaviour, 0.50 is the fix
+working.
