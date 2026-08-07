@@ -34,6 +34,7 @@ def _load(name: str):
 run = _load("run")
 check = _load("check")
 comms = _load("comms")
+profile = _load("profile")
 
 
 CFG = {
@@ -770,3 +771,41 @@ def test_the_docs_02_prediction_is_what_comms_compares_against():
         "B", population=16, d_model=512)
     assert comms.predicted("A", population=256, d_model=2048) == comms.predicted(
         "A", population=256, d_model=512)
+
+
+def test_flops_of_scales_with_the_population():
+    """Validates the instrument, not the finding.
+
+    `profile.py` concludes that per-device eval FLOPs do not fall with `D`, which is a
+    statement about the library and will stop being true when the evaluation distributes.
+    Pinning *that* would lock the defect in. What must stay true is that
+    `cost_analysis().flops` is a faithful measure of the compiled program, and the check for
+    that is proportionality to `N`: doubling the population doubles the work.
+    """
+    import jax
+
+    from shardes import sharding
+    from shardes.core import ShardedES
+    from shardes.problems import transformer_block
+
+    def eval_flops(population):
+        mesh = sharding.make_mesh(1)
+        key = jax.random.key(0)
+        params = transformer_block.init(key, d_model=16)
+        data = transformer_block.make_batch(
+            jax.random.fold_in(key, 1), d_model=16, batch=2, seq=4)
+        es = ShardedES(run.STRATEGIES["iid_gaussian"](), n=population, sigma=run.SIGMA,
+                       lr=run.LR, mesh=mesh, how="A")
+
+        def ev(state):
+            pert, scaled = es.ask(state)
+            return es.apply(transformer_block.loss, scaled, pert)(data)
+
+        return profile.flops_of(ev, es.init(key, params))
+
+    small, large = eval_flops(8), eval_flops(16)
+    assert small > 0, "cost_analysis reported no flops; the instrument is not measuring"
+    assert abs(large / small - 2.0) < 0.05, (
+        f"doubling the population changed flops by {large / small:.3f}x, not 2x, so "
+        "cost_analysis is not tracking the work"
+    )
