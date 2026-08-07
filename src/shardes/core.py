@@ -212,6 +212,27 @@ class ShardedES:
         measures what it costs; it is written here as one line so that measurement has
         something unambiguous to point at.
 
+        **The gather stays even though `apply` now pins the fitness sharded**, and it is
+        deliberate. It is what lets every shaping be a plain function of an array:
+        `centered_ranks` calls `argsort`, `group_relative` calls `mean(axis=0)`, and neither
+        can see a mesh. Removing it would either push sharding awareness into the shapings,
+        which is the trade `sharding.AXIS_TYPE_NOTE` already declined for the strategies, or
+        leave the compiler to insert the gather implicitly and take the barrier back out of
+        view. It is no longer load-bearing for the *bug* it once caused: `apply` constrains
+        the fitness on the way in, so this cannot propagate backwards past it
+        (`docs/diagnosis-replicated-evaluation.md`).
+
+        It is unconditional, so `shaping=none` pays a gather it has no use for. Measured at
+        `4N` bytes, 4 KB at `n=1024`, against the 6.29 MB model all-reduce strategy B
+        performs at `d=512`. Making it conditional means shapings declaring their
+        communication needs, which is a protocol change to save 4 KB.
+
+        For `group_relative` the fitness is `(n, g)` and the gather is `4Ng` rather than
+        `4N`, so the barrier grows with the task count. It only matters where `Ng` approaches
+        the parameter count: at `d=512` that is `Ng = 1.57e6`, or 1536 tasks at `n=1024`.
+        A `psum` of the per-task statistics would be `O(g)` instead, and would cost the same
+        sharding awareness this paragraph just declined.
+
         The `1/(n*sigma)` factor lives here rather than in `contract`, so partial
         contractions over disjoint members still sum to the whole. That is what makes both
         chunking and Strategy B valid.
