@@ -14,14 +14,33 @@ the independent variable, so it is excluded and *everything else* is held: platf
 jax, jaxlib and the XLA flags. A pair that differs in anything else is refused rather than
 reported, because the difference could not then be attributed to the change.
 
-**The digest is the real check, and it is the reason a speed claim can be made at all.**
-Every configuration records a trajectory digest. The change under test is supposed to be
-numerically inert: it moves where work happens, not what the work is. So each digest must
-equal its twin. A run that got faster *and* moved a digest has not been sped up, it has been
-altered, and the honest report of that is a mismatch rather than a speedup.
+**The digest check is exact at `D=1` and cannot be at `D>1`, and that asymmetry is not a
+loophole.** This tool first demanded bitwise equality everywhere. That is wrong, and the
+sharding fix is itself the reason.
 
-A digest that matches also rules out the duller failure: comparing two runs that quietly
-used different populations or seeds because a config was edited between them.
+Before the fix the evaluation was replicated, so every device count ran the *same program
+shape*: a vmap over all `N` members, `D` times over. `check.py` duly reports strategy A as
+`0.00e+00` across `D=1,2,4,8` for the whole pre-fix sweep, and that pass was vacuous. After
+the fix, `D=4` vmaps over `N/4`. A different shape reduces in a different order, so float32
+lands a fraction of an ulp elsewhere. Requiring the sharded program to be bit-identical to
+the replicated one is requiring the fix not to have happened.
+
+So:
+
+  - `D=1` must be bitwise identical. The constraint is a no-op there, the program shape is
+    unchanged, and a moved digest means something other than the change under test moved.
+    This is a hard failure.
+  - `D>1` is reported, never asserted. The update's relative error is printed next to
+    whether the *ranks* moved, which is the distinction `rank_digest` exists to draw: ranks
+    holding means summation order alone, ranks moving means the population is packed tightly
+    enough that an ulp reorders it and the rank shaping amplifies that into the update. The
+    second is the documented noise floor, a property of the configuration.
+
+Judging `D>1` belongs to `check.py` run against the new results, which asks the question
+that is actually answerable: is the post-fix program self-consistent across device counts.
+
+A baseline predating `rank_digest` records no ranks, and then neither case can be shown.
+That is reported as unadjudicated rather than quietly counted as a pass.
 
 Exit status is 1 if any pair fails, so this can gate a docs update.
 """
@@ -33,6 +52,8 @@ import collections
 import json
 import pathlib
 import sys
+
+import numpy as np
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -53,6 +74,19 @@ def load(results: pathlib.Path) -> dict[tuple, dict]:
     for r in rows:
         out[tuple(r["config"][k] for k in KEY)] = r
     return out
+
+
+def relative(a: dict, b: dict) -> float:
+    """Relative L2 error between two trajectory probes.
+
+    The norm ratio, not elementwise, for the reason `check.py._rel` spells out: a random
+    projection has components near zero all the time, and dividing by them reports a
+    divergence that is not there.
+    """
+    pa = np.asarray(a["trajectory"]["probe"], dtype=np.float64)
+    pb = np.asarray(b["trajectory"]["probe"], dtype=np.float64)
+    denom = float(np.linalg.norm(pb))
+    return float(np.linalg.norm(pa - pb) / denom) if denom else float(np.linalg.norm(pa - pb))
 
 
 def environment(row: dict) -> tuple:
@@ -110,7 +144,7 @@ def main(argv=None) -> int:
     print(f"\nbefore commit(s): {', '.join(sorted(commits))}")
     print(f"after commit(s):  {', '.join(sorted({r['env'].get('commit', '?')[:7] for r in after.values()}))}")
 
-    incomparable, digest_bad, dirty = [], [], []
+    incomparable, digest_bad, dirty, moved = [], [], [], []
     for key in shared:
         if environment(before[key]) != environment(after[key]):
             diff = "; ".join(
@@ -120,7 +154,10 @@ def main(argv=None) -> int:
             )
             incomparable.append((key, diff))
         if before[key]["trajectory"]["digest"] != after[key]["trajectory"]["digest"]:
-            digest_bad.append(key)
+            # Only D=1 is a failure. See the module docstring: at D>1 the post-fix program
+            # is a different shape by design and cannot be bit-identical to the replicated
+            # one it replaces.
+            (digest_bad if key[3] == 1 else moved).append(key)
         for label, row in (("before", before[key]), ("after", after[key])):
             if row["env"].get("dirty_worktree"):
                 dirty.append((key, label))
@@ -150,17 +187,44 @@ def main(argv=None) -> int:
             print(f"  {key}: {diff}")
         print("  the difference cannot be attributed to the change under test")
     if digest_bad:
-        print(f"FAIL: {len(digest_bad)} of {len(shared)} trajectory digests moved")
+        print(f"FAIL: {len(digest_bad)} D=1 trajectory digest(s) moved")
         for key in digest_bad[:8]:
             print(f"  {key}")
-        print("  the change was supposed to be numerically inert. It is not, or the two")
-        print("  sweeps did not run the same configurations. Either way this is not a")
-        print("  before/after of one computation and no speedup should be published.")
+        print("  D=1 runs the same program before and after; the constraint is a no-op")
+        print("  there. Something other than the change under test differs, and this is")
+        print("  not a before/after of one computation.")
+    if moved:
+        print(f"{len(moved)} multi-device update(s) moved. Expected: a sharded evaluation")
+        print("reduces in a different order than the replicated one it replaces.")
+        print(f"\n  {'config':<44}{'relerr':>10}  ranks")
+        unadjudicated = 0
+        for key in moved:
+            ra = before[key].get("ranks", {}).get("digest")
+            rb = after[key].get("ranks", {}).get("digest")
+            if ra is None or rb is None:
+                verdict, unadjudicated = "not recorded before this baseline", unadjudicated + 1
+            elif ra == rb:
+                verdict = "held: summation order only"
+            else:
+                verdict = f"MOVED: noise floor, {after[key].get('ranks', {}).get('ties', '?')} ties"
+            name = f"{key[0]} d={key[1]} N={key[2]} {key[4]}/{key[5]} D={key[3]}"
+            print(f"  {name:<44}{relative(before[key], after[key]):>10.2e}  {verdict}")
+        if unadjudicated:
+            print(f"\n  {unadjudicated} could not be adjudicated: the baseline predates")
+            print("  rank_digest, so it does not record whether ranks moved. Do not read")
+            print("  these as passes.")
+        print("\n  check.py --results <after> is what judges the new run's self-consistency.")
     if not (incomparable or digest_bad):
         # Printed unconditionally. This used to live inside the `if multi` below, so a
         # partial run of D=1 results passed the digest check and then said nothing at all,
         # which reads exactly like a checker that did not run.
-        print(f"OK: {len(shared)} digests identical, environment held except commit")
+        # Counts what was actually asserted, not what was compared. Saying "N digests
+        # identical" while N-7 were identical is the kind of summary line that gets quoted
+        # into a doc and then defended.
+        one = [k for k in shared if k[3] == 1]
+        exact = len(one) - len(digest_bad)
+        print(f"OK: environment held except commit; {exact}/{len(one)} D=1 digests exact"
+              + (f", {len(moved)} multi-device updates moved (above)" if moved else ""))
         # Averaged over the D>1 members only. D=1 has efficiency 1 by construction and
         # including it would dilute the number toward 1 for free.
         multi = [k for k in shared if k[3] > 1 and k in eff_before and k in eff_after]
