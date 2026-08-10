@@ -1,0 +1,50 @@
+# M1 re-run, after the sharding fix. Strong scaling only.
+#
+# `sweep.yaml` was run on 2026-08-06 against commit 953283f, before `ShardedES.apply`
+# constrained its output to the member axis. At that commit the evaluation was replicated on
+# every device, so the strong-scaling curve measured a program whose per-device work did not
+# fall with D at all (docs/diagnosis-replicated-evaluation.md). Parallel efficiency came out
+# at 1/D, which is what a replicated evaluation costs, not what shardes does now.
+#
+# **Every knob below is copied from `sweep.yaml` unchanged.** That is the point: the only
+# difference between the two runs is the commit, so the two M1 curves can be laid on the same
+# axes and the difference attributed to the fix. Anything edited here that is not `modes` or
+# `results_dir` invalidates that comparison, so do not edit it. Re-run `feasible.py` against
+# this file if you ever do.
+#
+# Weak scaling, the A/B crossover and the storage ceiling (M2, M3, M6) come from the same
+# driver and are equally stale, but they are not what this file re-runs. `docs/03` frames
+# them as a record of 2026-08-06 rather than current behaviour.
+#
+# Comparability is checked, not assumed: the trajectory digests here must match the ones in
+# `results/` config for config. The fix is numerically inert (verified old-vs-new on one
+# backend, 32/32 identical), so a digest that moves means something other than the fix
+# changed, and the run is not a before/after of anything.
+modes: [strong]
+devices: [1, 2, 4, 8]
+d_model: [512, 2048]
+
+population:
+  512: [256, 1024]
+  2048: [128, 256]
+
+# Unused with `modes: [strong]`, kept so this file stays a literal copy of the sweep it is
+# compared against. A reader diffing the two should see modes and results_dir and nothing else.
+population_per_device:
+  512: [32, 128]
+  2048: [16, 32]
+
+strategies: [iid_gaussian, seed_regenerated, mirrored_lr1, lowrank_r1]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+warmup: 3
+repeats: 5
+
+# Not `results`. The pre-fix numbers are the other half of the comparison and are cited by
+# date in docs/03; overwriting them would destroy the baseline this run exists to beat.
+results_dir: results-postfix
+
+matmul_precision: highest
