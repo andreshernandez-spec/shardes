@@ -157,15 +157,20 @@ def main(argv=None) -> int:
         print("  sweeps did not run the same configurations. Either way this is not a")
         print("  before/after of one computation and no speedup should be published.")
     if not (incomparable or digest_bad):
+        # Printed unconditionally. This used to live inside the `if multi` below, so a
+        # partial run of D=1 results passed the digest check and then said nothing at all,
+        # which reads exactly like a checker that did not run.
+        print(f"OK: {len(shared)} digests identical, environment held except commit")
         # Averaged over the D>1 members only. D=1 has efficiency 1 by construction and
         # including it would dilute the number toward 1 for free.
         multi = [k for k in shared if k[3] > 1 and k in eff_before and k in eff_after]
         if multi:
             gb = sum(eff_before[k] for k in multi) / len(multi)
             ga = sum(eff_after[k] for k in multi) / len(multi)
-            print(f"OK: {len(shared)} digests identical, environment held except commit")
             print(f"    mean parallel efficiency over {len(multi)} multi-device configs: "
                   f"{gb:.3f} -> {ga:.3f}")
+        else:
+            print("    no multi-device configuration in common yet, so no efficiency to report")
     return 1 if (incomparable or digest_bad) else 0
 
 
