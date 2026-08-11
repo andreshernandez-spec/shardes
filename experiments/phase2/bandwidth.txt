@@ -1,0 +1,30 @@
+# What the collective payload demands of the interconnect, computed rather than estimated.
+#
+#   python comms.py --config sweep-postfix.yaml --json comms-postfix.json
+#   python bandwidth.py --comms comms-postfix.json --results results-postfix
+#
+# Bytes from the compiled HLO on 8 simulated CPU devices (payload is a property of the
+# program, not of the hardware). Generation times from the 2026-08-11 sweep on
+# 8 x A100-SXM4-80GB, commit a496345.
+#
+# This replaces an extrapolation. docs/03 previously estimated the post-fix requirement at
+# "under 1% of NVLink" by scaling the pre-fix 1.894 GB/s. The real figure is 1.43%: the
+# estimate counted A's bytes doubling and underweighted generations getting faster.
+#
+results-postfix: NVIDIA A100-SXM4-80GB
+96 multi-device configurations matched; 0 in the comms table had no timing
+
+     d     N  strategy          how  D   bytes/gen   ms/gen     GB/s  % NVLink
+  2048   128  lowrank_r1          B  8 100,663,808    11.75    8.564     1.43%
+  2048   128  mirrored_lr1        B  8 100,663,808    12.00    8.390     1.40%
+  2048   128  lowrank_r1          B  4 100,663,808    17.43    5.777     0.96%
+  2048   256  lowrank_r1          B  8 100,664,320    18.27    5.510     0.92%
+  2048   128  mirrored_lr1        B  4 100,663,808    18.67    5.393     0.90%
+  2048   256  mirrored_lr1        B  8 100,664,320    19.48    5.169     0.86%
+  2048   128  iid_gaussian        B  8 100,663,808    23.84    4.222     0.70%
+  2048   128  lowrank_r1          B  2 100,663,808    30.58    3.292     0.55%
+  2048   128  mirrored_lr1        B  2 100,663,808    31.00    3.248     0.54%
+  2048   256  lowrank_r1          B  4 100,664,320    31.11    3.236     0.54%
+
+most demanding: d=2048 N=128 lowrank_r1/B at D=8
+  8.564 GB/s, 1.43% of an A100's ~600 GB/s NVLink
