@@ -46,6 +46,9 @@ from shardes import sharding
 from shardes.core import ShardedES
 from shardes.problems import transformer_block
 from shardes.strategies.iid_gaussian import IIDGaussian
+from shardes.strategies.lowrank import LowRank
+from shardes.strategies.mirrored import Mirrored
+from shardes.strategies.seed_regenerated import SeedRegenerated
 
 DEVICE_COUNTS = [1, 2, 4, 8]
 
@@ -305,4 +308,86 @@ def test_the_evaluation_distributes_across_devices(d, model, fitness_shape):
         f"a {fitness_shape} fitness, a ratio of {ratio:.3f} against an ideal of "
         f"{1 / d:.3f}. The population is not being divided: every device is evaluating all "
         "of it, so wall clock cannot fall with D."
+    )
+
+
+#: Every strategy in the library, including the two wrappers. The point of the list is that
+#: `test_every_strategy_evaluates_only_its_own_shard` runs over all of it: the defect it
+#: guards is strategy-dependent, and the test that came before it hardcoded one strategy.
+ALL_STRATEGIES = [
+    ("iid_gaussian", IIDGaussian),
+    ("seed_regenerated", SeedRegenerated),
+    ("lowrank_r1", lambda: LowRank(r=1)),
+    ("mirrored_lowrank", lambda: Mirrored(LowRank(r=1))),
+    ("mirrored_seed_regenerated", lambda: Mirrored(SeedRegenerated())),
+]
+
+
+@pytest.mark.parametrize("d", [2, 4, 8])
+@pytest.mark.parametrize("name, make", ALL_STRATEGIES, ids=[n for n, _ in ALL_STRATEGIES])
+def test_every_strategy_evaluates_only_its_own_shard(d, name, make):
+    """Each device hands its strategy `n/D` member ids, whatever the strategy does with them.
+
+    **This is the second time the evaluation silently failed to distribute, and the first
+    test could not see it.** `test_the_evaluation_distributes_across_devices` above asserts
+    that per-device FLOPs fall as `1/D`, which caught the original bug and would catch a
+    regression in any strategy that evaluates with a `vmap`. It is **blind to `lax.scan`**:
+    XLA lowers a scan to a `while` loop and `cost_analysis` counts the loop body once,
+    ignoring the trip count. Measured, at `d_model=128, n=64`: a device scanning 8 members
+    and a device scanning 64 report 10,308,543 and 10,308,533 FLOPs. The ratio is 1.000
+    whether the scan was partitioned or not, so that assertion cannot distinguish the two,
+    in either direction.
+
+    `SeedRegenerated` evaluates with a scan, and it went on evaluating the whole population
+    on every device through the fix that repaired the other three strategies. Parallel
+    efficiency stayed at `1/D` and wall clock stayed flat at 431.95, 435.29, 436.43,
+    440.35 ms across `D=1,2,4,8` on 8x A100, which is how it was eventually found: by a
+    rented sweep, again (`docs/diagnosis-seed-regenerated-scan.md`).
+
+    So this asserts the property directly rather than through a proxy the compiler is free
+    to be vague about. `ShardedES.apply` runs the evaluation under `shard_map`, so the
+    `member_ids` its strategy receives is that device's shard and nothing else. Length
+    `n/D` is what "the population is divided" *means*; every downstream claim, FLOPs
+    included, is a consequence.
+
+    It is a white-box test: it reaches into what `apply` passes the strategy. That is
+    deliberate. The black-box measures available on simulated devices are wall clock, which
+    is meaningless when eight devices share four cores, and FLOPs, which is the metric that
+    just failed to see a whole class of bug.
+    """
+    mesh = sharding.make_mesh(d)
+    key = jax.random.key(0)
+    params = transformer_block.init(key, d_model=16)
+    data = transformer_block.make_batch(jax.random.fold_in(key, 1), d_model=16,
+                                        batch=2, seq=4)
+    n = 8 * d
+
+    strategy = make()
+    seen: list[int] = []
+    inner = type(strategy).apply
+
+    def record(self, model, params_, pert, sigma):
+        seen.append(pert.member_ids.shape[0])
+        return inner(self, model, params_, pert, sigma)
+
+    es = ShardedES(strategy, n=n, sigma=0.01, lr=0.05, mesh=mesh, how="A")
+    state = es.init(key, params)
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(type(strategy), "apply", record)
+    try:
+        def evaluate(s):
+            pert, scaled = es.ask(s)
+            return es.apply(transformer_block.loss, scaled, pert)(data)
+
+        jax.jit(evaluate).lower(state)
+    finally:
+        monkey.undo()
+
+    assert seen, "the strategy's apply was never called; this test no longer tests anything"
+    assert set(seen) == {n // d}, (
+        f"{name} was handed member_ids of length {sorted(set(seen))} at D={d}, expected "
+        f"{n // d} = n/D. A strategy that receives all {n} ids evaluates the whole "
+        "population on every device, so wall clock cannot fall with D no matter what the "
+        "FLOP counters say."
     )

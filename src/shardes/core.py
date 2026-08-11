@@ -45,7 +45,8 @@ from typing import Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
-from jax.sharding import Mesh
+from jax import shard_map
+from jax.sharding import Mesh, PartitionSpec as P
 
 from shardes import contraction, sharding
 from shardes.shaping import centered_ranks
@@ -163,25 +164,45 @@ class ShardedES:
         never does. This owns the *placement*, because the strategies are deliberately
         sharding-agnostic and the mesh lives here.
 
-        **The output is constrained to the member axis, and that is what makes the design
-        distribute.** The mesh is `AxisType.Auto`, so GSPMD propagates sharding outward from
-        wherever the program constrains it, and until this line the fitness was constrained
-        in exactly one place: `tell`, to *replicated*, because `centered_ranks` needs a
-        global sort. That propagates backwards. The cheapest way to have the whole fitness on
-        every device is to compute it on every device, needing no collective at all, so the
-        evaluation was replicated `D` times and the sharded `member_ids` was gathered and
-        ignored. Per-device FLOPs did not fall with `D` at all, and parallel efficiency was
-        therefore exactly `1/D`: measured 0.112 to 0.142 at `D=8` against `1/8 = 0.125`
-        (`docs/diagnosis-replicated-evaluation.md`).
+        **The evaluation runs under `shard_map`, and that is what makes it distribute.**
+        Each device is handed its own slice of `member_ids`, re-derives the perturbation for
+        exactly those members, and evaluates them. `out_specs=P(POP)` reassembles the
+        `(n, ...)` fitness. This is `contraction.contract_sharded` applied to the other half
+        of the generation, and the protocol was written for it: `sample`'s contract is that
+        `member_ids` declared `P("pop")` "makes this work unchanged inside and outside a
+        shard_map", and `apply` is specified to return `g(x) -> (n_local, ...)`.
 
-        It has to be the *output*. Constraining `pert.eps` instead does nothing, measured:
-        the consumer is free to gather it and compute everywhere, which it does. Constraining
-        what the vmap produces forces the vmap to be partitioned, and that back-propagates
-        and shards `eps` on its own.
+        **A sharding constraint on the output is not enough, and the second sweep is what
+        proved it.** Constraining the output to the member axis does distribute a `vmap`,
+        because GSPMD partitions a batch axis. It silently does not distribute a `lax.scan`:
+        a scan's iteration space is a sequential loop with a static trip count, so XLA
+        satisfies the constraint by gathering the ids, running all `n` iterations on every
+        device, and slicing. `SeedRegenerated` evaluates with a scan, so it kept the exact
+        `1/D` signature of the original bug through the fix that repaired every other
+        strategy: per-device eval FLOPs unchanged from `D=1` to `D=8`, wall clock flat at
+        431.95, 435.29, 436.43, 440.35 ms (`docs/diagnosis-seed-regenerated-scan.md`).
 
-        `members(mesh)` is `P("pop")` with no trailing entries, which is correct at any rank:
-        an `(n, episodes)` fitness for `group_relative` shards its member axis and leaves the
-        rest replicated.
+        `shard_map` has no such precondition. It partitions by construction rather than by
+        propagation, so it does not care whether the body is a vmap, a scan, or a loop the
+        strategy invented, which is the property the protocol needs: a user-defined strategy
+        must not have to know which shapes GSPMD happens to be able to infer.
+
+        **Re-deriving rather than slicing the handed perturbation costs nothing, and both
+        contractions already work this way.** `contract_replicated` and `contract_sharded`
+        both call `strategy.sample(base_key, params, ids)` and use the `Perturbation` only
+        for `base_key` and `member_ids`. With this doing the same, a materialized `eps` from
+        `ask` has no consumer inside a jitted generation and is eliminated. Regenerability is
+        a protocol requirement precisely so that this is available.
+
+        The alternative was to pass the perturbation through `in_specs`, which needs a
+        `PartitionSpec` per leaf, which needs to know which leaves carry a member axis. The
+        only generic rule available is "leading dimension equals `n`", and a parameter leaf
+        whose leading dimension happens to equal the population would then be sharded
+        silently and wrongly. That is a correctness bug traded for an allocation the compiler
+        already removes.
+
+        `P(POP)` has no trailing entries, which is correct at any rank: an `(n, episodes)`
+        fitness for `group_relative` shards its member axis and leaves the rest replicated.
 
         **`x` is replicated to match `params`, and that is a correctness fix rather than a
         convenience.** Every member of a generation must be evaluated on the *same* data,
@@ -195,11 +216,35 @@ class ShardedES:
         rollout. The MuJoCo adapter hit exactly that. This paragraph described the line for
         some time before the line existed.
         """
-        g = self.strategy.apply(model, state.params, pert, state.sigma)
+        def local(ids_shard: Array, x_local: Array) -> Array:
+            # Mark the replicated closure as varying across the manual axis before the
+            # strategy sees it, exactly as `contraction.contract_sharded` does and for a
+            # related reason. `params` enters the body carrying the Auto mesh it was created
+            # under; indexing it with ids that vary across the manual axis then raises
+            # "Context mesh ... should match the mesh of sharding ...". `LowRank.gather` is
+            # where it bites, since `w[ids]` is exactly that indexing, so the embedding path
+            # fails and the dense path does not.
+            #
+            # This is the right home for it. `pcast` needs the axis name, the axis name lives
+            # here, and the strategy protocol stays silent about devices.
+            varying = jax.tree.map(
+                lambda x: jax.lax.pcast(x, (sharding.POP,), to="varying"), state.params
+            )
+            pert_local = self.strategy.sample(pert.base_key, varying, ids_shard)
+            g = self.strategy.apply(model, varying, pert_local, state.sigma)
+            return g(x_local)
 
         def evaluate(x: Array) -> Array:
+            # Before the shard_map, not inside it. `in_specs=P()` requires x to be
+            # replicated across the mesh; this is what makes a freshly built batch sitting
+            # on device 0 satisfy that instead of raising from inside the user's rollout.
             x = jax.lax.with_sharding_constraint(x, sharding.replicated(self.mesh))
-            return jax.lax.with_sharding_constraint(g(x), sharding.members(self.mesh))
+            return shard_map(
+                local,
+                mesh=self.mesh,
+                in_specs=(P(sharding.POP), P()),
+                out_specs=P(sharding.POP),
+            )(pert.member_ids, x)
 
         return evaluate
 
