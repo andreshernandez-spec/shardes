@@ -365,7 +365,7 @@ and B is faster in 12 of 16 cells. The pre-fix reading, that the two contraction
 | strategy | `log10(t_B/t_A)` | reading |
 |---|---|---|
 | `iid_gaussian` | -0.373 to -0.252 | B everywhere, 1.8x to 2.4x faster |
-| `seed_regenerated` | -0.057 to -0.027 | B everywhere, marginally |
+| `seed_regenerated` | -0.057 to -0.027 | B everywhere, but see below: this row is not a contraction result |
 | `lowrank_r1` | -0.039 to +0.049 | mixed, sign flips with model size |
 | `mirrored_lr1` | -0.004 to +0.059 | mixed, sign flips with model size |
 
@@ -375,18 +375,42 @@ falling to 0.125 at `D=8` against an ideal `1/8 = 0.125`. The whole generation d
 
 ```
                                       evalFLOP  fullFLOP
-  d=2048 N=256 iid_gaussian/A D1->D8     0.125     0.260
+  d=2048 N=256 iid_gaussian/A D1->D8     0.125     1.109
   d=2048 N=256 iid_gaussian/B D1->D8     0.125     0.125
-  d=2048 N=256 lowrank_r1/A   D1->D8     0.128     0.135
-  d=2048 N=256 lowrank_r1/B   D1->D8     0.128     0.128
+  d=2048 N=256 lowrank_r1/A   D1->D8     0.125     0.273
+  d=2048 N=256 lowrank_r1/B   D1->D8     0.125     0.133
+  d=2048 N=256 mirrored_lr1/A D1->D8     0.125     0.213
+  d=2048 N=256 mirrored_lr1/B D1->D8     0.125     0.146
 ```
 
 Strategy A regenerates and contracts the whole population on every device, which `docs/02`
-C1.3 chose deliberately to trade compute for communication. For `iid_gaussian` that
-contraction is `O(N*|params|)` per device and caps full-generation scaling at 0.260, about
-2x the ideal. For `lowrank_r1` it runs over rank-1 factors and is nearly free, 0.135. That is
-the A/B tradeoff becoming visible for the first time; before the fix nothing scaled and there
-was nothing to trade.
+C1.3 chose deliberately to trade compute for communication. Under B the whole generation
+falls at 0.125, the ideal. Under A it does not fall at all for `iid_gaussian`, 1.109, because
+regenerating `N` full-rank perturbations per device costs about what evaluating them does and
+that cost is independent of `D`. For the low-rank strategies A's contraction runs over rank-1
+factors and is far cheaper, 0.273 and 0.213, which is why `lowrank_r1/A` still reaches 0.728
+measured efficiency while `iid_gaussian/A` stops at 0.367. That is the A/B tradeoff becoming
+visible for the first time; before the fix nothing scaled and there was nothing to trade.
+
+**These are GPU numbers, and the same table on CPU disagrees.** `profile.py --static` on 8
+simulated CPU devices reports `iid_gaussian/A` at 0.260 rather than 1.109 and `lowrank_r1/A`
+at 0.135 rather than 0.273. The evaluation column agrees, 0.125 on both. This document
+previously carried the CPU figures on the assumption, stated in `profile.py`, that absolute
+FLOP counts are backend dependent but ratios are portable. **That assumption is wrong for the
+contraction**, which under A regenerates the same perturbation the evaluation already built,
+leaving the two backends free to disagree about how much of it is common subexpression. Quote
+the backend the sweep ran on, which is the table above.
+
+**`seed_regenerated`'s row measures the wrong thing and should not be read as a contraction
+result.** M3 is a ratio of whole generations, which is a statement about the contraction only
+when the contraction is a meaningful share of the generation. For `seed_regenerated` the
+evaluation is 399 ms of a 432 ms generation and does not distribute at all, so the ratio is
+dominated by a part that is identical under both contractions and the contraction difference
+is compressed toward zero. The per-part timings show what the ratio hides: at
+`d=512, N=1024`, `tell` scales `D=1` to `D=8` at **0.15 under B and 1.02 under A**, which is
+the difference between a contraction that shards and one that does not. The 3% to 6% in the
+table is that difference divided by a generation the defect made four times too long. The
+row will move once the strategy distributes.
 
 Still no crossover contour. Two model sizes by three populations cannot carry one, and that
 is unchanged by any of this.
@@ -426,7 +450,10 @@ doing the same thing for a reason that was not.
 
 Three series still grow, all `iid_gaussian/A`, as designed. `seed_regenerated` is flat at 15
 MiB (`d=512`) and 144 MiB (`d=2048`) across every device count, still the clearest systems
-result in the sweep.
+result in the sweep. **Unlike its M1 and M3 rows, this one is not distorted by the defect
+above.** Its scan holds one member at a time, so per-device storage is `O(|params|)`
+whatever `n` and whatever `D`, and that stays true once the evaluation distributes. The
+memory claim is about the schedule, and the defect is about where the schedule runs.
 
 One anomaly survives unchanged: `iid_gaussian/A` at `d=512, N/device=32` reads 486, 454, 902,
 1798 MiB, dipping 6.6% at `D=2` before doubling. The pre-fix run had the same shape (486,
