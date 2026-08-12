@@ -138,9 +138,13 @@ def test_odd_shard_under_pairing_is_refused():
     """Mirrored pairs (2k, 2k+1). 8 members over 4 devices is 2 each and fine; 4 over 4 is
     1 each and splits every pair."""
     mesh4 = sharding.make_mesh(4)
-    sharding.check_population(8, mesh4, paired=True)
-    with pytest.raises(ValueError, match="odd"):
-        sharding.check_population(4, mesh4, paired=True)
+    sharding.check_population(8, mesh4, pairing=2)
+    with pytest.raises(ValueError, match="pairing"):
+        sharding.check_population(4, mesh4, pairing=2)
+    # An integer rather than a bool, so a strategy grouping members in fours can say so.
+    sharding.check_population(16, mesh4, pairing=4)
+    with pytest.raises(ValueError, match="pairing"):
+        sharding.check_population(8, mesh4, pairing=4)
 
 
 def test_pairing_check_is_opt_in():
@@ -391,3 +395,13 @@ def test_every_strategy_evaluates_only_its_own_shard(d, name, make):
         "population on every device, so wall clock cannot fall with D no matter what the "
         "FLOP counters say."
     )
+
+
+def test_an_empty_population_is_refused():
+    """`tell` divides by `n * sigma`, so `n = 0` produced all-NaN parameters and no error.
+
+    Found by review on 2026-08-11. The failure was silent in the worst way: `check_population`
+    accepted it, every shape stayed consistent, and the run trained on NaN.
+    """
+    with pytest.raises(ValueError, match="at least 1"):
+        sharding.check_population(0, sharding.make_mesh(1))

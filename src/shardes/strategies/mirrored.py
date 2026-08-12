@@ -26,6 +26,7 @@ Consequences worth knowing before they bite:
 from typing import Callable, NamedTuple
 
 import jax
+import numpy as np
 import jax.numpy as jnp
 
 from shardes.strategies.protocol import PerturbationStrategy
@@ -40,7 +41,40 @@ class MirroredPerturbation(NamedTuple):
     inner: PyTree
 
 
+def _check_alignment(member_ids: Array) -> None:
+    """Refuse a batch that is not whole (2k, 2k+1) pairs, when that is knowable.
+
+    **Only checkable on concrete ids, and that is a real limitation rather than laziness.**
+    Under `jit` `member_ids` is a tracer and its values do not exist yet, so
+    `if (ids[0::2] % 2).any(): raise` cannot be written. The structural guarantee is
+    `check_population`, which runs at construction where `n` and the device count are static;
+    this catches the direct caller, the test, and the notebook, which is where a misaligned
+    batch would actually come from.
+
+    A pair split across a batch boundary does not raise anywhere else and does not produce a
+    wrong shape. It produces a population whose antithetic cancellation is quietly gone, and
+    members whose sign depends on how they were batched.
+    """
+    try:
+        ids = np.asarray(member_ids)
+    except (TypeError, jax.errors.TracerArrayConversionError):
+        return  # traced, so the values are not available; check_population covers this
+    if ids.size % 2 or (ids[0::2] % 2 != 0).any() or (ids[1::2] != ids[0::2] + 1).any():
+        raise ValueError(
+            f"Mirrored needs whole adjacent pairs starting on an even id, got {ids.tolist()}. "
+            "Members pair as (2k, 2k+1) and the direction is read from the pair's position, "
+            "so a batch that starts mid-pair gives a member the opposite sign to the one it "
+            "has in any other batch, which breaks the seed contract in sharding.py."
+        )
+
+
 class Mirrored:
+    #: Members per indivisible group. `ShardedES` reads this instead of asking
+    #: `isinstance(strategy, Mirrored)`, so a user-defined paired strategy can ask for the
+    #: same alignment without being this class. The protocol treats a strategy with no
+    #: `pairing` attribute as 1, which is every unpaired strategy.
+    pairing = 2
+
     def __init__(self, inner: PerturbationStrategy):
         self.inner = inner
 
@@ -52,9 +86,18 @@ class Mirrored:
                 "(2k, 2k+1), so an odd count or an odd chunk splits a pair and loses the "
                 "antithetic cancellation."
             )
-        # `// 2` on the even ids, so the direction index comes from the id rather than
-        # from the position in the batch. Member 7 is the negative image of direction 3
-        # whatever batch it arrives in, which is what the seed contract requires.
+        # **The slice is positional, and it is only correct because the batch is aligned.**
+        # This comment used to claim the direction came from the id rather than the
+        # position, which is false and was measured: with ids [0, 1] member 1 is the
+        # negative image of direction 0, and with ids [1, 2] the same member 1 is the
+        # positive image of direction 0. The same global member, two perturbations.
+        #
+        # The precondition is that the batch is a whole number of adjacent (2k, 2k+1) pairs
+        # starting on an even id. `ShardedES` guarantees it: `member_ids` is contiguous and
+        # `check_population` refuses a population whose per-device count is not a multiple
+        # of `pairing`, so every shard starts on an even id. `_check_alignment` re-checks it
+        # for anyone calling the strategy directly.
+        _check_alignment(member_ids)
         base_ids = member_ids[0::2] // 2
         return MirroredPerturbation(
             base_key, member_ids, self.inner.sample(base_key, params, base_ids)

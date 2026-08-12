@@ -30,4 +30,17 @@ def per_leaf(sigma: PyTree, like: PyTree) -> PyTree:
     """
     if jax.tree.structure(sigma) == jax.tree.structure(like):
         return sigma
+    # **Only a leaf broadcasts.** This used to fall through to `tree.map` for anything whose
+    # structure did not match, so a sigma tree with one wrong key was silently treated as a
+    # scalar and the whole object was broadcast to every leaf. The run then looked normal.
+    # A mismatched tree is a caller error and the only question is whether it is reported.
+    # `treedef_is_leaf`, not `num_leaves == 1`: a one-key dict has a single leaf and is not
+    # a scalar, and treating it as one is the exact silent broadcast being closed here.
+    if not jax.tree_util.treedef_is_leaf(jax.tree.structure(sigma)):
+        raise ValueError(
+            f"sigma has structure {jax.tree.structure(sigma)}, which is neither a scalar nor "
+            f"a match for params' structure {jax.tree.structure(like)}. A per-coordinate "
+            "sigma must have exactly the leaves params has; anything else was previously "
+            "broadcast as though it were a scalar."
+        )
     return jax.tree.map(lambda _: sigma, like)
