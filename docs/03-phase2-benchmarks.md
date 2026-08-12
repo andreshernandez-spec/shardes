@@ -347,8 +347,21 @@ per-device eval FLOPs unchanged from `D=1` to `D=8`. Its `apply` produces the ev
 `lax.scan` rather than `vmap`, and a scan's iteration space is a sequential loop that GSPMD
 cannot partition, so the output constraint is satisfied by gathering the ids and running all
 `n` iterations everywhere. `docs/diagnosis-seed-regenerated-scan.md` has the measurement and
-the mechanism. **Not fixed:** the obvious repair, a vmap, would distribute the work and
-destroy the `O(|params|)` memory that is the entire point of seed regeneration.
+the mechanism.
+
+**Fixed on 2026-08-11, after this sweep ran, so every `seed_regenerated` row above and below
+is stale.** `ShardedES.apply` now reshapes the member axis to `(D, n/D)` and vmaps over it,
+which gives GSPMD a batch axis to partition instead of a loop it must decline.
+`docs/proposal-scan-strategies-distribute.md` records the four options and why `shard_map`,
+which also distributes, was rejected: it puts the user's model inside a manual mesh and
+breaks three MuJoCo rollout tests. The obvious repair, replacing the scan with a vmap, was
+never a candidate, since it would distribute the work and destroy the `O(|params|)` memory
+that is the entire point of seed regeneration.
+
+The other three strategies are unaffected: their evaluation already distributed and the
+change does not alter what they compute. **Re-running the `seed_regenerated` configurations
+is the outstanding measurement**, and until it happens M1, M2, M3 and M6 should be read as
+describing a `seed_regenerated` that did not distribute.
 
 ### M2, weak scaling
 

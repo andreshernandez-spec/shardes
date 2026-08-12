@@ -2,8 +2,12 @@
 
 Written 2026-08-11 for the defect in `diagnosis-seed-regenerated-scan.md`. Per `CLAUDE.md`
 working style, both defensible answers are written down with the tradeoff rather than one
-being picked silently. **The sharding logic is Andres's to write**; this is the draft and the
-measurements behind it.
+being picked silently.
+
+> **Decided 2026-08-11: option B.** `ShardedES.apply` reshapes the member axis to `(D, n/D)`
+> and vmaps over it. The `shard_map` implementation is kept in history at `5aecfea` rather
+> than in the tree, and the reasoning for rejecting it is summarised in `apply`'s docstring
+> so it is not something the next reader has to rediscover by trying it.
 
 ## What has to be true
 
