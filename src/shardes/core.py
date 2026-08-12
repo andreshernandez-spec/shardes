@@ -50,7 +50,6 @@ from jax.sharding import Mesh
 from shardes import contraction, sharding
 from shardes.shaping import centered_ranks
 from shardes.strategies._scale import per_leaf
-from shardes.strategies.mirrored import Mirrored
 from shardes.strategies.protocol import Perturbation, PerturbationStrategy
 from shardes.types import Array, Key, PyTree
 
@@ -112,10 +111,12 @@ class ShardedES:
     ):
         # Validated once, here, where the error names the configuration that caused it
         # rather than surfacing as a shape mismatch inside shard_map three calls later.
-        # `paired` is asked of the strategy rather than assumed: Mirrored needs an even
-        # number of members per device or a pair straddles a device boundary and the
-        # antithetic cancellation is silently lost.
-        sharding.check_population(n, mesh, paired=isinstance(strategy, Mirrored))
+        # `pairing` is asked of the strategy rather than assumed from its type: a strategy
+        # needing an even number of members per device says so, and a pair straddling a
+        # device boundary loses the antithetic cancellation silently. This read
+        # `isinstance(strategy, Mirrored)`, which worked for the one paired strategy in this
+        # repo and gave a user-defined one no way to ask.
+        sharding.check_population(n, mesh, pairing=getattr(strategy, "pairing", 1))
         if how not in contraction.BY_NAME:
             raise ValueError(f"how must be one of {sorted(contraction.BY_NAME)}, got {how!r}")
 
@@ -130,7 +131,28 @@ class ShardedES:
     # ----------------------------------------------------------------------------------
 
     def init(self, key: Key, params: PyTree) -> State:
-        """Params replicated, everything else scalar. No solution is ever flattened."""
+        """Params replicated, everything else scalar. No solution is ever flattened.
+
+        Validates sigma here rather than at construction, because a tree-valued sigma can
+        only be checked against `params` and `params` arrives here. `tell` divides by
+        `n * sigma`, so a zero or negative leaf produces NaN parameters on the first
+        generation with nothing else raising.
+        """
+        per_leaf(self.sigma, params)  # structure, and its error message
+        for leaf in jax.tree.leaves(self.sigma):
+            # Concrete leaves only. A traced sigma is legitimate, since sigma lives in the
+            # state and an adaptive rule would compute it, and a tracer's value does not
+            # exist to compare against zero.
+            if isinstance(leaf, (int, float)) or getattr(leaf, "size", 0) and not isinstance(
+                leaf, jax.core.Tracer
+            ):
+                arr = jnp.asarray(leaf)
+                if not bool(jnp.all(jnp.isfinite(arr))) or not bool(jnp.all(arr > 0)):
+                    raise ValueError(
+                        f"sigma must be finite and strictly positive, got {arr}. `tell` "
+                        "divides by n * sigma, so a zero or negative step size gives NaN or "
+                        "a reversed update rather than an error."
+                    )
         return State(
             params=params,
             sigma=jax.tree.map(jnp.float32, self.sigma),

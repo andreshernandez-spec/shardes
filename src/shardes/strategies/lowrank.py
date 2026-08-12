@@ -121,6 +121,30 @@ class LowRankWeight:
         return self.w[ids] + (self.a[ids] @ self.b.T) * self.scale
 
 
+#: Raised when a per-coordinate sigma meets a structured leaf. The message explains the
+#: mathematics rather than the shapes, because the shapes are a symptom.
+#:
+#: The perturbed weight is `W + sigma * (A B^T)` with `*` elementwise. An elementwise sigma
+#: does not preserve the rank of that product: measured at `m=5, k=4, r=2`, the rank of
+#: `sigma * (A B^T)` is 4. So there is no pair of GEMMs left to apply, and materializing the
+#: sum would discard invariant 3. `core.State` documents sigma as "a scalar or a
+#: params-shaped pytree", which is true of the full-rank strategies and was never true here.
+#:
+#: The separable family survives and is the natural extension if anyone needs it:
+#: `(u v^T) * (A B^T) == (u[:, None] * A) @ (v[:, None] * B).T`, still rank `r`, still two
+#: GEMMs. That covers per-output-unit and per-input-unit step sizes, which is what a
+#: per-coordinate schedule usually means in practice. It is not implemented: it would make a
+#: sigma leaf a pair rather than an array, which is a change to the public contract.
+_NON_SCALAR_SIGMA = (
+    "LowRank got a sigma of shape {shape} for a leaf it perturbs with rank-r factors, and "
+    "only a scalar works there. The perturbation is W + sigma * (A B^T), and an elementwise "
+    "sigma raises the rank of that product above r, so it cannot be applied as two GEMMs "
+    "against the factors and the sum is never formed (invariant 3). Use a scalar sigma for "
+    "this leaf, or a full-rank strategy if the per-coordinate schedule is the point. "
+    "docs/proposal-review-fixes.md has the reasoning and the separable case that would work."
+)
+
+
 class LeafFactors(NamedTuple):
     """Per-leaf perturbation state. `b is None` marks a densely perturbed leaf.
 
@@ -204,7 +228,11 @@ class LowRank:
             def one(factors: PyTree) -> Array:
                 def substitute(leaf, s, lf):
                     if lf.b is None:
+                        # A densely perturbed leaf never enters the two-GEMM identity, so
+                        # any shape of sigma multiplies it the ordinary way.
                         return leaf + s * lf.a
+                    if jnp.ndim(s):
+                        raise ValueError(_NON_SCALAR_SIGMA.format(shape=jnp.shape(s)))
                     return LowRankWeight(leaf, lf.a, lf.b,
                                          jnp.asarray(s / math.sqrt(self.r), leaf.dtype))
 
