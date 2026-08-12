@@ -74,46 +74,80 @@ def _style(ax):
 
 
 def strong_scaling(rows, out: pathlib.Path) -> str | None:
-    """M1. Wall-clock per generation and parallel efficiency, side by side.
+    """M1. Wall-clock per generation over parallel efficiency, one column per (model size, N).
 
-    Two panels rather than two y-axes: they have different units, and a dual-axis chart
-    lets the reader infer a crossing that is an artefact of the scale choice.
+    Two rows rather than two y-axes: they have different units, and a dual-axis chart lets
+    the reader infer a crossing that is an artefact of the scale choice.
+
+    **This keyed on `(strategy, how)` alone until 2026-08-10, which is the third time that
+    bug has appeared in this file.** The sweep runs four `(d_model, population)` blocks, so
+    all four collapsed onto every line and whichever sorted last won each device count. By
+    filename order the survivor was `d=512, N=256` at every device count, so the efficiency
+    ratios happened to stay within one block and the figure was wrong by omission rather
+    than by arithmetic: it showed a quarter of the sweep and was captioned as if it showed
+    all of it. Nothing about that was guaranteed. Add a configuration whose name sorts later
+    at one device count only, and `T_1` and `T_8` come from different shapes, which makes the
+    ratio meaningless while still drawing a perfectly plausible line.
+
+    M2 and M3 had the same defect and say so in their own docstrings. A dict key missing a
+    factor of the design produces a plausible line, not an error, which is why it survives
+    review three times.
     """
-    series = collections.defaultdict(dict)
+    series: dict = collections.defaultdict(lambda: collections.defaultdict(dict))
     for r in rows:
         c = r["config"]
         if c["mode"] != "strong":
             continue
-        series[(c["strategy"], c["how"])][c["devices"]] = r["seconds_median"]
+        series[(c["d_model"], c["population"])][(c["strategy"], c["how"])][c["devices"]] = (
+            r["seconds_median"]
+        )
     if not series:
         return "no strong-scaling rows"
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.4))
-    for (strategy, how), by_d in sorted(series.items()):
-        ds = sorted(by_d)
-        ts = [by_d[d] for d in ds]
-        ax1.plot(ds, ts, marker=MARKERS[how], ms=8, lw=2, color=HUES[strategy])
-        ax2.plot(ds, [ts[0] / (d * by_d[d]) for d in ds], marker=MARKERS[how], ms=8, lw=2,
-                 color=HUES[strategy], label=f"{strategy} / {how}")
+    cells = sorted(series)
+    fig, axes = plt.subplots(2, len(cells), figsize=(3.7 * len(cells), 7.4), squeeze=False)
+    for j, cell in enumerate(cells):
+        d_model, population = cell
+        ax1, ax2 = axes[0][j], axes[1][j]
+        for (strategy, how), by_d in sorted(series[cell].items()):
+            ds = sorted(by_d)
+            ts = [by_d[d] for d in ds]
+            ax1.plot(ds, ts, marker=MARKERS[how], ms=7, lw=2, color=HUES[strategy])
+            ax2.plot(ds, [ts[0] / (d * by_d[d]) for d in ds], marker=MARKERS[how], ms=7,
+                     lw=2, color=HUES[strategy], label=f"{strategy} / {how}")
 
-    ideal_d = sorted({d for by_d in series.values() for d in by_d})
-    # No single ideal line on the left panel. With several series it can only be anchored to
-    # one of them, and it then reads as a target the others are failing to hit. The
-    # efficiency panel carries the ideal reference honestly, at 1.0, for every series at once.
-    ax2.axhline(1.0, ls="--", lw=1.5, color=MUTED, label="ideal")
+        # No single ideal line on the time panel. With several series it can only be anchored
+        # to one of them, and it then reads as a target the others are failing to hit. The
+        # efficiency panel carries the ideal reference honestly, at 1.0, for every series.
+        ax2.axhline(1.0, ls="--", lw=1.5, color=MUTED,
+                    label="ideal" if j == 0 else None)
 
-    ax1.set(xscale="log", yscale="log", xlabel="devices", ylabel="seconds / generation")
-    ax2.set(xscale="log", xlabel="devices", ylabel="parallel efficiency  $T_1/(D\\,T_D)$",
-            ylim=(0, 1.15))
-    for ax in (ax1, ax2):
-        ax.set_xticks(ideal_d)
-        ax.set_xticklabels([str(d) for d in ideal_d])
-        ax.xaxis.set_minor_locator(NullLocator())
-        _style(ax)
-    ax1.set_title("M1  strong scaling: fixed total population", color=INK, loc="left")
-    ax2.set_title("parallel efficiency", color=INK, loc="left")
-    ax2.legend(frameon=False, fontsize=8, labelcolor=MUTED,
-               loc="center left", bbox_to_anchor=(1.02, 0.5))
+        ideal_d = sorted({d for by_d in series[cell].values() for d in by_d})
+        ax1.set(xscale="log", yscale="log", xlabel="devices")
+        ax2.set(xscale="log", xlabel="devices", ylim=(0, 1.15))
+        if j == 0:
+            ax1.set_ylabel("seconds / generation")
+            ax2.set_ylabel("parallel efficiency  $T_1/(D\\,T_D)$")
+        for ax in (ax1, ax2):
+            ax.set_xticks(ideal_d)
+            ax.set_xticklabels([str(d) for d in ideal_d])
+            ax.xaxis.set_minor_locator(NullLocator())
+            _style(ax)
+        ax1.set_title(f"d={d_model}, N={population}", color=INK, loc="left", fontsize=10)
+
+    axes[0][0].set_title(
+        f"M1  strong scaling: fixed total population\nd={cells[0][0]}, N={cells[0][1]}",
+        color=INK, loc="left", fontsize=10,
+    )
+    # Built from every panel's handles, not from the last one's. A resumed or partial sweep
+    # can leave the rightmost block holding a subset of the strategies, and a legend taken
+    # from it silently documents four series while eight are drawn.
+    handles: dict = {}
+    for ax in axes.flat:
+        for h, lab in zip(*ax.get_legend_handles_labels()):
+            handles.setdefault(lab, h)
+    axes[1][-1].legend(handles.values(), handles.keys(), frameon=False, fontsize=8,
+                       labelcolor=MUTED, loc="center left", bbox_to_anchor=(1.02, 0.5))
 
     if simulated(rows):
         watermark(fig)
