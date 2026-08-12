@@ -127,6 +127,14 @@ random one.
 
 ## Results, 2026-08-06
 
+> **Superseded as a description of current behaviour by "Results, 2026-08-11" below, and
+> kept as the before half of a before and after.** Every number here was correctly measured
+> on a program whose evaluation was replicated on every device
+> (`docs/diagnosis-replicated-evaluation.md`). Two claims in this section are now known to be
+> wrong rather than merely dated: the estimate that post-fix bandwidth would stay "under 1%
+> of NVLink" (measured 1.43%), and the M1 figure, which was drawn from one of the four
+> `(d_model, population)` blocks because of a key bug in `plot.py`.
+
 **The run.** 256 configurations, 0 failed, 0 over cap, 2h56m on 8x A100-SXM4-80GB (driver
 595.71.05, CUDA 13.2, jax 0.11.0, community cloud, $27.90). `XLA_FLAGS` carried
 `--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer=`; the second is not
@@ -277,6 +285,222 @@ different GPU, a newer XLA, or TF32.
 
 ---
 
+## Results, 2026-08-11, after the sharding fix
+
+The 2026-08-06 section above is kept as written. It is the other half of a before and after,
+not a draft to be corrected: every number in it was correctly measured, on a program whose
+evaluation was replicated on every device. What changed is the program.
+
+**The run.** The same 256 configurations, from `experiments/phase2/sweep-postfix.yaml`, which
+differs from `sweep.yaml` by one line, `results_dir`. 0 failed, 0 over cap, 3h57m of measured
+wall on 8x A100-SXM4-80GB (driver 595.71.05, CUDA 13.2, jax 0.11.0, community cloud).
+`XLA_FLAGS` and every other knob are unchanged. Data in `experiments/phase2/results-postfix/`,
+figures in `experiments/phase2/figures-postfix/`, commit `a496345`, all 256 records stamped
+`dirty_worktree: false`.
+
+Billed $52.43 against 4h43m of pod uptime. The gap between 3h57m of measurement and 4h43m of
+billing is setup, two failed bootstraps and the tail after the sweep finished. Budget from
+uptime, not from the wall clock the driver reports.
+
+**Comparability is enforced, not asserted.** `experiments/phase2/compare.py` holds the
+platform, chip, jax, jaxlib and `XLA_FLAGS` fixed across the two runs and allows only the
+commit to differ, then checks every configuration that appears in both. **All 64 `D=1`
+trajectory digests are bitwise identical to 2026-08-06.** `D=1` is where the fix is a no-op,
+so that is the check with teeth: the two sweeps ran the same library on the same arithmetic,
+and what follows is a property of the change rather than of the machine.
+
+At `D>1` bitwise equality is neither expected nor demanded, and the reason is the defect
+itself. Before the fix every device count ran the same program shape, a vmap over all `N`
+members `D` times over, which is why `check.py` reported strategy A exact across
+`D=1,2,4,8` for the whole pre-fix sweep. That pass was vacuous. After the fix `D=4` vmaps
+over `N/4`, reduces in a different order, and lands a fraction of an ulp elsewhere. 22
+multi-device updates moved, by 6.34e-05 to 8.22e-04. Four are adjudicated as the documented
+noise floor by their rank digests; **18 cannot be adjudicated at all**, because the 2026-08-06
+baseline predates `rank_digest` and does not record whether members changed rank. They are
+reported as unadjudicated rather than counted as passes.
+
+### M1, strong scaling: it works now
+
+Parallel efficiency `T1/(D*T8)` at `D=8`, against **0.112 to 0.142 everywhere** before:
+
+| | `D=8` efficiency, post-fix | before |
+|---|---|---|
+| `iid_gaussian / B` | 0.560 to **0.815** | 0.119 to 0.127 |
+| `lowrank_r1 / A` | 0.382 to **0.728** | 0.112 to 0.124 |
+| `mirrored_lr1 / A` | 0.379 to 0.704 | 0.112 to 0.124 |
+| `iid_gaussian / A` | 0.313 to 0.367 | 0.119 to 0.125 |
+| `seed_regenerated` | 0.123 to 0.142 | 0.124 to 0.142 |
+
+Mean parallel efficiency over the 112 multi-device configurations present in both runs:
+**0.298 to 0.621**. Excluding `seed_regenerated`, which is a separate defect and is treated
+below, `D=8` efficiency spans **0.313 to 0.815**, a gain of 2.6x to 6.5x over the same
+configuration measured on the same hardware.
+
+Efficiency rises with problem size, 0.31 to 0.42 at the smallest block and 0.59 to 0.82 at
+the largest, which is ordinary amortization of fixed per-generation cost and not a property
+of the design.
+
+**`seed_regenerated` does not distribute, and this is a second defect rather than a slow
+strategy.** Its wall clock is flat in `D` (108.56, 109.04, 109.61 ms at `D=1,2,4` for
+`d=512, N=256`), efficiency is `1/D` to three digits, and `profile.py --static` shows
+per-device eval FLOPs unchanged from `D=1` to `D=8`. Its `apply` produces the evaluation with
+`lax.scan` rather than `vmap`, and a scan's iteration space is a sequential loop that GSPMD
+cannot partition, so the output constraint is satisfied by gathering the ids and running all
+`n` iterations everywhere. `docs/diagnosis-seed-regenerated-scan.md` has the measurement and
+the mechanism.
+
+**Fixed on 2026-08-11, after this sweep ran, so every `seed_regenerated` row above and below
+is stale.** `ShardedES.apply` now reshapes the member axis to `(D, n/D)` and vmaps over it,
+which gives GSPMD a batch axis to partition instead of a loop it must decline.
+`docs/proposal-scan-strategies-distribute.md` records the four options and why `shard_map`,
+which also distributes, was rejected: it puts the user's model inside a manual mesh and
+breaks three MuJoCo rollout tests. The obvious repair, replacing the scan with a vmap, was
+never a candidate, since it would distribute the work and destroy the `O(|params|)` memory
+that is the entire point of seed regeneration.
+
+The other three strategies are unaffected: their evaluation already distributed and the
+change does not alter what they compute. **Re-running the `seed_regenerated` configurations
+is the outstanding measurement**, and until it happens M1, M2, M3 and M6 should be read as
+describing a `seed_regenerated` that did not distribute.
+
+### M2, weak scaling
+
+Throughput at `D=8` as a multiple of `D=1`, ideal 8x: **1.00x to 7.53x, median 5.69x** across
+32 series, against **1.01x to 1.58x, median 1.20x** before. Excluding `seed_regenerated`,
+**3.01x to 7.53x, median 6.26x**. The best is `iid_gaussian/B` at `d=2048, N/device=32`.
+
+### M3, the contraction crossover
+
+`log10(t_B/t_A)` at `D=8` now spans **-0.373 to +0.059**, against -0.057 to +0.034 before,
+and B is faster in 12 of 16 cells. The pre-fix reading, that the two contractions are within
+14% everywhere, was a statement about a replicated evaluation dominating both.
+
+| strategy | `log10(t_B/t_A)` | reading |
+|---|---|---|
+| `iid_gaussian` | -0.373 to -0.252 | B everywhere, 1.8x to 2.4x faster |
+| `seed_regenerated` | -0.057 to -0.027 | B everywhere, but see below: this row is not a contraction result |
+| `lowrank_r1` | -0.039 to +0.049 | mixed, sign flips with model size |
+| `mirrored_lr1` | -0.004 to +0.059 | mixed, sign flips with model size |
+
+**The split is explained by where A's cost sits, and the FLOP counts say so directly.** At
+`d=2048, N=256` the evaluation distributes perfectly under both contractions, `evalFLOP`
+falling to 0.125 at `D=8` against an ideal `1/8 = 0.125`. The whole generation does not:
+
+```
+                                      evalFLOP  fullFLOP
+  d=2048 N=256 iid_gaussian/A D1->D8     0.125     1.109
+  d=2048 N=256 iid_gaussian/B D1->D8     0.125     0.125
+  d=2048 N=256 lowrank_r1/A   D1->D8     0.125     0.273
+  d=2048 N=256 lowrank_r1/B   D1->D8     0.125     0.133
+  d=2048 N=256 mirrored_lr1/A D1->D8     0.125     0.213
+  d=2048 N=256 mirrored_lr1/B D1->D8     0.125     0.146
+```
+
+Strategy A regenerates and contracts the whole population on every device, which `docs/02`
+C1.3 chose deliberately to trade compute for communication. Under B the whole generation
+falls at 0.125, the ideal. Under A it does not fall at all for `iid_gaussian`, 1.109, because
+regenerating `N` full-rank perturbations per device costs about what evaluating them does and
+that cost is independent of `D`. For the low-rank strategies A's contraction runs over rank-1
+factors and is far cheaper, 0.273 and 0.213, which is why `lowrank_r1/A` still reaches 0.728
+measured efficiency while `iid_gaussian/A` stops at 0.367. That is the A/B tradeoff becoming
+visible for the first time; before the fix nothing scaled and there was nothing to trade.
+
+**These are GPU numbers, and the same table on CPU disagrees.** `profile.py --static` on 8
+simulated CPU devices reports `iid_gaussian/A` at 0.260 rather than 1.109 and `lowrank_r1/A`
+at 0.135 rather than 0.273. The evaluation column agrees, 0.125 on both. This document
+previously carried the CPU figures on the assumption, stated in `profile.py`, that absolute
+FLOP counts are backend dependent but ratios are portable. **That assumption is wrong for the
+contraction**, which under A regenerates the same perturbation the evaluation already built,
+leaving the two backends free to disagree about how much of it is common subexpression. Quote
+the backend the sweep ran on, which is the table above.
+
+**`seed_regenerated`'s row measures the wrong thing and should not be read as a contraction
+result.** M3 is a ratio of whole generations, which is a statement about the contraction only
+when the contraction is a meaningful share of the generation. For `seed_regenerated` the
+evaluation is 399 ms of a 432 ms generation and does not distribute at all, so the ratio is
+dominated by a part that is identical under both contractions and the contraction difference
+is compressed toward zero. The per-part timings show what the ratio hides: at
+`d=512, N=1024`, `tell` scales `D=1` to `D=8` at **0.15 under B and 1.02 under A**, which is
+the difference between a contraction that shards and one that does not. The 3% to 6% in the
+table is that difference divided by a generation the defect made four times too long. The
+row will move once the strategy distributes.
+
+Still no crossover contour. Two model sizes by three populations cannot carry one, and that
+is unchanged by any of this.
+
+### M5, communication against the clock
+
+**Recomputed, not extrapolated, and the previous figure in this document was wrong.**
+`experiments/phase2/bandwidth.py` divides the payload `comms.py` counts by the generation time
+`run.py` measures. At the most demanding configuration, `d=2048, N=128, lowrank_r1/B` at
+`D=8`, 100,663,808 bytes per generation at 11.75 ms is **8.564 GB/s, 1.43% of an A100's
+~600 GB/s NVLink**.
+
+The M5 section above estimated that post-fix the requirement would rise "by something under
+2x" and stay "under 1% of NVLink". It rose 4.5x, from 1.894 GB/s, and 1.43% is not under 1%.
+The estimate counted the bytes doubling for strategy A and underweighted the generations
+getting faster: the same 100 MB all-reduce now lands in 11.75 ms instead of roughly 50. The
+conclusion survives, communication is still a rounding error against NVLink, but the number
+in an estimate is not a measurement and this document should not have carried one.
+
+### M6, memory: weak scaling now actually holds per-device memory constant
+
+**28 of 32 weak-mode series are flat in `D`.** That is what weak scaling is supposed to look
+like: population per device held constant, memory per device constant.
+
+| weak, `d=512, N/device=128` | `D=1` | `D=2` | `D=4` | `D=8` |
+|---|---|---|---|---|
+| `iid_gaussian/B` before | 1610 | 1674 | 3338 | **6666** MiB |
+| `iid_gaussian/B` after | 1610 | 1610 | 1610 | **1610** MiB |
+| `lowrank_r1/B` before | 206 | 395 | 1031 | **1554** MiB |
+| `lowrank_r1/B` after | 206 | 205 | 205 | **205** MiB |
+
+Before the fix, adding devices at fixed per-device population grew per-device memory 4x to
+7.5x, because every device held the whole population. That is not weak scaling; it is a
+configuration that runs out of HBM by adding hardware. The pre-fix M6 section reported A's
+storage tracking total `N` as a designed property, which it is, and did not notice that B was
+doing the same thing for a reason that was not.
+
+Three series still grow, all `iid_gaussian/A`, as designed. `seed_regenerated` is flat at 15
+MiB (`d=512`) and 144 MiB (`d=2048`) across every device count, still the clearest systems
+result in the sweep. **Unlike its M1 and M3 rows, this one is not distorted by the defect
+above.** Its scan holds one member at a time, so per-device storage is `O(|params|)`
+whatever `n` and whatever `D`, and that stays true once the evaluation distributes. The
+memory claim is about the schedule, and the defect is about where the schedule runs.
+
+One anomaly survives unchanged: `iid_gaussian/A` at `d=512, N/device=32` reads 486, 454, 902,
+1798 MiB, dipping 6.6% at `D=2` before doubling. The pre-fix run had the same shape (486,
+426) and the same non-explanation. It is the step where the program goes from unsharded to
+sharded, a different compiler choice is still the obvious suspect, and it has still not been
+checked.
+
+### What did not need redoing, and why
+
+`noisefloor.txt` stands. `noisefloor.py` builds its mesh with `sharding.make_mesh(1)` and is
+a single-device measurement by construction, and all 64 `D=1` digests are bitwise identical
+across the fix. A `D=1` measurement whose inputs did not move cannot have moved.
+
+`comms.txt` was already re-run post-fix on 2026-08-07. This run confirms it: `comms.py`
+against `sweep-postfix.yaml` reproduces the same payloads, A at 1,024 to 8,192 bytes and B at
+6.29 to 100.66 MB.
+
+### Two defects in the instrumentation, found by re-running
+
+**`plot.py` drew M1 from a quarter of the data.** The M1 series keyed on `(strategy, how)`
+with neither model size nor population, so the four blocks collapsed onto every line and the
+last by filename order won each device count. That was `d=512, N=256` consistently, so the
+ratios stayed inside one block by luck rather than by construction, and the committed figure
+showed a quarter of the sweep captioned as all of it. It also happened to show the worst
+block: at `d=512, N=1024` efficiency reaches 0.63 to 0.78 at `D=8` against 0.31 to 0.56 at
+`N=256`. M1 is now faceted like M2 and M3. **This is the third time this file has had a
+series key missing a factor of the design**, which is worth stating plainly: a dict key that
+drops a dimension produces a plausible line, not an error.
+
+**`compare.py` first demanded bitwise equality at every device count**, which demands that
+the fix not have happened. Corrected to assert at `D=1` and report at `D>1`.
+
+---
+
 ## Exit criteria — Gate G2
 
 1. Strong and weak scaling curves across `D ∈ {1,2,4,8}`, with parallel efficiency stated.
@@ -329,3 +553,31 @@ comparison against an external reference. That is now the only outstanding measu
 Whether to fix the sharding before or after M4 is a judgement call, not a gate question. A
 scaling curve measured against EGGROLL while the evaluation is replicated `D` times
 measures the defect, not the design.
+
+### Status after the 2026-08-11 re-run
+
+| | criterion | status |
+|---|---|---|
+| 1 | strong and weak curves, efficiency stated | **met**, and the curves now show scaling rather than its absence |
+| 2 | crossover measured, phase diagram | **met**, still without a contour, but the diagram now has structure to show |
+| 3 | one comparison against an external reference | **not met**, M4 still not run |
+| 4 | reproducible from a committed config plus a recorded environment | **met** |
+| 5 | a limitations paragraph a skeptic would accept as fair | still needs rewriting, in Andres's words |
+
+**Criterion 1 is met on its own terms now, not on the forgiveness clause.** Strong scaling
+reaches 0.313 to 0.815 parallel efficiency at `D=8` across the three strategies that
+distribute, and where it falls short the cause is measured rather than guessed: strategy A's
+contraction caps `iid_gaussian` at 0.260 full-generation FLOP scaling, and fixed
+per-generation cost dominates the smallest block. "ES scales at 71% efficiency to 8 GPUs and
+here is where the other 29% goes" was the standard this document set for itself. That is now
+roughly the literal result.
+
+**One defect is outstanding and it is not a gate question either.** `seed_regenerated` does
+not distribute its evaluation at all, for a reason unrelated to the fix that made the others
+work: `lax.scan` cannot be partitioned by GSPMD. It is measured, diagnosed and unfixed
+(`docs/diagnosis-seed-regenerated-scan.md`). Both published algorithms this library exists to
+support are affected, since `Mirrored(SeedRegenerated())` is Qiu et al.
+
+**The gate still does not pass, on criterion 3.** M4 remains the only outstanding
+measurement, and it is now worth running for the right reason: benchmarking against EGGROLL
+while the evaluation was replicated `D` times would have measured the defect.

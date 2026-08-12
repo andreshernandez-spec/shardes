@@ -1,0 +1,49 @@
+# The Phase 2 sweep, re-run after the sharding fix.
+#
+# `sweep.yaml` was run on 2026-08-06 against commit 953283f, before `ShardedES.apply`
+# constrained its output to the member axis. At that commit the evaluation was replicated on
+# every device, so the strong-scaling curve measured a program whose per-device work did not
+# fall with D at all (docs/diagnosis-replicated-evaluation.md). Parallel efficiency came out
+# at 1/D, which is what a replicated evaluation costs, not what shardes does now.
+#
+# **Every knob below is copied from `sweep.yaml` unchanged.** That is the point: the only
+# difference between the two runs is the commit, so the curves can be laid on the same axes
+# and the difference attributed to the fix. Anything edited here that is not `results_dir`
+# invalidates that comparison, so do not edit it. Re-run `feasible.py` against this file if
+# you ever do.
+#
+# Both modes, because M1, M2, M3 and M6 all come from this driver and every one of them is a
+# multi-device performance number. They are stale for the same reason and by the same
+# mechanism: a replicated evaluation does not get faster with D, whether the population is
+# held fixed (strong) or grown with the device count (weak).
+#
+# Comparability is checked, not assumed: the trajectory digests here must match the ones in
+# `results/` config for config. The fix is numerically inert (verified old-vs-new on one
+# backend, 32/32 identical), so a digest that moves means something other than the fix
+# changed, and the run is not a before/after of anything.
+modes: [strong, weak]
+devices: [1, 2, 4, 8]
+d_model: [512, 2048]
+
+population:
+  512: [256, 1024]
+  2048: [128, 256]
+
+population_per_device:
+  512: [32, 128]
+  2048: [16, 32]
+
+strategies: [iid_gaussian, seed_regenerated, mirrored_lr1, lowrank_r1]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+warmup: 3
+repeats: 5
+
+# Not `results`. The pre-fix numbers are the other half of the comparison and are cited by
+# date in docs/03; overwriting them would destroy the baseline this run exists to beat.
+results_dir: results-postfix
+
+matmul_precision: highest
