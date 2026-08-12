@@ -216,35 +216,24 @@ class ShardedES:
         rollout. The MuJoCo adapter hit exactly that. This paragraph described the line for
         some time before the line existed.
         """
-        def local(ids_shard: Array, x_local: Array) -> Array:
-            # Mark the replicated closure as varying across the manual axis before the
-            # strategy sees it, exactly as `contraction.contract_sharded` does and for a
-            # related reason. `params` enters the body carrying the Auto mesh it was created
-            # under; indexing it with ids that vary across the manual axis then raises
-            # "Context mesh ... should match the mesh of sharding ...". `LowRank.gather` is
-            # where it bites, since `w[ids]` is exactly that indexing, so the embedding path
-            # fails and the dense path does not.
-            #
-            # This is the right home for it. `pcast` needs the axis name, the axis name lives
-            # here, and the strategy protocol stays silent about devices.
-            varying = jax.tree.map(
-                lambda x: jax.lax.pcast(x, (sharding.POP,), to="varying"), state.params
-            )
-            pert_local = self.strategy.sample(pert.base_key, varying, ids_shard)
-            g = self.strategy.apply(model, varying, pert_local, state.sigma)
-            return g(x_local)
+        # VARIANT C: reshape the member axis to (D, n/D) and vmap over D. The vmap's
+        # leading axis is a batch axis, which GSPMD partitions natively, so each device
+        # gets one row of n/D members. No manual mesh, so the user's model never leaves
+        # Auto and its own lax.scan carries keep their types.
+        d = sharding.n_devices(self.mesh)
+
+        def row(ids_row: Array, x_row: Array) -> Array:
+            p = self.strategy.sample(pert.base_key, state.params, ids_row)
+            return self.strategy.apply(model, state.params, p, state.sigma)(x_row)
 
         def evaluate(x: Array) -> Array:
-            # Before the shard_map, not inside it. `in_specs=P()` requires x to be
-            # replicated across the mesh; this is what makes a freshly built batch sitting
-            # on device 0 satisfy that instead of raising from inside the user's rollout.
             x = jax.lax.with_sharding_constraint(x, sharding.replicated(self.mesh))
-            return shard_map(
-                local,
-                mesh=self.mesh,
-                in_specs=(P(sharding.POP), P()),
-                out_specs=P(sharding.POP),
-            )(pert.member_ids, x)
+            ids = jax.lax.with_sharding_constraint(
+                pert.member_ids.reshape(d, self.n // d), sharding.members(self.mesh)
+            )
+            out = jax.vmap(row, in_axes=(0, None))(ids, x)
+            out = jax.lax.with_sharding_constraint(out, sharding.members(self.mesh))
+            return out.reshape(self.n, *out.shape[2:])
 
         return evaluate
 
