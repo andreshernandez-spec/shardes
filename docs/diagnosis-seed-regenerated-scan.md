@@ -2,7 +2,19 @@
 
 Found 2026-08-10, in the post-fix sweep. This is the same defect as
 `diagnosis-replicated-evaluation.md`, surviving in the one strategy that fix could not
-reach. **The fix is not written.** This is the diagnosis and the evidence for it.
+reach.
+
+> **Fixed 2026-08-11.** `ShardedES.apply` reshapes the member axis to `(D, n/D)` and vmaps
+> over it, so the thing GSPMD is asked to partition is a batch axis rather than a loop.
+> `docs/proposal-scan-strategies-distribute.md` has the four options that were weighed and
+> why `shard_map`, which also works, was not taken. Measured on 8 simulated CPU devices at
+> `n=64`: total work across devices goes 39.6 to 50.5 ms from `D=1` to `D=8` before the fix,
+> and 31.2 to 8.2 ms after. The sweep numbers below and the `seed_regenerated` rows in
+> `docs/03` predate it.
+>
+> Everything from here down is the diagnosis as written, because the reasoning is what makes
+> the fix defensible and one part of it turned out to be wrong. See "the FLOP evidence was
+> not evidence" at the end.
 
 ## Symptom
 
@@ -122,3 +134,31 @@ The sharding fix in `ShardedES.apply` is not wrong or incomplete for the strateg
 covers: three of four distribute, at 0.65 to 0.96 parallel efficiency where they previously
 sat at `1/D`. This is a second, narrower instance of the same defect class, in the one path
 whose producer a sharding constraint cannot reach.
+
+## The FLOP evidence was not evidence
+
+Added 2026-08-11, while fixing this. The section above cites
+`profile.py --static` reporting per-device eval FLOPs unchanged from `D=1` to `D=8` as proof
+that the evaluation is replicated. **That reasoning does not hold for a scan strategy, and it
+happened to reach the right conclusion.**
+
+XLA lowers `lax.scan` to a `while` loop, and `cost_analysis` counts the loop body once
+without multiplying by the trip count. So a device scanning 8 members and a device scanning
+64 report the same FLOPs. Measured at `d_model=128, n=64`: 10,308,543 against 10,308,533, a
+ratio of 1.000. That figure is 1.000 whether the scan is partitioned or not, in either
+direction, which makes it useless as a discriminator rather than merely imprecise.
+
+What actually carried the diagnosis was the wall clock: flat at 431.95, 435.29, 436.43,
+440.35 ms across `D=1,2,4,8` while every other strategy fell. A program whose per-device work
+is unchanged cannot get faster, and it did not.
+
+This matters beyond the bookkeeping, because the same blindness is why the defect survived
+review. `tests/test_sharding.py::test_the_evaluation_distributes_across_devices` was written
+after the *first* replicated-evaluation incident, specifically to prevent a second one, and
+it asserts a FLOP ratio. It cannot see a scan. It also hardcoded `IIDGaussian`, so it never
+looked at the one strategy where the metric fails. The test generalised along the axis the
+previous bug moved along, which is the natural thing to do and was not enough.
+
+`test_every_strategy_evaluates_only_its_own_shard` is the replacement: it asserts that each
+device is handed `n/D` member ids, over every strategy, which is what "the population is
+divided" means and is true or false independently of what the compiler's cost model can see.

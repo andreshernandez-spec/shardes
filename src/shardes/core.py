@@ -45,8 +45,7 @@ from typing import Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
-from jax import shard_map
-from jax.sharding import Mesh, PartitionSpec as P
+from jax.sharding import Mesh
 
 from shardes import contraction, sharding
 from shardes.shaping import centered_ranks
@@ -164,45 +163,55 @@ class ShardedES:
         never does. This owns the *placement*, because the strategies are deliberately
         sharding-agnostic and the mesh lives here.
 
-        **The evaluation runs under `shard_map`, and that is what makes it distribute.**
-        Each device is handed its own slice of `member_ids`, re-derives the perturbation for
-        exactly those members, and evaluates them. `out_specs=P(POP)` reassembles the
-        `(n, ...)` fitness. This is `contraction.contract_sharded` applied to the other half
-        of the generation, and the protocol was written for it: `sample`'s contract is that
-        `member_ids` declared `P("pop")` "makes this work unchanged inside and outside a
-        shard_map", and `apply` is specified to return `g(x) -> (n_local, ...)`.
+        **The population is divided by reshaping it into a batch axis, `(D, n/D)`, and
+        vmapping over that.** Each row is one device's members. The strategy is handed
+        `n/D` ids and evaluates them however it likes; the leading axis is constrained to
+        `P("pop")` so GSPMD gives each device one row, and the result is reshaped back to
+        `(n, ...)`.
 
-        **A sharding constraint on the output is not enough, and the second sweep is what
-        proved it.** Constraining the output to the member axis does distribute a `vmap`,
-        because GSPMD partitions a batch axis. It silently does not distribute a `lax.scan`:
-        a scan's iteration space is a sequential loop with a static trip count, so XLA
-        satisfies the constraint by gathering the ids, running all `n` iterations on every
-        device, and slicing. `SeedRegenerated` evaluates with a scan, so it kept the exact
-        `1/D` signature of the original bug through the fix that repaired every other
-        strategy: per-device eval FLOPs unchanged from `D=1` to `D=8`, wall clock flat at
-        431.95, 435.29, 436.43, 440.35 ms (`docs/diagnosis-seed-regenerated-scan.md`).
+        The reason it is a *batch* axis is the whole design. Everything here turns on which
+        shapes GSPMD will partition, and a vmap batch axis is the case it exists to handle.
 
-        `shard_map` has no such precondition. It partitions by construction rather than by
-        propagation, so it does not care whether the body is a vmap, a scan, or a loop the
-        strategy invented, which is the property the protocol needs: a user-defined strategy
-        must not have to know which shapes GSPMD happens to be able to infer.
+        **A sharding constraint on the output alone is not enough, and two rented sweeps
+        proved it.** Constraining the fitness does distribute a `vmap`, for the reason above.
+        It silently does not distribute a `lax.scan`: a scan is a sequential loop with a
+        static trip count, so XLA satisfies the constraint by gathering the ids, running all
+        `n` iterations on every device, and slicing the result. `SeedRegenerated` evaluates
+        with a scan, so it kept the exact `1/D` signature of the original bug straight
+        through the fix that repaired the other three strategies, with wall clock flat at
+        431.95, 435.29, 436.43, 440.35 ms across `D=1,2,4,8` on 8x A100
+        (`docs/diagnosis-seed-regenerated-scan.md`). Reshaping first means the thing being
+        partitioned is a batch axis whatever the strategy's body turns out to be.
+
+        **`shard_map` also works and was rejected, which is the more interesting half.** It
+        partitions by construction rather than by propagation, so it needs no reshape and
+        makes no assumption about the body at all. The cost is that the user's model then
+        runs inside a manual mesh, and that makes the manual mesh part of this library's
+        public contract: every `lax.scan` and every sharding annotation a user writes in
+        their rollout has to be manual-mesh-compatible, with nothing in the API saying so.
+        The MuJoCo rollout in `tests/test_control.py` is the first user code to meet that
+        requirement and it fails, three tests, on a scan carry that starts invariant inside
+        the manual mesh and gains varying-ness from the loop body. Measured: 729 passed and
+        3 failed under `shard_map`, 732 passed and 0 failed under this.
+        `docs/proposal-scan-strategies-distribute.md` carries all four options and the
+        numbers.
+
+        The residual risk is honest and worth stating: this still relies on GSPMD inferring a
+        partition, and inference is exactly what failed here. The defence is not that batch
+        axes are safe, it is
+        `tests/test_sharding.py::test_every_strategy_evaluates_only_its_own_shard`, which
+        asserts the property directly for every strategy and fails 15 of 15 without this.
 
         **Re-deriving rather than slicing the handed perturbation costs nothing, and both
         contractions already work this way.** `contract_replicated` and `contract_sharded`
         both call `strategy.sample(base_key, params, ids)` and use the `Perturbation` only
         for `base_key` and `member_ids`. With this doing the same, a materialized `eps` from
         `ask` has no consumer inside a jitted generation and is eliminated. Regenerability is
-        a protocol requirement precisely so that this is available.
+        a protocol requirement precisely so this is available.
 
-        The alternative was to pass the perturbation through `in_specs`, which needs a
-        `PartitionSpec` per leaf, which needs to know which leaves carry a member axis. The
-        only generic rule available is "leading dimension equals `n`", and a parameter leaf
-        whose leading dimension happens to equal the population would then be sharded
-        silently and wrongly. That is a correctness bug traded for an allocation the compiler
-        already removes.
-
-        `P(POP)` has no trailing entries, which is correct at any rank: an `(n, episodes)`
-        fitness for `group_relative` shards its member axis and leaves the rest replicated.
+        `members(mesh)` is `P("pop")` with no trailing entries, which is correct at any rank:
+        the `(D, n/D)` ids and an `(D, n/D, episodes)` fitness for `group_relative` both
+        shard their leading axis and leave the rest replicated.
 
         **`x` is replicated to match `params`, and that is a correctness fix rather than a
         convenience.** Every member of a generation must be evaluated on the *same* data,
@@ -216,22 +225,29 @@ class ShardedES:
         rollout. The MuJoCo adapter hit exactly that. This paragraph described the line for
         some time before the line existed.
         """
-        # VARIANT C: reshape the member axis to (D, n/D) and vmap over D. The vmap's
-        # leading axis is a batch axis, which GSPMD partitions natively, so each device
-        # gets one row of n/D members. No manual mesh, so the user's model never leaves
-        # Auto and its own lax.scan carries keep their types.
         d = sharding.n_devices(self.mesh)
 
         def row(ids_row: Array, x_row: Array) -> Array:
-            p = self.strategy.sample(pert.base_key, state.params, ids_row)
-            return self.strategy.apply(model, state.params, p, state.sigma)(x_row)
+            """One device's worth of members. `n/D` of them, and the strategy's own shape."""
+            local = self.strategy.sample(pert.base_key, state.params, ids_row)
+            return self.strategy.apply(model, state.params, local, state.sigma)(x_row)
 
         def evaluate(x: Array) -> Array:
             x = jax.lax.with_sharding_constraint(x, sharding.replicated(self.mesh))
+            # Row-major, so row k is members [k*n/D, (k+1)*n/D), which is the same
+            # contiguous split `sharding.member_ids` already hands the mesh. The two have to
+            # agree or a member is evaluated under one device's shard and contracted under
+            # another's. `check_population` refuses an uneven split at construction, so the
+            # reshape cannot be ragged.
             ids = jax.lax.with_sharding_constraint(
                 pert.member_ids.reshape(d, self.n // d), sharding.members(self.mesh)
             )
+            # in_axes=(0, None): every row sees the whole batch. Common random numbers are
+            # the point, so `x` is mapped over nothing.
             out = jax.vmap(row, in_axes=(0, None))(ids, x)
+            # Constrained after the vmap as well as before it. The constraint on `ids` says
+            # where the work starts; this says where its result lives, and without it the
+            # compiler is free to gather the rows back before the reshape.
             out = jax.lax.with_sharding_constraint(out, sharding.members(self.mesh))
             return out.reshape(self.n, *out.shape[2:])
 
