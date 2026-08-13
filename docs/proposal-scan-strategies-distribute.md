@@ -150,3 +150,74 @@ lesson it produced belongs in a comment wherever the mesh boundary ends up.
   distributing. Whichever option ships, its rows change and the sweep should be re-run for
   that strategy. The other three strategies are unaffected: their evaluation already
   distributed and neither option changes what they compute.
+
+---
+
+## Addendum, 2026-08-13: the reshape costs 32% on the materializing strategies
+
+Found by asking whether any Phase 2 measurement is still valid for the code that ships.
+Measured, not estimated, and it is a cost this proposal did not price.
+
+**The reshape path re-derives the perturbation inside the vmap, and that is a third
+materialization.** Counting noise primitives in the jaxpr of one full generation at
+`d_model=64, n=32`:
+
+| | `random_bits` | `normal` |
+|---|---|---|
+| `a496345`, output constraint | 2 | 32 |
+| current, reshape and vmap | **3** | **48** |
+
+`ask` materializes, `apply` re-derives, `contract` re-derives. Before the reshape, `apply`
+used the perturbation `ask` had already built, so there were two. **`ask`'s copy is dead and
+XLA does not eliminate it**, which is the specific claim `core.apply`'s docstring makes and
+which is wrong.
+
+Per-device FLOPs for one generation, against the sweep commit:
+
+| strategy | FLOPs | peak temp memory |
+|---|---|---|
+| `iid_gaussian` | **1.32x** | 1.18x |
+| `lowrank_r1` | 1.08x | 1.12x |
+| `mirrored_lr1` | 1.07x | 1.10x |
+| `seed_regenerated` | 1.00x | n/a |
+
+The cost lands exactly where the reshape is not needed. `SeedRegenerated.sample` does no
+work, so re-deriving it is free; `IIDGaussian.sample` *is* the work, and it is a strategy
+whose evaluation a sharding constraint already distributed.
+
+Numerics are unaffected: every trajectory digest matches across the change, and the
+collectives are identical.
+
+### Three ways out, and why none of them is obviously right
+
+**(a) Leave it.** Correct by construction: `ShardedES.apply` cannot be fooled by a strategy
+whose body it does not understand, which is the property that took two rented sweeps to buy.
+Costs 32% of a generation on `iid_gaussian` and roughly 8% on the low-rank strategies.
+
+**(b) Let a strategy declare `evaluation = "batched"` and take the old path.** Implemented
+and reverted on 2026-08-13. It removes the cost exactly, restoring `a496345` FLOPs to the
+digit, and it reintroduces the failure mode: **a scan strategy that declares itself batched
+does not distribute, and nothing can tell.** Measured, a correct `SeedRegenerated` and one
+that wrongly declares `batched` both report a FLOP ratio of 1.000, because `cost_analysis`
+counts a `while` body once. The declaration would be unverifiable, which is what the
+structural version exists to avoid. It also splits the test coverage: the `n/D` ids property
+is only true on the reshape path, so nine tests fail and would have to be made path-aware.
+
+**(c) Reuse the perturbation instead of re-deriving it.** Needs the pytree reshaped from
+`(n, ...)` to `(D, n/D, ...)`, and only the strategy knows which of its leaves carry a member
+axis. A generic "leading dimension equals `n`" rule is wrong for `Mirrored`, whose inner
+perturbation has `n/2`, and would silently mis-shape a parameter leaf that happens to be `n`
+long. Done properly it is a protocol method, which `sharding.AXIS_TYPE_NOTE` says to add only
+with a reason. A third of a generation is arguably a reason.
+
+**Left for Andres.** (a) is what ships today and is the safe default. (c) is the one that
+gets both properties, at the cost of the protocol seam the design has so far avoided.
+
+### What this means for the Phase 2 numbers
+
+The `iid_gaussian`, `lowrank_r1` and `mirrored_lr1` rows of M1, M2, M3 and M6 were measured
+at `a496345`. Their **scaling ratios** survive the change (`D1->D8` FLOP ratio 0.1260 against
+0.1262 for `iid_gaussian`), so parallel efficiency and weak throughput are approximately
+unaffected. Their **absolute** ms/generation and MiB/device figures describe a program doing
+up to a third less work than the one that ships. `docs/03` should say so until they are
+re-run at a single commit, which is 192 configurations and about $30.
