@@ -103,3 +103,51 @@ def test_it_agrees_with_what_actually_happens_under_lowrank():
     assert check_model(bad, PARAMS, BATCH)
     with pytest.raises(TypeError):
         strategy.apply(bad, PARAMS, pert, 0.1)(BATCH)
+
+
+# --------------------------------------------------------------------------------------
+# Pytree-shaped objectives. Review finding H2, 2026-08-11.
+# --------------------------------------------------------------------------------------
+
+
+def test_a_pytree_walking_objective_is_reported():
+    """The one misuse that is silently wrong at runtime rather than loud.
+
+    Every other unrouted access raises under a real `LowRankWeight`: the dunders refuse `@`,
+    indexing, iteration and elementwise arithmetic. A *tree walk* does not. `LowRankWeight` is
+    a registered pytree of `(w, a, b, scale)`, so `jax.tree.leaves(params)` descends into the
+    factors and hands back four ordinary arrays. Arithmetic on them works. The model computes
+    a different function and nothing complains.
+
+    Measured, at `n=2` with a rank-1 perturbation: a tree-L2 objective returned
+    `[24.93, 30.97]` where materialising `W + sigma * (A B^T)` and taking its L2 gives
+    `[16.52, 16.89]`.
+
+    So `check_model` is the guard, and this asserts it fires.
+    """
+    params = {"w": jnp.ones((4, 4)), "b": jnp.ones((4,))}
+
+    def tree_objective(p, _x):
+        return sum(jnp.sum(jnp.square(leaf)) for leaf in jax.tree.leaves(p))
+
+    findings = check_model(tree_objective, params, jnp.ones((2, 4)))
+    assert len(findings) == 1
+    assert "tree.leaves" in findings[0], "the finding must name the pytree case"
+    assert "computes a different function" in findings[0]
+
+
+def test_a_correct_model_with_a_weight_decay_term_is_still_reported():
+    """The realistic shape of the mistake, and the one a spot check would miss.
+
+    Nobody writes a model that only walks the tree. They write one that routes its matmuls
+    properly and then adds a regulariser over `jax.tree.leaves`, which is the idiom every
+    other JAX codebase uses. The matmul being correct must not excuse the rest.
+    """
+    params = {"w": jnp.ones((4, 4)), "b": jnp.ones((4,))}
+
+    def with_decay(p, x):
+        return jnp.sum(dense(x, p["w"])) + 0.1 * sum(
+            jnp.sum(jnp.square(leaf)) for leaf in jax.tree.leaves(p)
+        )
+
+    assert check_model(with_decay, params, jnp.ones((2, 4)))
