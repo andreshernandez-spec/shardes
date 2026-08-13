@@ -210,8 +210,28 @@ perturbation has `n/2`, and would silently mis-shape a parameter leaf that happe
 long. Done properly it is a protocol method, which `sharding.AXIS_TYPE_NOTE` says to add only
 with a reason. A third of a generation is arguably a reason.
 
-**Left for Andres.** (a) is what ships today and is the safe default. (c) is the one that
-gets both properties, at the cost of the protocol seam the design has so far avoided.
+> **Decided 2026-08-13: (c).** `PerturbationStrategy.split(pert, n_rows)` returns the
+> perturbation reshaped to a leading row axis and the `in_axes` saying which leaves carry it.
+> `lowrank_r1`, `mirrored_lr1` and `seed_regenerated` return to their pre-reshape per-device
+> FLOPs **exactly**; `iid_gaussian` goes from 1.32x to **1.108x**. Digests unchanged,
+> `seed_regenerated` still distributes.
+>
+> The seam is the abstraction leaking and it was taken knowingly.
+> `test_protocol_has_no_extra_methods` asserted three methods with "a fourth would mean the
+> abstraction leaked"; it now asserts four and carries this reason.
+>
+> **A slicing implementation was tried first and is wrong.** Having the strategy
+> `dynamic_slice` a closed-over perturbation is numerically identical and does not shard: a
+> closed-over array must exist whole on every device before it can be sliced, so each device
+> materialised all `n` members and `iid_gaussian` reached **5.55x** at `D=8`. Mapping the
+> array is what makes GSPMD partition it. Slicing it is the replicated-evaluation defect
+> wearing a different hat.
+>
+> **The residual 1.108x on `iid_gaussian` is unexplained.** It is not a third materialisation:
+> the jaxpr shows two, as at `a496345`. More of the gaussian transform survives compilation,
+> 2262 `erf-inv` against 1896, which is consistent with the reshape breaking a common
+> subexpression between `ask`'s `eps` and the contraction's re-derivation. Not isolated
+> further, and it is a compiler interaction rather than a structural cost.
 
 ### What this means for the Phase 2 numbers
 
