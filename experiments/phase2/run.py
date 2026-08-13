@@ -27,6 +27,7 @@ actually ran that, rather than benchmarking a config that quietly diverged.
 from __future__ import annotations
 
 import argparse
+import json
 import hashlib
 import os
 import re
@@ -368,11 +369,24 @@ def measure(config: Config, cfg: dict) -> dict:
         trajectory = fingerprint(guard_state.params)
         ranks = rank_digest(guard_fitness)
 
-    compiled = generation.lower(state).compile()
+    # **Inside the precision context, and it was not.** `matmul_precision` is part of jit's
+    # cache key, so compiling out here produced a DEFAULT-precision program while the timed
+    # one ran at whatever the config set, usually "highest". M6 was then reporting the memory
+    # of an executable the sweep never ran. Same reason the guard needs its own context.
+    with jax.default_matmul_precision(precision):
+        compiled = generation.lower(state).compile()
     try:
         mem = compiled.memory_analysis()
-        peak = int(getattr(mem, "temp_size_in_bytes", 0)) + int(
-            getattr(mem, "argument_size_in_bytes", 0)
+        # **Outputs count, minus whatever aliases an input.** This was `temp + argument` and
+        # omitted `output - alias`, which for the d=2048 block is about 96 MiB of parameters
+        # the updated state has to hold. That undercount lands hardest on exactly the
+        # strategies M6 exists to praise: `seed_regenerated` reports 15 MiB per device, so a
+        # missing 96 MiB is not a rounding error, it is the result.
+        peak = (
+            int(getattr(mem, "temp_size_in_bytes", 0))
+            + int(getattr(mem, "argument_size_in_bytes", 0))
+            + int(getattr(mem, "output_size_in_bytes", 0))
+            - int(getattr(mem, "alias_size_in_bytes", 0))
         )
     except Exception:  # noqa: BLE001
         peak = None
@@ -447,13 +461,38 @@ def main(argv=None) -> int:
                 print(f"  {c.slug()}")
 
     if args.dry_run:
-        print(f"{len(configs)} configs, {len(runnable)} runnable on {available} devices")
+        # **Pending, not runnable.** This reported "256 runnable" for a results directory that
+        # already held 256 files, so a dry run before renting hardware looked identical
+        # whether the session would measure everything or nothing. Pending is the number that
+        # decides whether the session is worth paying for.
+        pending, retry = [], 0
+        for c in runnable:
+            if not c.path().exists():
+                pending.append(c)
+                continue
+            try:
+                if "error" in json.loads(c.path().read_text()):
+                    pending.append(c)
+                    retry += 1
+            except (json.JSONDecodeError, OSError):
+                pending.append(c)
+                retry += 1
+        print(f"{len(configs)} configs, {len(runnable)} runnable on {available} devices, "
+              f"{len(pending)} PENDING")
+        if retry:
+            print(f"  {retry} of those are previous errors, which are retried")
         if skipped:
             print(f"  {skipped} need more devices than this machine has")
-        for c in runnable[:10]:
+        if not pending:
+            print(f"\nNOTHING TO DO: every configuration already has a result in "
+                  f"{cfg.get('results_dir', 'results')}/. Point results_dir at a fresh "
+                  "directory, or delete what should be re-measured. Renting hardware for "
+                  "this config would measure nothing.")
+            return 1
+        for c in pending[:10]:
             print(f"  {c.slug()}")
-        if len(runnable) > 10:
-            print(f"  ... and {len(runnable) - 10} more")
+        if len(pending) > 10:
+            print(f"  ... and {len(pending) - 10} more")
         return 0
 
     env = harness.capture_env(HERE, (*OUTPUTS, cfg.get("results_dir", "results")))
@@ -477,8 +516,17 @@ def main(argv=None) -> int:
     done = failed = over = 0
     stopped_early = None
     for i, config in enumerate(runnable, 1):
+        # **An error file is not a result and must not be skipped.** A failed configuration
+        # writes `{"config": ..., "error": ...}` to the same path a good one uses, so the
+        # resume logic used to treat it as done: re-running a sweep that half failed skipped
+        # every failure, printed "0 written", and exited 0. Errors are now retried, which is
+        # what makes the resume story true rather than nearly true.
         if config.path().exists():
-            continue
+            try:
+                if "error" not in json.loads(config.path().read_text()):
+                    continue
+            except (json.JSONDecodeError, OSError):
+                pass  # unreadable: treat as absent and re-measure
         elapsed = time.perf_counter() - started
         if elapsed > args.budget:
             stopped_early = (i, elapsed)
@@ -507,6 +555,12 @@ def main(argv=None) -> int:
         i, elapsed = stopped_early
         print(f"STOPPED at {i}/{len(runnable)} after {elapsed / 3600:.2f} h "
               f"(budget {args.budget / 3600:.2f} h). Re-run to continue; results resume.")
+    # **Non-zero when anything failed or was left undone.** This returned 0 unconditionally,
+    # so a sweep that errored on every configuration exited successfully and the only signal
+    # was a line of stdout nobody reads on a detached run.
+    if failed or stopped_early:
+        print("EXITING NON-ZERO: the results directory is incomplete.")
+        return 1
     return 0
 
 

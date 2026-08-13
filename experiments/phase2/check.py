@@ -160,10 +160,32 @@ def main(argv=None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--results", type=pathlib.Path, default=HERE / "results")
+    ap.add_argument("--config", type=pathlib.Path, default=None,
+                    help="the sweep config these results should cover. Given it, every "
+                         "expected configuration must be present; without it, this can only "
+                         "check what happens to be here")
     args = ap.parse_args(argv)
 
     rows = load(args.results)
     errors = [r for r in rows if "error" in r]
+
+    # **What is absent is invisible without the config.** Every check below reads the rows
+    # that exist, so a sweep that wrote half its device counts, or died before `d=2048`, or
+    # was pointed at the wrong directory, passes on the half it managed. Only the config
+    # knows what should be there.
+    missing = []
+    if args.config:
+        import sys as _sys
+        _sys.path.insert(0, str(HERE))
+        import run as R  # the one enumeration, so the checker cannot drift from the driver
+        cfg = R.yaml.safe_load(args.config.read_text())
+        have = {(r["config"]["mode"], r["config"]["d_model"], r["config"]["population"],
+                 r["config"]["devices"], r["config"]["strategy"], r["config"]["how"])
+                for r in rows}
+        for c in R.expand(cfg):
+            key = (c.mode, c.d_model, c.population, c.devices, c.strategy, c.how)
+            if key not in have:
+                missing.append(key)
 
     groups: dict[tuple, dict[int, dict]] = collections.defaultdict(dict)
     for r in rows:
@@ -263,10 +285,6 @@ def main(argv=None) -> int:
         print(f"note: {len(dirty)}/{len(rows)} results were written from a dirty worktree "
               "and are not reproducible from a commit alone\n")
 
-    if errors:
-        print(f"{len(errors)} configuration(s) recorded an error:")
-        for r in errors[:5]:
-            print(f"  {r['config']} -> {r['error']}")
     for f in failures:
         print(f"FAIL: {f}")
 
@@ -288,10 +306,26 @@ def main(argv=None) -> int:
         print()
         print("Quote no scaling number from these groups without saying which they are.")
 
-    if failures or floored:
-        print("\nA scaling number from these results would compare different computations.")
+    if errors:
+        print(f"\n{len(errors)} configuration(s) recorded an error rather than a measurement:")
+        for r in errors[:5]:
+            c = r["config"]
+            print(f"  d={c['d_model']} N={c['population']} {c['strategy']}/{c['how']} "
+                  f"D={c['devices']}: {r['error'][:80]}")
+        print("  Errors used to print here and still return 0. They do not any more.")
+    if missing:
+        print(f"\n{len(missing)} configuration(s) from {args.config.name} have no result:")
+        for k in missing[:5]:
+            print(f"  {k}")
+        print("  A checker that only reads what is present cannot see a sweep that stopped.")
+
+    if failures or floored or errors or missing:
+        if failures or floored:
+            print("\nA scaling number from these results would compare different computations.")
         return 1
-    print(f"OK: {len(groups)} strong-scaling groups, every device count ran the same thing.")
+    covered = f", covering all of {args.config.name}" if args.config else ""
+    print(f"OK: {len(groups)} strong-scaling groups, every device count ran the same "
+          f"thing{covered}.")
     return 0
 
 
