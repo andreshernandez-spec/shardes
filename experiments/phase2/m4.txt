@@ -1,0 +1,140 @@
+=== 2026-08-13T07:01:25Z setup
+NVIDIA A100-SXM4-80GB, 595.71.05
+GPU0	 X 	NV12	NV12	NV12	NV12	NV12	NV12	NV12	NODE	NODE	0-63,128-191	0		N/A
+GPU1	NV12	 X 	NV12	NV12	NV12	NV12	NV12	NV12	NODE	NODE	0-63,128-191	0		N/A
+commit: 5c18799b7dbd0dddde915b1bde7591518c9d982b
+worktree: 0 entries
+python 3.12.3 jax 0.11.0 jaxlib 0.11.0
+numpy 2.5.1 scipy 1.18.0
+evosax present
+devices 8 NVIDIA A100-SXM4-80GB
+
+######## JOB 1: seed_regenerated re-run, 64 configs ########
+[1/64] mode=strong__D=1__d=512__N=256__s=seed_regenerated__how=A  108.6 ms
+[2/64] mode=strong__D=1__d=512__N=256__s=seed_regenerated__how=B  108.7 ms
+[3/64] mode=strong__D=1__d=512__N=1024__s=seed_regenerated__how=A  431.6 ms
+[4/64] mode=strong__D=1__d=512__N=1024__s=seed_regenerated__how=B  432.5 ms
+[5/64] mode=strong__D=2__d=512__N=256__s=seed_regenerated__how=A  58.7 ms
+[6/64] mode=strong__D=2__d=512__N=256__s=seed_regenerated__how=B  59.0 ms
+[7/64] mode=strong__D=2__d=512__N=1024__s=seed_regenerated__how=A  232.8 ms
+[8/64] mode=strong__D=2__d=512__N=1024__s=seed_regenerated__how=B  216.3 ms
+[9/64] mode=strong__D=4__d=512__N=256__s=seed_regenerated__how=A  37.4 ms
+[10/64] mode=strong__D=4__d=512__N=256__s=seed_regenerated__how=B  30.7 ms
+[11/64] mode=strong__D=4__d=512__N=1024__s=seed_regenerated__how=A  132.6 ms
+[12/64] mode=strong__D=4__d=512__N=1024__s=seed_regenerated__how=B  109.3 ms
+[13/64] mode=strong__D=8__d=512__N=256__s=seed_regenerated__how=A  24.1 ms
+[14/64] mode=strong__D=8__d=512__N=256__s=seed_regenerated__how=B  16.7 ms
+[15/64] mode=strong__D=8__d=512__N=1024__s=seed_regenerated__how=A  83.4 ms
+[16/64] mode=strong__D=8__d=512__N=1024__s=seed_regenerated__how=B  56.9 ms
+[17/64] mode=strong__D=1__d=2048__N=128__s=seed_regenerated__how=A  222.4 ms
+[18/64] mode=strong__D=1__d=2048__N=128__s=seed_regenerated__how=B  222.6 ms
+[19/64] mode=strong__D=1__d=2048__N=256__s=seed_regenerated__how=A  444.1 ms
+[20/64] mode=strong__D=1__d=2048__N=256__s=seed_regenerated__how=B  444.2 ms
+[21/64] mode=strong__D=2__d=2048__N=128__s=seed_regenerated__how=A  127.9 ms
+[22/64] mode=strong__D=2__d=2048__N=128__s=seed_regenerated__how=B  112.8 ms
+[23/64] mode=strong__D=2__d=2048__N=256__s=seed_regenerated__how=A  254.9 ms
+[24/64] mode=strong__D=2__d=2048__N=256__s=seed_regenerated__how=B  223.7 ms
+[25/64] mode=strong__D=4__d=2048__N=128__s=seed_regenerated__how=A  80.9 ms
+[26/64] mode=strong__D=4__d=2048__N=128__s=seed_regenerated__how=B  58.1 ms
+[27/64] mode=strong__D=4__d=2048__N=256__s=seed_regenerated__how=A  160.4 ms
+[28/64] mode=strong__D=4__d=2048__N=256__s=seed_regenerated__how=B  113.4 ms
+[29/64] mode=strong__D=8__d=2048__N=128__s=seed_regenerated__how=A  60.0 ms
+[30/64] mode=strong__D=8__d=2048__N=128__s=seed_regenerated__how=B  33.8 ms
+[31/64] mode=strong__D=8__d=2048__N=256__s=seed_regenerated__how=A  113.4 ms
+[32/64] mode=strong__D=8__d=2048__N=256__s=seed_regenerated__how=B  60.2 ms
+[33/64] mode=weak__D=1__d=512__N=32__s=seed_regenerated__how=A  15.5 ms
+[34/64] mode=weak__D=1__d=512__N=32__s=seed_regenerated__how=B  15.5 ms
+[35/64] mode=weak__D=1__d=512__N=128__s=seed_regenerated__how=A  54.3 ms
+[36/64] mode=weak__D=1__d=512__N=128__s=seed_regenerated__how=B  54.6 ms
+[37/64] mode=weak__D=2__d=512__N=64__s=seed_regenerated__how=A  16.8 ms
+[38/64] mode=weak__D=2__d=512__N=64__s=seed_regenerated__how=B  15.8 ms
+[39/64] mode=weak__D=2__d=512__N=256__s=seed_regenerated__how=A  60.4 ms
+[40/64] mode=weak__D=2__d=512__N=256__s=seed_regenerated__how=B  56.8 ms
+[41/64] mode=weak__D=4__d=512__N=128__s=seed_regenerated__how=A  19.4 ms
+[42/64] mode=weak__D=4__d=512__N=128__s=seed_regenerated__how=B  16.3 ms
+[43/64] mode=weak__D=4__d=512__N=512__s=seed_regenerated__how=A  67.0 ms
+[44/64] mode=weak__D=4__d=512__N=512__s=seed_regenerated__how=B  57.8 ms
+[45/64] mode=weak__D=8__d=512__N=256__s=seed_regenerated__how=A  24.2 ms
+[46/64] mode=weak__D=8__d=512__N=256__s=seed_regenerated__how=B  16.8 ms
+[47/64] mode=weak__D=8__d=512__N=1024__s=seed_regenerated__how=A  83.6 ms
+[48/64] mode=weak__D=8__d=512__N=1024__s=seed_regenerated__how=B  59.7 ms
+[49/64] mode=weak__D=1__d=2048__N=16__s=seed_regenerated__how=A  28.9 ms
+[50/64] mode=weak__D=1__d=2048__N=16__s=seed_regenerated__how=B  31.3 ms
+[51/64] mode=weak__D=1__d=2048__N=32__s=seed_regenerated__how=A  58.9 ms
+[52/64] mode=weak__D=1__d=2048__N=32__s=seed_regenerated__how=B  58.5 ms
+[53/64] mode=weak__D=2__d=2048__N=32__s=seed_regenerated__how=A  35.9 ms
+[54/64] mode=weak__D=2__d=2048__N=32__s=seed_regenerated__how=B  32.4 ms
+[55/64] mode=weak__D=2__d=2048__N=64__s=seed_regenerated__how=A  64.6 ms
+[56/64] mode=weak__D=2__d=2048__N=64__s=seed_regenerated__how=B  57.6 ms
+[57/64] mode=weak__D=4__d=2048__N=64__s=seed_regenerated__how=A  44.8 ms
+[58/64] mode=weak__D=4__d=2048__N=64__s=seed_regenerated__how=B  33.3 ms
+[59/64] mode=weak__D=4__d=2048__N=128__s=seed_regenerated__how=A  81.0 ms
+[60/64] mode=weak__D=4__d=2048__N=128__s=seed_regenerated__how=B  58.5 ms
+[61/64] mode=weak__D=8__d=2048__N=128__s=seed_regenerated__how=A  57.5 ms
+[62/64] mode=weak__D=8__d=2048__N=128__s=seed_regenerated__how=B  33.7 ms
+[63/64] mode=weak__D=8__d=2048__N=256__s=seed_regenerated__how=A  113.2 ms
+[64/64] mode=weak__D=8__d=2048__N=256__s=seed_regenerated__how=B  63.2 ms
+
+64 written, 0 failed, 0 over cap, 0 needed more devices
+job1 rc=0
+
+######## JOB 2a: M4 at D=1, the like-for-like comparison ########
+8 x NVIDIA A100-SXM4-80GB, mesh of 1
+
+  evosax: available
+  eggroll: unavailable, hyperscalees not installed (GPL-3.0, never vendored here)
+
+                 shape  arm                             ms/gen      +-      tokens/s   mesh
+d=  512 N=  256  shardes/mirrored_lr1/B            3.10    0.02    21,137,712    yes
+d=  512 N=  256  shardes/seed_regenerated/B       50.12    4.88     1,307,615    yes
+d=  512 N=  256  naive_es                         12.11    0.05     5,413,293     no
+d=  512 N=  256  evosax/Open_ES                   12.04    0.01     5,441,457     no
+d=  512 N= 1024  shardes/mirrored_lr1/B            9.84    0.13    26,643,196    yes
+d=  512 N= 1024  shardes/seed_regenerated/B      179.84    0.41     1,457,665    yes
+d=  512 N= 1024  naive_es                         46.23    0.13     5,670,952     no
+d=  512 N= 1024  evosax/Open_ES                   45.03    0.85     5,822,124     no
+d= 2048 N=  128  shardes/mirrored_lr1/B           10.54    0.13     3,110,067    yes
+d= 2048 N=  128  shardes/seed_regenerated/B      105.45    0.09       310,733    yes
+d= 2048 N=  128  naive_es                         80.33    0.36       407,909     no
+d= 2048 N=  128  evosax/Open_ES                   87.16    0.03       375,954     no
+d= 2048 N=  256  shardes/mirrored_lr1/B           19.28    0.08     3,398,435    yes
+d= 2048 N=  256  shardes/seed_regenerated/B      210.09    0.20       311,937    yes
+d= 2048 N=  256  naive_es                        160.65    0.36       407,940     no
+d= 2048 N=  256  evosax/Open_ES                  173.07    0.10       378,678     no
+
+16 rows -> results-m4/m4-d1.json
+job2a rc=0
+
+######## JOB 2b: M4 at D=8, what sharding adds ########
+8 x NVIDIA A100-SXM4-80GB, mesh of 8
+
+  evosax: available
+  eggroll: unavailable, hyperscalees not installed (GPL-3.0, never vendored here)
+
+NOTE: only the shardes arms use the mesh. naive_es and evosax run on one
+device whatever --devices says, so their rows are not a like-for-like
+comparison at D>1. Use --devices 1 for that.
+
+                 shape  arm                             ms/gen      +-      tokens/s   mesh
+d=  512 N=  256  shardes/mirrored_lr1/B            2.41    0.13    27,241,943    yes
+d=  512 N=  256  shardes/seed_regenerated/B       11.19    0.06     5,855,314    yes
+d=  512 N=  256  naive_es                         12.08    0.03     5,424,464     no
+d=  512 N=  256  evosax/Open_ES                   12.00    0.00     5,459,102     no
+d=  512 N= 1024  shardes/mirrored_lr1/B            3.10    0.07    84,463,127    yes
+d=  512 N= 1024  shardes/seed_regenerated/B       27.77    2.91     9,440,923    yes
+d=  512 N= 1024  naive_es                         46.04    0.08     5,693,981     no
+d=  512 N= 1024  evosax/Open_ES                   44.80    0.94     5,852,051     no
+d= 2048 N=  128  shardes/mirrored_lr1/B            4.82    0.10     6,794,510    yes
+d= 2048 N=  128  shardes/seed_regenerated/B       17.48    0.05     1,874,221    yes
+d= 2048 N=  128  naive_es                         80.17    0.04       408,715     no
+d= 2048 N=  128  evosax/Open_ES                   87.14    0.08       376,031     no
+d= 2048 N=  256  shardes/mirrored_lr1/B            6.02    0.04    10,884,703    yes
+d= 2048 N=  256  shardes/seed_regenerated/B       31.81    0.18     2,059,943    yes
+d= 2048 N=  256  naive_es                        160.10    0.41       409,335     no
+d= 2048 N=  256  evosax/Open_ES                  173.02    0.06       378,786     no
+
+16 rows -> results-m4/m4-d8.json
+job2b rc=0
+
+=== 2026-08-13T07:58:40Z done
+BOTH_DONE_MARKER
