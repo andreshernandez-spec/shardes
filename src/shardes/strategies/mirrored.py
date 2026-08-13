@@ -30,6 +30,7 @@ import numpy as np
 import jax.numpy as jnp
 
 from shardes.strategies.protocol import PerturbationStrategy
+from shardes.strategies._select import mapped, rows, rows_like, unmapped
 from shardes.types import Array, Key, PyTree
 
 
@@ -128,6 +129,20 @@ class Mirrored:
             return jnp.stack([plus, minus], axis=1).reshape((-1,) + plus.shape[1:])
 
         return g
+
+    def split(self, pert: MirroredPerturbation, n_rows: int):
+        """Recursive, because `inner` covers `n/2` directions rather than `n` members.
+
+        Pairs are adjacent and the split is contiguous, so row `k`'s members
+        `[k*n/D, (k+1)*n/D)` are exactly directions `[k*n/(2D), (k+1)*n/(2D))`. Delegating to
+        the inner's own `split` gets that without this class knowing the inner's layout, the
+        same reason `apply` and `contract` delegate.
+        """
+        inner, inner_axes = self.inner.split(pert.inner, n_rows)
+        return (
+            MirroredPerturbation(pert.base_key, rows(pert.member_ids, n_rows), inner),
+            MirroredPerturbation(None, 0, inner_axes),
+        )
 
     def contract(self, pert: MirroredPerturbation, weights: Array) -> PyTree:
         """sum_k (w_2k - w_{2k+1}) eps_k.
