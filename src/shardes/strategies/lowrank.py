@@ -36,6 +36,7 @@ from jax.tree_util import register_dataclass
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import leaf_streams
 from shardes.strategies._scale import Separable, densify, is_separable, per_leaf
+from shardes.strategies._select import mapped, rows, rows_like, unmapped
 from shardes.types import Array, Key, PyTree
 
 
@@ -279,6 +280,18 @@ class LowRank:
             return jax.vmap(one)(pert.factors)
 
         return g
+
+    def split(self, pert: LowRankPerturbation, n_rows: int):
+        """`a` and `b` are `(n, m, r)` and `(n, k, r)`, so the member axis leads both.
+
+        `b is None` marks a densely perturbed leaf, and `None` is an empty pytree node, so
+        `tree.map` skips it in both the reshape and the `in_axes` without a branch here.
+        """
+        return (
+            LowRankPerturbation(pert.base_key, rows(pert.member_ids, n_rows),
+                                rows_like(pert.factors, n_rows)),
+            LowRankPerturbation(None, 0, mapped(pert.factors)),
+        )
 
     def contract(self, pert: LowRankPerturbation, weights: Array) -> PyTree:
         """sum_n w_n E_n, params-shaped, unit scale.

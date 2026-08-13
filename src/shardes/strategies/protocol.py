@@ -69,6 +69,40 @@ class PerturbationStrategy(Protocol):
         """
         ...
 
+    def split(self, pert: Perturbation, n_rows: int):
+        """`(pert reshaped to a leading row axis, the in_axes saying which leaves carry it)`.
+
+        **The one place the protocol is not silent about devices, and it is deliberate.**
+        `ShardedES.apply` divides the population by vmapping over `n_rows` rows, and it cannot
+        do the division itself because only a strategy knows which of its arrays carry a
+        member axis. `SeedPerturbation.like` is the params tree and carries none;
+        `MirroredPerturbation.inner` carries `n/2` directions rather than `n`. A generic rule
+        of "leading dimension equals n" gets both wrong, and would silently mis-slice a
+        parameter leaf that happens to be `n` long.
+
+        `sharding.AXIS_TYPE_NOTE` declined a sharding-aware seam once and said to revisit it
+        "if the strategy protocol ever grows one for another reason". This is that reason: the
+        alternative is re-deriving the perturbation per row, which costs a third of a
+        generation for `IIDGaussian` (`docs/proposal-scan-strategies-distribute.md`).
+
+        **Two return values because one is not enough.** `in_axes=0` at every leaf would
+        demand tiling the leaves that have no member axis `n_rows` times, and for
+        `SeedPerturbation.like` that is `n_rows` copies of the model. So the reshape and the
+        map/no-map decision travel together.
+
+        **Reshaped rather than sliced.** An implementation that returned a slice of a
+        closed-over perturbation is numerically identical and does not shard: a closed-over
+        array has to exist whole on every device before it can be sliced, so each device
+        materialises all `n` members. Measured at 5.55x the per-device FLOPs at `D=8`, which
+        is the replicated-evaluation defect again with the perturbation standing in for the
+        evaluation.
+
+        `n_rows` is static, and `n` divides it because `check_population` refuses anything
+        else at construction. `strategies._select` has the primitives; most implementations
+        are one line per member-axis field.
+        """
+        ...
+
     def contract(self, pert: Perturbation, weights: Array) -> PyTree:
         """sum_i weights[i] * eps_i, params-shaped, unit scale.
 
