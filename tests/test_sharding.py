@@ -349,8 +349,10 @@ def test_every_strategy_evaluates_only_its_own_shard(d, name, make):
     rented sweep, again (`docs/diagnosis-seed-regenerated-scan.md`).
 
     So this asserts the property directly rather than through a proxy the compiler is free
-    to be vague about. `ShardedES.apply` runs the evaluation under `shard_map`, so the
-    `member_ids` its strategy receives is that device's shard and nothing else. Length
+    to be vague about. `ShardedES.apply` reshapes the member axis to `(D, n/D)` and vmaps
+    over it, so the `member_ids` its strategy receives is that device's row and nothing else.
+    (An earlier version of this docstring said `shard_map`, which was the implementation that
+    was measured and rejected; `docs/proposal-scan-strategies-distribute.md` has both.) Length
     `n/D` is what "the population is divided" *means*; every downstream claim, FLOPs
     included, is a consequence.
 

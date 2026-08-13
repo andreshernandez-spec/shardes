@@ -6,7 +6,7 @@ Layout (docs/02-phase1-sharded-core.md C1.2):
   params        replicated across the "pop" axis, every device holds the full model
   perturbations sharded on the member axis, P("pop")
   fitnesses     sharded, P("pop")
-  state         see docs/02 C1.4, the decision is open
+  state         replicated, not sharded (docs/02 C1.4, settled 2026-07-31)
 
 The perturbation layout is not placed by hand. `ShardedES.apply` constrains what it
 *produces* to the member axis, and GSPMD propagates that backwards to shard the perturbation

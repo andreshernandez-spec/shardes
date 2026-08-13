@@ -49,7 +49,7 @@ from jax.sharding import Mesh
 
 from shardes import contraction, sharding
 from shardes.shaping import centered_ranks
-from shardes.strategies._scale import per_leaf
+from shardes.strategies._scale import densify, per_leaf
 from shardes.strategies.protocol import Perturbation, PerturbationStrategy
 from shardes.types import Array, Key, PyTree
 
@@ -338,7 +338,10 @@ class ShardedES:
         )
         # Per leaf, because sigma may be a params-shaped diagonal. The estimator divides by
         # the sigma it perturbed with, so a per-coordinate sigma divides per coordinate.
-        sigmas = per_leaf(state.sigma, state.params)
+        # Densified here and nowhere in a forward pass. The estimator divides the update
+        # by sigma elementwise and the update is already params-shaped by this point, so
+        # a Separable's (m, k) form costs nothing new. `LowRank.apply` keeps it factored.
+        sigmas = densify(per_leaf(state.sigma, state.params))
         return state._replace(
             params=jax.tree.map(
                 lambda p, s, u: p - (self.lr / (self.n * s)) * u,

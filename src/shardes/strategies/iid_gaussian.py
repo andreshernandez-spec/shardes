@@ -4,7 +4,7 @@ Slow and memory-hungry on purpose. It is the reference the other two strategies 
 checked against, and it is the naive baseline both papers beat (E9).
 
 Storage is `n_local * |params| * 4` bytes, which is why this is the reference and not the
-workhorse: at N = 2^18 with m = n = 512 that is 275 TB. `SeedRegenerated` exists to avoid
+workhorse: at N = 2^18 with m = n = 512 that is 275 GB, 256 GiB. `SeedRegenerated` exists to avoid
 exactly this, and differs from this file by dropping one field.
 """
 
@@ -15,7 +15,7 @@ import jax.numpy as jnp
 
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
-from shardes.strategies._scale import per_leaf
+from shardes.strategies._scale import densify, per_leaf
 from shardes.types import Array, Key, PyTree
 
 
@@ -75,7 +75,9 @@ class IIDGaussian:
         the others are checked against, so keep it obvious rather than clever.
         """
 
-        scale = per_leaf(sigma, params)
+        # Full rank materialises the perturbation anyway, so a Separable has nothing to
+        # save here and becomes its (m, k) form.
+        scale = densify(per_leaf(sigma, params))
 
         def g(x: Array) -> Array:
             def one(eps: PyTree) -> Array:
