@@ -1,0 +1,45 @@
+# The seed_regenerated half of the sweep, re-run after it was made to distribute.
+#
+# `sweep-postfix.yaml` ran on 2026-08-11 at commit a496345, before `ShardedES.apply`
+# reshaped the member axis into something GSPMD partitions. At that commit
+# `seed_regenerated` evaluated the whole population on every device: wall clock flat at
+# 431.58, 434.79, 435.17 ms across D=1,2,4 and parallel efficiency exactly 1/D
+# (`docs/diagnosis-seed-regenerated-scan.md`). Its rows in docs/03 M1, M2, M3 and M6
+# describe that program.
+#
+# **Identical to sweep-postfix.yaml except for `strategies` and `results_dir`.** The other
+# three strategies are not re-run: their evaluation already distributed and the reshape does
+# not change what they compute, so their numbers stand. Re-running them would cost four
+# times as much to reproduce results that are already current.
+#
+# 64 configurations, 2 modes x 4 device counts x 2 model sizes x 2 populations x 2
+# contractions. Everything else, including batch, seq, warmup, repeats and precision, is
+# copied so the new rows drop into the existing tables without a footnote.
+modes: [strong, weak]
+devices: [1, 2, 4, 8]
+d_model: [512, 2048]
+
+population:
+  512: [256, 1024]
+  2048: [128, 256]
+
+population_per_device:
+  512: [32, 128]
+  2048: [16, 32]
+
+# The one line that matters. `mirrored_lr1` and `lowrank_r1` and `iid_gaussian` are current.
+strategies: [seed_regenerated]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+warmup: 3
+repeats: 5
+
+# Its own directory. `results-postfix/` is the record of what the strategy did before it
+# distributed, and docs/03 cites it as such; overwriting it would erase the before half of
+# the only measurement that shows the reshape did anything.
+results_dir: results-seedregen
+
+matmul_precision: highest

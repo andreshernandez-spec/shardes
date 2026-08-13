@@ -108,3 +108,37 @@ def test_cancels_the_constant_term(params):
     )(jax.random.split(jax.random.key(8), reps))
     mean = jax.tree.map(lambda z: jnp.mean(z, 0), gs)
     assert float(metrics.cosine_similarity(mean, truth)) > 0.99
+
+
+def test_a_batch_that_starts_mid_pair_is_refused():
+    """The same global member must not change sign with how it was batched.
+
+    **Measured before the fix:** with ids `[0, 1]` member 1 is the negative image of
+    direction 0; with ids `[1, 2]` the same member 1 is the *positive* image of direction 0.
+    `sample` slices `member_ids[0::2]`, which is positional, while the comment above it
+    claimed the direction came from the id. `sharding.py` states the contract this breaks:
+    member `i`'s perturbation derives from `fold_in(base_key, i)` and from nothing else.
+
+    Only checkable on concrete ids. Under `jit` `member_ids` is a tracer with no values, so
+    the structural guarantee is `check_population`, which runs where `n` and the device count
+    are static. This covers the direct caller, which is where a misaligned batch comes from.
+    """
+    strategy = Mirrored(IIDGaussian())
+    params = {"w": jnp.zeros((2, 2))}
+    key = jax.random.key(0)
+
+    strategy.sample(key, params, jnp.array([0, 1], jnp.int32))
+    strategy.sample(key, params, jnp.array([2, 3], jnp.int32))
+    for bad in ([1, 2], [0, 2], [3, 4]):
+        with pytest.raises(ValueError, match="adjacent pairs"):
+            strategy.sample(key, params, jnp.array(bad, jnp.int32))
+
+
+def test_pairing_is_declared_rather_than_inferred_from_the_type():
+    """`ShardedES` reads `strategy.pairing`, so a user-defined paired strategy can ask too.
+
+    It used to read `isinstance(strategy, Mirrored)`, which worked for the one paired
+    strategy in this repo and left anyone else's silently unprotected.
+    """
+    assert Mirrored(IIDGaussian()).pairing == 2
+    assert getattr(IIDGaussian(), "pairing", 1) == 1

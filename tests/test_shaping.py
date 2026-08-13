@@ -236,3 +236,62 @@ def test_centered_ranks_pass_a_wrong_shape_through_for_tell_to_reject():
     """
     f = jnp.asarray([[3.0, 1.0], [1.0, 2.0], [2.0, 5.0]], jnp.float32)
     assert shaping.centered_ranks(f).shape == f.shape
+
+
+# --------------------------------------------------------------------------------------
+# Non-finite fitness. Found by review on 2026-08-11; see docs/proposal-review-fixes.md.
+# --------------------------------------------------------------------------------------
+
+
+def test_non_finite_members_all_tie_and_rank_worst():
+    """A diverged episode must not out-vote the members that worked.
+
+    **Before this was fixed a NaN member received the largest weight in the population.**
+    `_midranks` separates tie groups with `!=`, and `NaN != NaN`, so every failed member
+    started its own group and landed on a different rank; `centered_ranks([0, nan, nan, 1])`
+    returned `[-0.5, 0.167, 0.5, -0.167]`. The two failures disagreed with each other, and
+    one of them got `+0.5`, which under `tell`'s descent convention is the strongest possible
+    pull. Any RL or control workload can produce a NaN, and `tests/test_control.py` drives
+    MuJoCo, so this was reachable rather than theoretical.
+
+    Two properties, and the direction is the one that matters. Ties alone would still leave
+    the failures out-voting everything.
+    """
+    w = shaping.centered_ranks(jnp.array([0.0, jnp.nan, jnp.nan, 1.0]))
+    assert w[1] == w[2], "non-finite members must tie with each other"
+    assert w[1] == w.max(), "a non-finite member must rank worst, not best"
+    assert w[0] == w.min(), "the best finite member keeps the most negative weight"
+
+
+def test_infinite_fitness_ties_with_nan():
+    """`+inf` is already the worst loss, so a NaN mapped onto it must land in the same group.
+
+    Otherwise a run mixing overflow and genuine NaN would rank them against each other on
+    nothing.
+    """
+    w = shaping.centered_ranks(jnp.array([0.0, jnp.nan, jnp.inf, 1.0]))
+    assert w[1] == w[2]
+
+
+def test_a_finite_population_is_unchanged_by_the_non_finite_handling():
+    """The guard must be invisible when nothing has failed.
+
+    Asserted bitwise. A shaping that quietly changed every ordinary generation to handle a
+    case that almost never fires would be a bad trade.
+    """
+    f = jnp.array([3.0, 1.0, 2.0, 0.0])
+    expected = jnp.argsort(jnp.argsort(f)).astype(jnp.float32) / 3.0 - 0.5
+    assert bool(jnp.all(shaping.centered_ranks(f) == expected))
+
+
+def test_rank_weights_are_float32_whatever_the_fitness_dtype():
+    """bf16 has 8 mantissa bits, so rank positions stop being distinct above 256 members.
+
+    The ranks are this function's business and the fitness dtype is the caller's. Computing
+    positions at `fitness.dtype` let a bf16 fitness collapse the shaping it was meant to
+    spread out: consecutive ranks past 256 rounded onto each other and the members became
+    indistinguishable to the update.
+    """
+    for dtype in (jnp.bfloat16, jnp.float16, jnp.float32):
+        w = shaping.centered_ranks(jnp.arange(512, dtype=dtype))
+        assert w.dtype == jnp.float32, f"{dtype} fitness gave {w.dtype} weights"

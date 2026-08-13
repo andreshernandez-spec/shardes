@@ -6,7 +6,7 @@ Layout (docs/02-phase1-sharded-core.md C1.2):
   params        replicated across the "pop" axis, every device holds the full model
   perturbations sharded on the member axis, P("pop")
   fitnesses     sharded, P("pop")
-  state         see docs/02 C1.4, the decision is open
+  state         replicated, not sharded (docs/02 C1.4, settled 2026-07-31)
 
 The perturbation layout is not placed by hand. `ShardedES.apply` constrains what it
 *produces* to the member axis, and GSPMD propagates that backwards to shard the perturbation
@@ -95,26 +95,37 @@ def n_devices(mesh: Mesh) -> int:
     return mesh.shape[POP]
 
 
-def check_population(n: int, mesh: Mesh, *, paired: bool = False) -> None:
+def check_population(n: int, mesh: Mesh, *, pairing: int = 1) -> None:
     """Raise unless `n` members shard evenly, loudly and before anything expensive runs.
 
-    `paired=True` additionally requires an even count per device. Mirrored pairs members as
-    (2k, 2k+1), and a split landing between them loses the antithetic cancellation
+    `pairing` is the number of members a strategy treats as one indivisible group, and the
+    per-device count must be a multiple of it. `Mirrored` declares 2, because it pairs
+    members as (2k, 2k+1) and a split landing between them loses the antithetic cancellation
     *silently*: the run still produces an update, just a worse one. With both `n` and the
     device count powers of two this always holds, which is exactly why the one configuration
     where it does not would go unnoticed.
+
+    It used to be `paired: bool` read off `isinstance(strategy, Mirrored)`, which meant a
+    user-defined paired strategy could not ask for the alignment it needs. An integer read
+    off the strategy covers both and admits groups larger than 2.
     """
+    if n < 1:
+        raise ValueError(
+            f"population must be at least 1, got {n}. `tell` divides by n * sigma, so a "
+            "population of zero produces all-NaN parameters rather than an error."
+        )
     d = n_devices(mesh)
     if n % d:
         raise ValueError(
             f"population {n} does not divide across {d} devices. shard_map needs an even "
             "split, and an uneven one would change the update rather than fail."
         )
-    if paired and (n // d) % 2:
+    if pairing > 1 and (n // d) % pairing:
         raise ValueError(
             f"population {n} over {d} devices gives {n // d} members per device, which is "
-            "odd. Mirrored pairs members as (2k, 2k+1), so an odd shard splits a pair "
-            "across devices and loses the antithetic cancellation without erroring."
+            f"not a multiple of the strategy's pairing of {pairing}. Mirrored pairs members "
+            "as (2k, 2k+1), so a shard that is not a whole number of pairs splits one across "
+            "devices and loses the antithetic cancellation without erroring."
         )
 
 

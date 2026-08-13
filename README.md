@@ -2,18 +2,26 @@
 
 Sharded evolution strategies for JAX.
 
-> **Status: pre-alpha. Phase 0 complete; Phase 1 capabilities complete, Gate G1 not yet
-> closed.** The estimator harness, the perturbation strategies, the couplings, the shaping,
-> the sharded `ask`/`tell` core, both contraction strategies and a MuJoCo Playground task
-> adapter are implemented and tested (645 tests, CPU, two tiers: see `docs/conventions.md`).
+> **Status: pre-alpha. Phases 0 to 2 implemented; Gate G2 open on one criterion.** The
+> estimator harness, the perturbation strategies, the couplings, the shaping, the sharded
+> `ask`/`tell` core, both contraction strategies and a MuJoCo Playground task adapter are
+> implemented and tested (753 tests, CPU, two tiers: see `docs/conventions.md`).
 >
-> Device-count invariance — the property everything else is built to permit — passes on 1, 2,
-> 4 and 8 simulated devices for every strategy and both contraction strategies, and one real
-> GPU reproduces the simulated result. **The two-GPU confirmation is the one thing G1 still
-> wants**, and it is deliberately not fakeable on this hardware: simulated devices share a
-> memory space and never actually communicate. See `docs/06` T2′.
+> Device-count invariance, the property everything else is built to permit, holds on 1, 2, 4
+> and 8 real A100s as well as on simulated devices. Six configurations at `d=512` are
+> excepted and named: their populations are packed inside float32 resolution, so an ulp of
+> arithmetic reorders them and the rank shaping turns that into a different update. That is a
+> property of those configurations rather than of the contraction, and `check.py` refuses to
+> quote a scaling number from them without saying so.
 >
-> Phase 2 (scaling benchmarks) has not started. Nothing here is a timing claim.
+> **Phase 2 is measured, twice.** The sweep of 2026-08-06 found strong scaling at `1/D`, which
+> turned out to be a defect rather than a result: the evaluation was replicated on every
+> device. After the fix, parallel efficiency at `D=8` is 0.313 to 0.815 and weak-scaling
+> throughput is a median 5.69x of one device against an ideal 8x. `docs/03` keeps both runs,
+> the second below the first, because the pair is the evidence that the fix did anything.
+>
+> **G2 is open on criterion 3**: no comparison against an external reference has been run
+> yet. Nothing here is a claim about performance relative to EGGROLL or evosax.
 
 ---
 
