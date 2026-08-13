@@ -287,6 +287,20 @@ different GPU, a newer XLA, or TF32.
 
 ## Results, 2026-08-11, after the sharding fix
 
+> **The `iid_gaussian`, `lowrank_r1` and `mirrored_lr1` numbers below are absolute figures
+> for a program that no longer ships.** They were measured at `a496345`, before
+> `ShardedES.apply` reshaped the member axis. That change re-derives the perturbation inside
+> the vmap, which is a third materialisation, so current `main` does 1.32x the FLOPs for
+> `iid_gaussian` and about 1.08x for the low-rank strategies, with peak memory up 10 to 18%.
+> Measured; see the addendum in `docs/proposal-scan-strategies-distribute.md`.
+>
+> **Scaling ratios survive**, which is what M1 efficiency and M2 throughput rest on: the
+> `D1->D8` FLOP ratio for `iid_gaussian` is 0.1260 against 0.1262. **Absolute ms/generation
+> and MiB/device do not.** The `seed_regenerated` rows were re-measured on 2026-08-13 and are
+> current; M4 is current. Putting all four strategies on one commit is 192 configurations and
+> about $30, and has not been done.
+
+
 The 2026-08-06 section above is kept as written. It is the other half of a before and after,
 not a draft to be corrected: every number in it was correctly measured, on a program whose
 evaluation was replicated on every device. What changed is the program.
