@@ -50,7 +50,24 @@ def params0():
 
 
 def sphere(p, _x):
-    """Sum of squares. Minimized at zero, so descent must shrink it."""
+    """Sum of squares. Minimized at zero, so descent must shrink it.
+
+    **This walks the params tree, which `shardes.nn` documents as unsupported for a model
+    that will meet a structured weight, and it is used here with `Mirrored(LowRank)` anyway.**
+    That is deliberate and worth understanding rather than fixing in place.
+
+    Under `LowRank` a tree walk sees `(w, a, b, scale)` instead of the weight, so `sphere`
+    measures a different function there than it does under the full-rank strategies. The
+    tests using it assert descent, device-count invariance and the sigma widening, and every
+    one of those is a property of the optimiser rather than of which scalar it is minimising:
+    they hold whatever well-defined function the fitness happens to be. So the tests are
+    sound, and their name is the only thing that overpromises.
+
+    What this must not become is evidence that a tree-shaped objective is *supported*. It is
+    not, `check.check_model` reports it, and
+    `test_lowrank.py::test_a_pytree_objective_computes_something_else_and_this_records_it`
+    asserts the divergence directly. Review finding H2, 2026-08-11.
+    """
     return sum(jnp.sum(jnp.square(leaf)) for leaf in jax.tree.leaves(p))
 
 
