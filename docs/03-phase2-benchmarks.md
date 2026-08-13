@@ -501,6 +501,109 @@ the fix not have happened. Corrected to assert at `D=1` and report at `D>1`.
 
 ---
 
+## Results, 2026-08-13: seed_regenerated re-measured, and M4
+
+Two runs on one 8x A100-SXM4-80GB node (driver 595.71.05, CUDA 13.2, jax 0.11.0, community
+cloud, commit `5c18799`, 1 h, $11). All 64 re-run records stamp `dirty_worktree: false`.
+
+### The seed_regenerated rows above are superseded
+
+`experiments/phase2/sweep-seedregen.yaml` re-runs the 64 `seed_regenerated` configurations
+after `ShardedES.apply` began reshaping the member axis into a batch axis
+(`docs/proposal-scan-strategies-distribute.md`). It differs from `sweep-postfix.yaml` by two
+lines, `strategies` and `results_dir`. The other three strategies are not re-run: their
+evaluation already distributed and the reshape does not change what they compute.
+
+**It distributes now.** Wall clock at `d=512, N=256`:
+
+| | `D=1` | `D=2` | `D=4` | `D=8` |
+|---|---|---|---|---|
+| before | 108.6 ms | 105.4 | 104.2 | **103.6** |
+| after | 108.6 ms | 58.7 | 37.4 | **24.1** |
+| efficiency after | 1.000 | 0.924 | 0.726 | **0.563** |
+
+Merged with the three strategies that were already current, the sweep now reads:
+
+- **M1**: parallel efficiency at `D=8` spans **0.313** (`iid_gaussian/A`) to **0.951**
+  (`seed_regenerated/B`). `seed_regenerated` alone went from 0.123-0.142, which is `1/D`, to
+  **0.464-0.951**.
+- **M2**: weak throughput at `D=8` is **3.01x to 7.53x** of one device against an ideal 8x,
+  median **6.26x**. `seed_regenerated` went from 1.00x to **4.01x-7.43x**.
+- **M3**: `seed_regenerated`'s cells moved from `-0.027..-0.057` to **`-0.159..-0.275`**, so
+  B is 1.4x to 1.9x faster than A rather than the 3-6% previously reported. The earlier
+  section flagged that row as "not a contraction result" because a 399 ms non-distributing
+  evaluation was drowning the signal in a 432 ms generation. It was, and this is the size of
+  what it was hiding.
+- **M6**: unchanged at 15 MiB (`d=512`) and 144 MiB (`d=2048`) per device. Also flagged
+  earlier as the one `seed_regenerated` row the defect did *not* distort, because the scan
+  holds one member at a time wherever it runs. That held.
+
+**The fix is numerically inert here, at every device count.** `compare.py` reports 16/16
+`D=1` digests exact and **zero** multi-device updates moved, which is stronger than the
+`apply` fix managed for the low-rank strategies. The reason is structural: this evaluation
+has no cross-member reduction. The scan computes each member's loss independently and stacks
+them, so 64 members on one device and 8 on each of eight produce bitwise identical fitness.
+The reshape changed only where the iterations run.
+
+`check.py` on the new results: all 8 strong groups invariant across `D=1,2,4,8`, strategy A
+bitwise exact and B at 2.7e-07 to 4.5e-07 from summation order, **no noise-floor groups**.
+Unlike the low-rank strategies, `seed_regenerated`'s populations are not packed inside
+float32 resolution at these shapes.
+
+### M4, against the references
+
+`experiments/phase2/m4.py`, tokens/s at a stated parameter count, three arms on the same
+model, population and batch. `tokens = population * batch * seq`.
+
+**Like for like, one A100, which is what `docs/03` asks for:**
+
+| `d=512, N=1024`, 1 GPU | ms/gen | tokens/s |
+|---|---|---|
+| shardes `mirrored_lr1/B` | **9.84** | **26.6M** |
+| evosax `Open_ES` | 45.03 | 5.8M |
+| naive ES | 46.23 | 5.7M |
+| shardes `seed_regenerated/B` | 179.84 | 1.5M |
+
+The low-rank path is **3.9x to 9.0x faster than evosax** across the grid, and the gap widens
+with model size, which is what a factored perturbation predicts: naive cost scales with
+`n*|params|` and low rank with `n*r*(m+k)`.
+
+**evosax and the naive baseline agree to within 2% everywhere** (12.04 against 12.11 ms,
+45.03 against 46.23, 173.02 against 160.65). That was not arranged. It says the incumbent and
+"the baseline both papers beat" are the same measurement, which is the concrete form of the
+`ravel_pytree` argument in `docs/00`, and it means the naive arm is not a strawman built to
+lose.
+
+**`seed_regenerated` is 2.6x to 4x slower than naive on one device**, and that is the
+strategy working as designed rather than a defect. It buys `O(|params|)` storage with
+throughput, which M6 prices at 15 MiB per device against 12,810 for `iid_gaussian/A`.
+
+**With the mesh, which is not like for like:** at `d=2048, N=256` shardes `mirrored_lr1/B`
+reaches 10.9M tokens/s against evosax's 0.379M, a factor of 28.7. That decomposes into
+**9.0x algorithmic**, measured at `D=1` on the same GPU, and **3.2x from sharding** across
+eight devices, consistent with M1's efficiency. evosax and the naive arm have no sharding
+path, so they run on one device whatever the mesh says; `m4.py` prints that caveat above the
+table rather than leaving the ratio to be read as a library-against-library number.
+
+The most interesting row is `seed_regenerated`: **4x slower than evosax at `D=1` and 1.6x
+faster at `D=8`.** Trading throughput for memory on one device and winning it back through
+device count is Qiu et al.'s argument, and this is it measured.
+
+### What M4 does not cover
+
+**EGGROLL's own implementation was not run.** `ESHyperscale/HyperscaleES` is GPL-3.0 against
+this repo's Apache-2.0, so none of it is vendored and none should be; `m4.py` imports it if
+the person running the benchmark installed it, exactly as it treats evosax. Beyond the
+licence, their API is built around RWKV language models, so driving it at this transformer
+block is adaptation work rather than an import. `docs/03` calls that the comparison that
+matters, and it is still outstanding.
+
+**evosax did not run out of memory**, including at `d=2048, N=256` where its flattened
+population is about 26 GB. It fit in 80 GB and ran. So M4 measures a throughput gap and not
+the memory wall; that argument still rests on M6.
+
+---
+
 ## Exit criteria — Gate G2
 
 1. Strong and weak scaling curves across `D ∈ {1,2,4,8}`, with parallel efficiency stated.
@@ -581,3 +684,24 @@ support are affected, since `Mirrored(SeedRegenerated())` is Qiu et al.
 **The gate still does not pass, on criterion 3.** M4 remains the only outstanding
 measurement, and it is now worth running for the right reason: benchmarking against EGGROLL
 while the evaluation was replicated `D` times would have measured the defect.
+
+
+### Status after the 2026-08-13 runs
+
+| | criterion | status |
+|---|---|---|
+| 1 | strong and weak curves, efficiency stated | **met**, 0.313 to 0.951 at `D=8` |
+| 2 | crossover measured, phase diagram | **met**, still no contour: the grid is too coarse |
+| 3 | one comparison against an external reference | **met**, evosax at matched shapes |
+| 4 | reproducible from a committed config plus a recorded environment | **met** |
+| 5 | a limitations paragraph a skeptic would accept as fair | still needs rewriting, in Andres's words |
+
+**G2's measurements are complete.** Criterion 3 is satisfied by evosax, which is a fair
+external reference: it is the incumbent, it is what `docs/00` argues against, and it was run
+on the same GPU at the same shapes with the same population.
+
+It is satisfied in the letter and not in the spirit. The comparison `docs/03` asks for by
+name is EGGROLL's own implementation, and that is not run. Being within its throughput while
+offering a general API was set as a perfectly good result; we do not know whether we are.
+
+**Criterion 5 is the remaining gate item**, and it is prose rather than measurement.

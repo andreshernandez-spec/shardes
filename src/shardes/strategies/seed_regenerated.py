@@ -23,7 +23,7 @@ import jax.numpy as jnp
 
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
-from shardes.strategies._scale import per_leaf
+from shardes.strategies._scale import densify, per_leaf
 from shardes.types import Array, Key, PyTree
 
 
@@ -72,7 +72,9 @@ class SeedRegenerated:
         from holding them all at once.
         """
 
-        scale = per_leaf(sigma, params)
+        # Same as IIDGaussian: the noise is regenerated at full rank, so there is no
+        # factored form for a Separable to stay in.
+        scale = densify(per_leaf(sigma, params))
 
         def g(x: Array) -> Array:
             def step(carry, i):

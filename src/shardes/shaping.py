@@ -107,12 +107,24 @@ def _midranks(fitness: Array) -> Array:
     rows = fitness.reshape(-1, m)
 
     def one(row: Array) -> Array:
+        # **float32 regardless of the fitness dtype.** Rank positions run to m, and bf16 has
+        # 8 mantissa bits, so above 256 members consecutive positions stop being distinct and
+        # the shaping silently compresses the population it was meant to spread out. The
+        # fitness dtype is the caller's business; the ranks are this function's.
+        row = row.astype(jnp.float32)
+        # **Non-finite fitness is the worst outcome, and all of it ties.** `NaN != NaN`, so
+        # every failed member used to start its own tie group and land on a different rank;
+        # measured, `centered_ranks([0, nan, nan, 1])` gave the two NaNs 0.167 and 0.5, the
+        # largest weight in the population. A diverged episode was getting the strongest
+        # vote. `+inf` is the worst loss under `tell`'s descent convention, and mapping every
+        # NaN onto the same value makes them tie with each other by construction.
+        row = jnp.where(jnp.isnan(row), jnp.inf, row)
         order = jnp.argsort(row)
         ordered = row[order]
         # A tie group starts wherever the sorted value changes.
         starts = jnp.concatenate([jnp.array([True]), ordered[1:] != ordered[:-1]])
         group = jnp.cumsum(starts) - 1
-        positions = jnp.arange(m, dtype=row.dtype)
+        positions = jnp.arange(m, dtype=jnp.float32)
 
         # `first + (count - 1) / 2`, not `sum(positions) / count`. They agree in exact
         # arithmetic and not in float32: the sum reaches m^2/2, which passes 2^24 and stops

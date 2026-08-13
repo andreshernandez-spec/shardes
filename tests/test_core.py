@@ -270,7 +270,7 @@ def test_mirrored_population_must_pair_within_a_device():
     That does not raise anywhere downstream; it just quietly stops cancelling.
     """
     mesh = sharding.make_mesh(4)
-    with pytest.raises(ValueError, match="odd"):
+    with pytest.raises(ValueError, match="pairing"):
         ShardedES(Mirrored(IIDGaussian()), n=4, sigma=0.01, lr=0.05, mesh=mesh)
     ShardedES(Mirrored(IIDGaussian()), n=8, sigma=0.01, lr=0.05, mesh=mesh)
 
@@ -314,15 +314,53 @@ def test_a_uniform_diagonal_equals_a_scalar_sigma(strategy):
     scalar = 0.01
     diagonal = jax.tree.map(lambda leaf: jnp.full(leaf.shape, scalar, jnp.float32), p0)
 
-    outs = []
-    for sig in (scalar, diagonal):
+    def run(sig):
         es = ShardedES(strategy(), n=N, sigma=sig, lr=0.05, mesh=mesh)
         state = es.init(jax.random.key(0), p0)
         pert, state = es.ask(state)
         fitness = es.apply(sphere, state, pert)(jnp.zeros(()))
-        outs.append(es.tell(state, pert, fitness).params)
+        return es.tell(state, pert, fitness).params
 
-    assert rel_err(outs[1], outs[0]) == 0.0
+    # **A structured strategy refuses a per-coordinate sigma, and the widening survives as a
+    # per-leaf scalar instead.** `LowRank` perturbs a rank-2 leaf as `W + sigma * (A B^T)`,
+    # and an elementwise sigma raises the rank of that product above `r`, so there is no
+    # two-GEMM form left and the sum is never formed (invariant 3). A *uniform* diagonal
+    # happens to be equivalent to a scalar, but nothing can tell a uniform array from a
+    # general one at trace time, where `sigma` is a tracer off the ES state.
+    #
+    # So the promise this test makes narrows for structured leaves: the diagonal is a
+    # superset of the scalar for the full-rank strategies, and per-leaf scalars are the
+    # superset for the structured ones. See `docs/proposal-review-fixes.md`.
+    structured = isinstance(strategy(), Mirrored) or isinstance(strategy(), LowRank)
+    if structured:
+        with pytest.raises(ValueError, match="raises the rank"):
+            run(diagonal)
+    else:
+        assert rel_err(run(diagonal), run(scalar)) == 0.0
+
+
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_a_per_leaf_scalar_sigma_equals_a_global_one_when_uniform(strategy):
+    """The widening that every strategy keeps, including the structured ones.
+
+    `{"w": s, "b": s}` has to give bitwise what the bare `s` gives. This is the part of the
+    per-coordinate promise that survives `LowRank`: a scalar per leaf leaves the two-GEMM
+    identity intact, so different layers can carry different step sizes even where a
+    per-coordinate diagonal cannot exist.
+    """
+    mesh = sharding.make_mesh(4)
+    p0 = params0()
+    scalar = 0.01
+    per_leaf_scalar = jax.tree.map(lambda _: scalar, p0)
+
+    def run(sig):
+        es = ShardedES(strategy(), n=N, sigma=sig, lr=0.05, mesh=mesh)
+        state = es.init(jax.random.key(0), p0)
+        pert, state = es.ask(state)
+        fitness = es.apply(sphere, state, pert)(jnp.zeros(()))
+        return es.tell(state, pert, fitness).params
+
+    assert rel_err(run(per_leaf_scalar), run(scalar)) == 0.0
 
 
 def test_a_diagonal_sigma_scales_each_coordinate_separately():
@@ -567,3 +605,60 @@ def test_an_embedding_model_trains_under_both_algorithms():
         assert float(last) > float(first) + 0.05, (
             f"{type(strategy.inner).__name__}: {float(first):.4f} -> {float(last):.4f}"
         )
+
+
+# --------------------------------------------------------------------------------------
+# Sigma validation. Found by review on 2026-08-11; see docs/proposal-review-fixes.md.
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", [0.0, -1.0, float("nan"), float("inf")])
+def test_a_non_positive_or_non_finite_sigma_is_refused(bad):
+    """`tell` divides by `n * sigma`. Zero gives NaN; negative reverses the update.
+
+    Validated at `init` rather than at construction because a tree-valued sigma can only be
+    checked against `params`, and `params` arrives here.
+    """
+    es = ShardedES(IIDGaussian(), n=4, sigma=bad, lr=0.05, mesh=sharding.make_mesh(1))
+    with pytest.raises(ValueError, match="finite and strictly positive"):
+        es.init(jax.random.key(0), params0())
+
+
+def test_a_sigma_tree_that_does_not_match_params_is_refused():
+    """**A one-key dict has one leaf and is not a scalar.**
+
+    `per_leaf` fell through to broadcasting for anything whose structure did not match
+    `params`, so a sigma tree with a missing or misspelled key was silently treated as a
+    scalar and the whole dict was broadcast to every leaf. The run then looked normal.
+
+    Worth the explicit case: the first guard written for this counted leaves, and
+    `{"w": array}` has exactly one, so it passed straight through the check meant to catch
+    it. `treedef_is_leaf` is the question actually being asked.
+    """
+    es_missing = ShardedES(IIDGaussian(), n=4, sigma={"w": 0.01}, lr=0.05,
+                           mesh=sharding.make_mesh(1))
+    with pytest.raises(ValueError, match="neither a scalar nor"):
+        es_missing.init(jax.random.key(0), params0())
+
+    es_wrong_key = ShardedES(IIDGaussian(), n=4, sigma={"w": 0.01, "c": 0.01}, lr=0.05,
+                             mesh=sharding.make_mesh(1))
+    with pytest.raises(ValueError, match="neither a scalar nor"):
+        es_wrong_key.init(jax.random.key(0), params0())
+
+
+def test_a_traced_sigma_is_not_rejected():
+    """Sigma lives in the state, so an adaptive rule would compute it and it crosses `jit`.
+
+    The positivity check reads concrete values, and a tracer has none. Rejecting what it
+    cannot see would make `docs/BACKLOG.md` B6, an adaptive sigma, unimplementable.
+    """
+    es = ShardedES(IIDGaussian(), n=4, sigma=0.01, lr=0.05, mesh=sharding.make_mesh(1))
+
+    @jax.jit
+    def one(p, s):
+        inner = ShardedES(IIDGaussian(), n=4, sigma=s, lr=0.05, mesh=sharding.make_mesh(1))
+        state = inner.init(jax.random.key(0), p)
+        pert, state = inner.ask(state)
+        return inner.tell(state, pert, inner.apply(sphere, state, pert)(jnp.zeros(())))
+
+    one(params0(), jnp.float32(0.01))  # must not raise
