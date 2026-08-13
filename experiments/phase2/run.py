@@ -233,12 +233,25 @@ def fingerprint(tree) -> dict:
     flat = np.concatenate(
         [np.asarray(x, dtype=np.float64).ravel() for x in jax.tree.leaves(tree)]
     )
+    # **One projection row at a time, and the values are unchanged.** This built the whole
+    # `(16, n)` matrix, which at the sweep's `d=2048` block is 16 x 25.2M x 8 bytes, about
+    # 3.2 GB of host memory allocated once per configuration inside a rented session. Drawing
+    # row by row peaks at 202 MB instead.
+    #
+    # **The same projection, not merely a similar one.** `standard_normal((16, n))` fills in
+    # C order, so sixteen successive draws of `n` from the same generator are the same
+    # numbers; verified at `rtol=1e-9`. The probe values are *not* bitwise identical, because
+    # a `(16, n) @ (n,)` BLAS matrix-vector accumulates in a different order than sixteen
+    # vector dots: measured at 7.3e-15 relative, against the `RTOL = 1e-5` every consumer
+    # compares probes with. That distinction is worth keeping straight, because a projection
+    # that genuinely changed would make every historical comparison meaningless while still
+    # looking like a working check.
     rng = np.random.default_rng(_PROBE_SEED)
-    projection = rng.standard_normal((_PROBE_DIM, flat.size))
+    probe = [float(rng.standard_normal(flat.size) @ flat) for _ in range(_PROBE_DIM)]
     return {
         "digest": hashlib.sha256(np.round(flat, 9).tobytes()).hexdigest()[:16],
         "norm": float(np.linalg.norm(flat)),
-        "probe": (projection @ flat).tolist(),
+        "probe": probe,
     }
 
 

@@ -130,3 +130,20 @@ def test_jit(tree):
         metrics.cosine_similarity(tree, tree),
         rtol=RTOL,
     )
+
+
+def test_leaves_of_the_same_structure_but_different_shapes_are_refused():
+    """`jnp.vdot` flattens, so this returned a plausible number instead of raising.
+
+    The pytree structures match, so the structure check passes; `vdot` then ravels both leaves
+    and computes an inner product between a `(2, 3)` and a `(6,)`. That is never what a caller
+    meant, and it is easy to reach: a transposed leaf or a reshaped parameter looks exactly
+    like this. Found by review, 2026-08-11.
+    """
+    with pytest.raises(ValueError, match="differently shaped"):
+        metrics.tree_vdot({"a": jnp.ones((2, 3))}, {"a": jnp.ones((6,))})
+
+    # The legitimate case still works, including across dtypes, which is the reason the
+    # function accumulates in f32 rather than refusing a bf16 leaf.
+    assert float(metrics.tree_vdot({"a": jnp.ones((2, 3), jnp.bfloat16)},
+                                   {"a": jnp.ones((2, 3))})) == 6.0
