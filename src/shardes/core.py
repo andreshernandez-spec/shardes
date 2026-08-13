@@ -248,28 +248,39 @@ class ShardedES:
         some time before the line existed.
         """
         d = sharding.n_devices(self.mesh)
+        # The perturbation reshaped to a leading row axis, plus the in_axes saying which of
+        # its leaves carry that axis. The strategy supplies both because only it knows:
+        # `SeedPerturbation.like` is the params tree and has no member axis, and
+        # `MirroredPerturbation.inner` has n/2 rather than n.
+        split, axes = self.strategy.split(pert, d)
 
-        def row(ids_row: Array, x_row: Array) -> Array:
+        def row(p_row, x_row: Array) -> Array:
             """One device's worth of members. `n/D` of them, and the strategy's own shape."""
-            local = self.strategy.sample(pert.base_key, state.params, ids_row)
-            return self.strategy.apply(model, state.params, local, state.sigma)(x_row)
+            return self.strategy.apply(model, state.params, p_row, state.sigma)(x_row)
 
         def evaluate(x: Array) -> Array:
             x = jax.lax.with_sharding_constraint(x, sharding.replicated(self.mesh))
-            # Row-major, so row k is members [k*n/D, (k+1)*n/D), which is the same
-            # contiguous split `sharding.member_ids` already hands the mesh. The two have to
-            # agree or a member is evaluated under one device's shard and contracted under
-            # another's. `check_population` refuses an uneven split at construction, so the
-            # reshape cannot be ragged.
-            ids = jax.lax.with_sharding_constraint(
-                pert.member_ids.reshape(d, self.n // d), sharding.members(self.mesh)
+            # **Mapped, not closed over.** Slicing a closed-over perturbation is numerically
+            # identical and does not shard: the whole array has to exist on every device
+            # before it can be sliced, which put `iid_gaussian` at 5.55x the per-device FLOPs
+            # of the sweep commit at `D=8`. Mapping it is what GSPMD partitions.
+            #
+            # Constrained on `member_ids` alone rather than on the whole perturbation. The
+            # protocol guarantees that field and it always carries the row axis, whereas the
+            # tree also holds `base_key`, which is rank 0 and which `P("pop")` rejects. The
+            # rest follows by propagation through the vmap, which is the mechanism this is
+            # already relying on.
+            local = split._replace(
+                member_ids=jax.lax.with_sharding_constraint(
+                    split.member_ids, sharding.members(self.mesh)
+                )
             )
-            # in_axes=(0, None): every row sees the whole batch. Common random numbers are
-            # the point, so `x` is mapped over nothing.
-            out = jax.vmap(row, in_axes=(0, None))(ids, x)
-            # Constrained after the vmap as well as before it. The constraint on `ids` says
-            # where the work starts; this says where its result lives, and without it the
-            # compiler is free to gather the rows back before the reshape.
+            # in_axes: `axes` per perturbation leaf, None for the batch. Every row sees the
+            # whole batch because common random numbers are the point.
+            out = jax.vmap(row, in_axes=(axes, None))(local, x)
+            # Constrained after the vmap as well as before. The input constraint says where
+            # the work starts; this says where the result lives, and without it the compiler
+            # is free to gather the rows back before the reshape.
             out = jax.lax.with_sharding_constraint(out, sharding.members(self.mesh))
             return out.reshape(self.n, *out.shape[2:])
 

@@ -16,6 +16,7 @@ import jax.numpy as jnp
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
 from shardes.strategies._scale import densify, per_leaf
+from shardes.strategies._select import mapped, rows, rows_like, unmapped
 from shardes.types import Array, Key, PyTree
 
 
@@ -87,6 +88,14 @@ class IIDGaussian:
             return jax.vmap(one)(pert.eps)
 
         return g
+
+    def split(self, pert: IIDPerturbation, n_rows: int):
+        """`member_ids` and every `eps` leaf carry the member axis; `base_key` does not."""
+        return (
+            IIDPerturbation(pert.base_key, rows(pert.member_ids, n_rows),
+                            rows_like(pert.eps, n_rows)),
+            IIDPerturbation(None, 0, mapped(pert.eps)),
+        )
 
     def contract(self, pert: IIDPerturbation, weights: Array) -> PyTree:
         """sum_i weights[i] * eps_i, params-shaped, unit scale.

@@ -93,9 +93,28 @@ def test_protocol_signature_is_the_agreed_one():
 
 
 def test_protocol_has_no_extra_methods():
-    """Three steps, no more. A fourth would mean the abstraction leaked."""
+    """Four steps. **The fourth is the abstraction leaking, and it was accepted knowingly.**
+
+    This said three, with "a fourth would mean the abstraction leaked", and that reading was
+    right: `split` is the protocol admitting it knows about devices, which
+    `sharding.AXIS_TYPE_NOTE` spent its argument avoiding. The note said to revisit "if the
+    strategy protocol ever grows a sharding-aware seam for another reason", and this is the
+    reason, measured:
+
+    `ShardedES.apply` divides the population by vmapping device rows, and it cannot reshape
+    the perturbation itself because only a strategy knows which of its arrays carry a member
+    axis. `SeedPerturbation.like` is the params tree and carries none;
+    `MirroredPerturbation.inner` carries `n/2`. The alternative was re-deriving the
+    perturbation per row, which is free for `SeedRegenerated` and **1.32x the per-device
+    FLOPs** for `IIDGaussian`, whose `sample` is the work. With `split` that is 1.108x, and
+    the other three strategies return to their pre-reshape cost exactly.
+
+    `docs/proposal-scan-strategies-distribute.md` carries the four options and the numbers.
+
+    The guard stays, at four. A fifth method wants the same argument made again.
+    """
     methods = {n for n in vars(PerturbationStrategy) if not n.startswith("_")}
-    assert methods == {"sample", "apply", "contract"}
+    assert methods == {"sample", "apply", "contract", "split"}
 
 
 def test_sample_cannot_take_sigma():

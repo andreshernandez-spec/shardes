@@ -24,6 +24,7 @@ import jax.numpy as jnp
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import member_noise
 from shardes.strategies._scale import densify, per_leaf
+from shardes.strategies._select import mapped, rows, rows_like, unmapped
 from shardes.types import Array, Key, PyTree
 
 
@@ -86,6 +87,20 @@ class SeedRegenerated:
             return out
 
         return g
+
+    def split(self, pert: SeedPerturbation, n_rows: int):
+        """Only `member_ids` is reshaped. `like` is the params tree and has no member axis.
+
+        This is the case a generic "leading dimension equals n" rule gets wrong: a parameter
+        leaf whose first dimension happened to equal the population would be reshaped into
+        rows and every device would see a fraction of its own weights. It is also why `like`
+        is `None` in the `in_axes`: mapping it would tile the model `n_rows` times, which is
+        the opposite of what this strategy exists to do.
+        """
+        return (
+            SeedPerturbation(pert.base_key, rows(pert.member_ids, n_rows), pert.like),
+            SeedPerturbation(None, 0, unmapped(pert.like)),
+        )
 
     def contract(self, pert: SeedPerturbation, weights: Array) -> PyTree:
         """sum_i weights[i] * eps_i, regenerated one member at a time.
