@@ -17,6 +17,21 @@ There are two seams, not one, because there are two ways a weight gets used. `de
 `x @ W.T`; `embed` covers `W[ids]`. An embedding is a gather rather than a matmul, which is
 the whole reason it needed its own entry point and the reason EGGROLL's reference
 implementation raises `NotImplementedError` there.
+
+**The contract, stated once: a params tree carrying a structured weight may only be read
+through these seams.** `dense` covers `x @ W.T` and `embed` covers `W[ids]`. Anything else is
+unsupported, and one case of it is silently wrong rather than loud.
+
+That case is a pytree walk. `LowRankWeight` is a registered pytree, which it has to be to
+travel inside params through `jit`, `vmap` and the mesh, so `jax.tree.leaves(params)`
+descends into `(w, a, b, scale)` and returns four ordinary arrays instead of the weight they
+stand for. Arithmetic on them works and the shapes are plausible, so a weight decay term, a
+parameter norm or any other tree-shaped objective computes a different function without
+raising. Every *other* misuse hits a dunder on `LowRankWeight` and raises immediately.
+
+`shardes.check.check_model` reports models that read params any other way, including a model
+whose matmuls are routed correctly and whose regulariser is not, which is the shape the
+mistake actually takes. Run it before a sweep; it takes a second on CPU.
 """
 
 from typing import Protocol, runtime_checkable

@@ -96,6 +96,34 @@ class _Probe:
     __rmatmul__ = __matmul__
 
 
+def _opaque(path: str, exc: Exception) -> str:
+    """Translate JAX's own rejection of the probe into a finding that names the cause.
+
+    The probe refuses the array operations it can intercept and says which seam to use. It
+    cannot intercept everything: `jnp.square(leaf)` reaches JAX's abstractification first and
+    comes back as "is not a valid JAX type", naming the probe's repr. `__jax_array__` looks
+    like the hook for this and is not one, JAX 0.11 raises rather than calling it, which turns
+    a clear TypeError into a ValueError and loses the finding entirely. So the translation
+    happens here, where the path is still in scope.
+
+    **The pytree case is the one worth spelling out**, because it is the only one that is
+    silently wrong at runtime rather than loud. Everything else the probe catches would also
+    raise under a real `LowRankWeight`.
+    """
+    return (
+        f"{path} is reached as a bare array, which a structured weight cannot support. "
+        f"Route it through shardes.nn.dense (for `x @ W.T`) or shardes.nn.embed (for "
+        f"`W[ids]`). JAX reported: {type(exc).__name__}: {str(exc)[:120]}\n"
+        f"    If this came from jax.tree.leaves, jax.tree.map or anything else that walks "
+        f"the params tree, read on. Under LowRank this leaf is a LowRankWeight, a registered "
+        f"pytree of (w, a, b, scale), so a tree walk descends into the factors and returns "
+        f"four ordinary arrays instead of the weight they stand for. At runtime that does "
+        f"NOT raise and does not give a wrong shape: it computes a different function, "
+        f"quietly. A tree-shaped objective (weight decay, a parameter norm, a regulariser) "
+        f"has to be written against the seams. docs/01-phase0-estimator-harness.md C0.1."
+    )
+
+
 def _paths(params: PyTree):
     for path, leaf in jax.tree_util.tree_flatten_with_path(params)[0]:
         yield jax.tree_util.keystr(path), leaf
@@ -123,8 +151,8 @@ def check_model(
         probed = _substitute(params, path, probe)
         try:
             model(probed, *args)
-        except TypeError as exc:
-            findings.append(str(exc))
+        except (TypeError, ValueError) as exc:
+            findings.append(str(exc) if path in str(exc) else _opaque(path, exc))
             continue
         if not probe.seams:
             findings.append(

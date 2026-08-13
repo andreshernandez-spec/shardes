@@ -355,3 +355,42 @@ def test_a_separable_with_the_wrong_shapes_names_the_leaf():
     pert, state = es.ask(state)
     with pytest.raises(ValueError, match=r"u of shape \(6,\)"):
         es.apply(lambda p, x: jnp.sum(dense(x, p["w"])), state, pert)(jnp.ones((2, 4)))
+
+
+def test_a_pytree_objective_computes_something_else_and_this_records_it():
+    """Not a bug report. The recorded behaviour of an unsupported pattern.
+
+    `LowRankWeight` has to be a registered pytree: it travels inside the params tree through
+    `jit`, `vmap` and the mesh, and that is not optional. The cost is that an ordinary tree
+    walk sees `(w, a, b, scale)` rather than the weight they stand for, so a tree-shaped
+    objective silently computes a different function.
+
+    The library's answer is that params carrying a structured weight may only be read through
+    `shardes.nn.dense` and `shardes.nn.embed`, and `check.check_model` reports any model that
+    does otherwise, including one whose matmuls are correct and whose regulariser is not
+    (`tests/test_check.py`). This test exists so the consequence is written down and asserted
+    rather than rediscovered: if a future change makes a tree walk agree with the seams, that
+    is a real improvement and this test should fail and be deleted.
+    """
+    mesh = sharding.make_mesh(1)
+    p0 = {"w": jnp.ones((4, 4))}
+    es = ShardedES(LowRank(r=1), n=2, sigma=0.1, lr=0.05, mesh=mesh, how="A")
+    state = es.init(jax.random.key(0), p0)
+    pert, state = es.ask(state)
+
+    def tree_objective(p, _x):
+        return sum(jnp.sum(jnp.square(leaf)) for leaf in jax.tree.leaves(p))
+
+    walked = es.apply(tree_objective, state, pert)(jnp.zeros((1, 4)))
+
+    factors = pert.factors["w"]
+
+    def materialised(a, b):
+        return jnp.sum(jnp.square(p0["w"] + 0.1 * (a @ b.T)))
+
+    intended = jax.vmap(materialised)(factors.a, factors.b)
+
+    assert not jnp.allclose(walked, intended, rtol=1e-3), (
+        "a tree walk now agrees with the seams. If that is deliberate, this test has served "
+        "its purpose and should go; if it is accidental, something has started materialising."
+    )
