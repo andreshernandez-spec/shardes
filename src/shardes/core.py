@@ -265,19 +265,21 @@ class ShardedES:
             # before it can be sliced, which put `iid_gaussian` at 5.55x the per-device FLOPs
             # of the sweep commit at `D=8`. Mapping it is what GSPMD partitions.
             #
-            # Constrained on `member_ids` alone rather than on the whole perturbation. The
-            # protocol guarantees that field and it always carries the row axis, whereas the
-            # tree also holds `base_key`, which is rank 0 and which `P("pop")` rejects. The
-            # rest follows by propagation through the vmap, which is the mechanism this is
-            # already relying on.
-            local = split._replace(
-                member_ids=jax.lax.with_sharding_constraint(
-                    split.member_ids, sharding.members(self.mesh)
-                )
-            )
+            # **No constraint on the way in, and that is measured rather than assumed.**
+            # There was one, on `member_ids` alone, and it was inert: identical FLOPs and
+            # identical trajectory digests for all four strategies at `D=1` and `D=8`, and
+            # `seed_regenerated` still distributes without it (26.1 to 6.3 ms across 8
+            # simulated devices). The output constraint below is what places the work.
+            #
+            # It also could not stay. It was written `split._replace(...)`, and `_replace` is
+            # a NamedTuple method. `Perturbation` promises `base_key` and `member_ids` and
+            # nothing else, so a user-defined perturbation that is a registered dataclass
+            # satisfies the protocol and would have failed here, against the first-class
+            # custom-strategy contract in `protocol.py`. An inert line is not worth a hole in
+            # the protocol.
             # in_axes: `axes` per perturbation leaf, None for the batch. Every row sees the
             # whole batch because common random numbers are the point.
-            out = jax.vmap(row, in_axes=(axes, None))(local, x)
+            out = jax.vmap(row, in_axes=(axes, None))(split, x)
             # Constrained after the vmap as well as before. The input constraint says where
             # the work starts; this says where the result lives, and without it the compiler
             # is free to gather the rows back before the reshape.

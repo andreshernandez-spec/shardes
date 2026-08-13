@@ -177,19 +177,27 @@ def test_weak_scaling_rows_are_not_held_to_the_identity_claim(tmp_path):
     assert check.main(["--results", str(tmp_path)]) == 0
 
 
-def test_a_recorded_error_does_not_crash_the_guard(tmp_path, capsys):
-    """One OOM must not end a rented session, so errors are recorded and reported, not raised."""
+def test_a_recorded_error_fails_the_guard_without_crashing_it(tmp_path, capsys):
+    """An error row must be survivable *and* fatal, which are two different things.
+
+    This asserted `check.main(...) == 0`, and that was the bug rather than the contract. A
+    configuration that raised wrote `{"config": ..., "error": ...}` to the normal result path;
+    the checker printed it and returned success, `run.py` returned 0 regardless, and a resumed
+    sweep skipped the error file as though it were a result. A sweep could fail on every
+    configuration and every signal in the pipeline said fine.
+
+    The survivable half is still asserted, and still matters: the guard reads `trajectory` off
+    rows that have one, so an error row must not raise a KeyError and take the whole report
+    with it. The rows that did measure are still reported.
+    """
+
     _write(tmp_path, 1, "A", _fingerprint(1.0, [1.0], digest="x"))
     (tmp_path / "err.json").write_text(
         json.dumps({"config": {"mode": "strong", "devices": 2, "d_model": 32,
                                "population": 16, "strategy": "s", "how": "A"},
                     "error": "RuntimeError: out of memory"})
     )
-    assert check.main(["--results", str(tmp_path)]) == 0
-    assert "recorded an error" in capsys.readouterr().out
-
-
-# --------------------------------------------------------------------------- fingerprint
+    assert check.main(["--results", str(tmp_path)]) == 1
 
 
 def test_the_probe_catches_a_change_the_norm_would_miss():
