@@ -15,6 +15,9 @@ from shardes import metrics, shaping
 from shardes.estimator import estimate
 from shardes.nn import dense
 from shardes.strategies.iid_gaussian import IIDGaussian
+from shardes.core import ShardedES
+from shardes import sharding
+from shardes.strategies._scale import Separable
 from shardes.strategies.lowrank import LowRank, LowRankWeight
 
 M, K, N = 6, 4, 8
@@ -243,3 +246,112 @@ def test_a_structured_weight_is_not_a_sequence():
             call()
     # metadata stays available: a caller's own shape assertions should not have to change
     assert w.shape == (6, 4) and w.dtype == jnp.float32
+
+
+# --------------------------------------------------------------------------------------
+# Separable sigma: the per-coordinate family a factored perturbation can carry.
+# docs/proposal-review-fixes.md, implemented 2026-08-11.
+# --------------------------------------------------------------------------------------
+
+
+def test_a_separable_sigma_equals_its_dense_form():
+    """`(u v^T) * (A B^T) == (u * A) @ (v * B).T`, which is why the type exists.
+
+    The forward pass folds `u` and `v` into the factors and never forms the `(m, k)` product.
+    This asserts that shortcut against the thing it is a shortcut for: materialise
+    `W + (u v^T) * (A B^T)` per member and evaluate the model on it.
+
+    A general per-coordinate sigma has no such identity. It raises the rank of the product
+    above `r`, measured 4 against `r=2`, so there is nothing left to apply as two GEMMs and
+    `apply` refuses it.
+    """
+    mesh = sharding.make_mesh(1)
+    p0 = {"w": jax.random.normal(jax.random.key(3), (6, 4))}
+    x = jax.random.normal(jax.random.key(4), (2, 4))
+    u = jnp.abs(jax.random.normal(jax.random.key(1), (6,))) + 0.5
+    v = jnp.abs(jax.random.normal(jax.random.key(2), (4,))) + 0.5
+
+    def model(p, xx):
+        return jnp.sum(dense(xx, p["w"]) ** 2)
+
+    es = ShardedES(LowRank(r=1), n=4, sigma={"w": Separable(u, v)}, lr=0.05, mesh=mesh,
+                   how="A")
+    state = es.init(jax.random.key(0), p0)
+    pert, state = es.ask(state)
+    got = es.apply(model, state, pert)(x)
+
+    factors = pert.factors["w"]
+
+    def materialised(a, b):
+        w = p0["w"] + jnp.outer(u, v) * (a @ b.T)
+        return jnp.sum((x @ w.T) ** 2)
+
+    assert jnp.allclose(got, jax.vmap(materialised)(factors.a, factors.b), rtol=1e-4)
+
+
+def test_a_uniform_separable_equals_a_scalar_sigma():
+    """The widening has to be a superset, which is the promise the general diagonal broke."""
+    mesh = sharding.make_mesh(1)
+    p0 = {"w": jax.random.normal(jax.random.key(3), (6, 4))}
+    x = jax.random.normal(jax.random.key(4), (2, 4))
+    s = 0.02
+
+    def model(p, xx):
+        return jnp.sum(dense(xx, p["w"]) ** 2)
+
+    def run(sigma):
+        es = ShardedES(LowRank(r=1), n=4, sigma=sigma, lr=0.05, mesh=mesh, how="A")
+        state = es.init(jax.random.key(0), p0)
+        pert, state = es.ask(state)
+        return es.apply(model, state, pert)(x)
+
+    separable = {"w": Separable(jnp.full((6,), s), jnp.ones((4,)))}
+    assert jnp.allclose(run(separable), run(s), rtol=1e-6)
+
+
+def test_a_separable_never_materialises_the_perturbation():
+    """Invariant 3 still holds with a per-coordinate sigma, which is the entire point.
+
+    Folding `u` and `v` into `(m, r)` and `(k, r)` keeps every array factor-sized. A version
+    that densified the sigma and multiplied would satisfy every other test here and quietly
+    allocate `(n, m, k)`.
+    """
+    mesh = sharding.make_mesh(1)
+    p0 = {"w": jnp.ones((6, 4))}
+    u, v = jnp.full((6,), 0.01), jnp.full((4,), 0.02)
+
+    def model(p, xx):
+        return jnp.sum(dense(xx, p["w"]))
+
+    es = ShardedES(LowRank(r=1), n=4, sigma={"w": Separable(u, v)}, lr=0.05, mesh=mesh,
+                   how="A")
+    state = es.init(jax.random.key(0), p0)
+    pert, state = es.ask(state)
+    jaxpr = jax.make_jaxpr(es.apply(model, state, pert))(jnp.ones((2, 4)))
+    forbidden = (4, 6, 4)
+    shapes = [tuple(v_.aval.shape) for v_ in jaxpr.jaxpr.eqns[0].invars if hasattr(v_, "aval")]
+    assert forbidden not in [tuple(s) for s in shapes], "materialised (n, m, k)"
+
+
+def test_a_separable_on_a_densely_perturbed_leaf_is_refused():
+    """A vector has one axis, so an output/input split is not a thing it has."""
+    mesh = sharding.make_mesh(1)
+    p0 = {"b": jnp.ones((4,))}
+    es = ShardedES(LowRank(r=1), n=4, sigma={"b": Separable(jnp.ones((4,)), jnp.ones((4,)))},
+                   lr=0.05, mesh=mesh, how="A")
+    state = es.init(jax.random.key(0), p0)
+    pert, state = es.ask(state)
+    with pytest.raises(ValueError, match="perturbs densely"):
+        es.apply(lambda p, x: jnp.sum(p["b"]), state, pert)(jnp.zeros(()))
+
+
+def test_a_separable_with_the_wrong_shapes_names_the_leaf():
+    """Caught at trace time, not several lines later inside a GEMM."""
+    mesh = sharding.make_mesh(1)
+    p0 = {"w": jnp.ones((6, 4))}
+    es = ShardedES(LowRank(r=1), n=4, sigma={"w": Separable(jnp.ones((5,)), jnp.ones((4,)))},
+                   lr=0.05, mesh=mesh, how="A")
+    state = es.init(jax.random.key(0), p0)
+    pert, state = es.ask(state)
+    with pytest.raises(ValueError, match=r"u of shape \(6,\)"):
+        es.apply(lambda p, x: jnp.sum(dense(x, p["w"])), state, pert)(jnp.ones((2, 4)))

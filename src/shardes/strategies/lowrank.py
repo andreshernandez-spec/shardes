@@ -10,8 +10,10 @@ EGGROLL's whole trick and here it falls out of vmap rather than being arranged b
 
 `contract` is `sum_n w_n a_n b_n^T`, one (m x nr) by (nr x k) GEMM: m*k*n*r FLOPs. At
 m = k = 4096, n = 2^18, r = 1 that is 4.4 TFLOP, about 6 ms on an H100. The cost that
-bites is storage: A and B together are n*r*(m+k), roughly 2 GB per layer in bf16, which is
-what motivates regenerating them from seeds during contraction (docs/00-context.md).
+bites is storage: A and B together are n*r*(m+k), which at those numbers is 4.3 GB per
+layer in bf16, or half that under `Mirrored` because an antithetic pair shares its factors.
+That is what motivates regenerating them from seeds during contraction
+(docs/00-context.md).
 
 **Leaves that are not rank-2 are perturbed densely.** A vector has no low-rank
 factorisation, and `E = a b^T` for a (d,) leaf is just a scaled `a`. This matters more
@@ -33,7 +35,7 @@ from jax.tree_util import register_dataclass
 
 from shardes.coupling import GAUSSIAN, Coupling
 from shardes.strategies._noise import leaf_streams
-from shardes.strategies._scale import per_leaf
+from shardes.strategies._scale import Separable, densify, is_separable, per_leaf
 from shardes.types import Array, Key, PyTree
 
 
@@ -145,6 +147,28 @@ _NON_SCALAR_SIGMA = (
 )
 
 
+_SEPARABLE_ON_DENSE = (
+    "a Separable sigma was given for a leaf of shape {shape}, which LowRank perturbs densely "
+    "rather than with factors. Separable scales an output axis and an input axis, and a leaf "
+    "that is not rank 2 has only one. Use a scalar or an ordinary per-coordinate array there."
+)
+
+
+def _check_separable(s, leaf) -> None:
+    """Shapes, at trace time, where the message can still name the leaf.
+
+    Without this a mismatched `u` broadcasts against `a` and fails several lines later inside
+    a GEMM, reported against shapes the caller never wrote.
+    """
+    m, k = leaf.shape
+    if s.u.shape != (m,) or s.v.shape != (k,):
+        raise ValueError(
+            f"Separable sigma for a {leaf.shape} leaf needs u of shape ({m},) and v of shape "
+            f"({k},), got u{s.u.shape} and v{s.v.shape}. u scales the output axis and v the "
+            "input axis, matching `W + (u v^T) * (A B^T)`."
+        )
+
+
 class LeafFactors(NamedTuple):
     """Per-leaf perturbation state. `b is None` marks a densely perturbed leaf.
 
@@ -229,8 +253,22 @@ class LowRank:
                 def substitute(leaf, s, lf):
                     if lf.b is None:
                         # A densely perturbed leaf never enters the two-GEMM identity, so
-                        # any shape of sigma multiplies it the ordinary way.
+                        # any shape of sigma multiplies it the ordinary way. A Separable has
+                        # no meaning here: there is no second axis to scale.
+                        if is_separable(s):
+                            raise ValueError(_SEPARABLE_ON_DENSE.format(shape=leaf.shape))
                         return leaf + s * lf.a
+                    if is_separable(s):
+                        # `(u v^T) * (A B^T) == (u * A) @ (v * B).T`. Folded into the factors,
+                        # so the (m, k) product is still never formed and the forward pass is
+                        # still two GEMMs. This is the whole reason the type exists.
+                        _check_separable(s, leaf)
+                        return LowRankWeight(
+                            leaf,
+                            (s.u[:, None] * lf.a).astype(leaf.dtype),
+                            (s.v[:, None] * lf.b).astype(leaf.dtype),
+                            jnp.asarray(1.0 / math.sqrt(self.r), leaf.dtype),
+                        )
                     if jnp.ndim(s):
                         raise ValueError(_NON_SCALAR_SIGMA.format(shape=jnp.shape(s)))
                     return LowRankWeight(leaf, lf.a, lf.b,
