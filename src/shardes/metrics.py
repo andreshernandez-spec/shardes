@@ -29,6 +29,19 @@ def tree_vdot(a: PyTree, b: PyTree) -> Array:
     leaves_a, leaves_b = jax.tree.leaves(a), jax.tree.leaves(b)
     if not leaves_a:
         raise ValueError("empty pytree has no inner product")
+    # **Shapes, not just structure.** `_check_same_structure` compares the pytree and
+    # `jnp.vdot` flattens whatever it is given, so leaves of shape `(2, 3)` and `(6,)` used to
+    # produce a plausible number instead of an error. An inner product between two differently
+    # shaped tensors is a caller error every time, and this one is easy to reach: it is what a
+    # transposed leaf or a reshaped parameter looks like.
+    for x, y in zip(leaves_a, leaves_b):
+        if jnp.shape(x) != jnp.shape(y):
+            raise ValueError(
+                f"tree_vdot got leaves of shape {jnp.shape(x)} and {jnp.shape(y)}. The "
+                "structures match, so this passed the pytree check, and jnp.vdot would "
+                "flatten both and return a number. There is no inner product between "
+                "differently shaped tensors."
+            )
     terms = [
         jnp.vdot(x.astype(jnp.float32), y.astype(jnp.float32))
         for x, y in zip(leaves_a, leaves_b)
