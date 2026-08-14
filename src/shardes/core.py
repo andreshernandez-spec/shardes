@@ -381,6 +381,22 @@ class ShardedES:
         contractions over disjoint members still sum to the whole. That is what makes both
         chunking and Strategy B valid.
         """
+        # Refused rather than cast, because a cast here cannot help: the distinctions are
+        # already gone. bf16 resolves ~256 values per binade, and a real population's
+        # losses cluster tightly enough that 256 members collapsed to 2 distinct fitness
+        # values when measured (docs/proposal-bf16-policy.md Q3). Ranks computed from that
+        # are tie ordering, and the noise-floor postmortem showed one reorder is a
+        # different update. The model's *forward* may be bf16; its loss reduction is where
+        # f32 must begin: `jnp.mean(x, dtype=jnp.float32)` costs nothing and preserves the
+        # comparisons this whole algorithm runs on.
+        if jnp.issubdtype(fitness.dtype, jnp.inexact) and jnp.dtype(fitness.dtype).itemsize < 4:
+            raise ValueError(
+                f"fitness is {fitness.dtype}; tell needs f32 or wider. Ranks and weights "
+                "are computed from fitness comparisons, and sub-f32 fitness has already "
+                "merged members that differ (measured: 256 distinct losses become 2 in "
+                "bf16). Accumulate the loss in f32 at the reduction, e.g. "
+                "jnp.mean(err, dtype=jnp.float32); the forward pass can stay bf16."
+            )
         weights = self.shaping(
             jax.lax.with_sharding_constraint(fitness, sharding.replicated(self.mesh))
         )
