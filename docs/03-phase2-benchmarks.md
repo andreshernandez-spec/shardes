@@ -810,16 +810,31 @@ being measured.
 | M3 `log10(t_B/t_A)` at `D=8` | -0.154 to -0.083, B faster in 4/4 | -0.057 to -0.027 |
 | M6 weak, MiB per device | 21 and 240, flat in `D` | 21 and 240, flat in `D` |
 
-**It is faster than the unmirrored strategy, not merely equivalent.** At `d=512, N=256, D=8`:
-19.8 ms against 26.5 ms under A, 16.3 against 18.3 under B, and the efficiency floor rises
-from 0.470 to 0.567.
+**It is faster than the unmirrored strategy at matched `N`, and that comparison needs a
+caveat rather than a headline.** At `d=512, N=256, D=8`: 19.8 ms against 26.5 ms under A,
+16.3 against 18.3 under B, and the efficiency floor rises from 0.470 to 0.567.
 
-The reason is the contraction rather than the evaluation. `Mirrored` draws `n/2` distinct
+The saving is in the contraction rather than the evaluation. `Mirrored` draws `n/2` distinct
 directions and evaluates each at plus and minus sigma, and its `contract` folds the signs into
-the weights (`weights[0::2] - weights[1::2]`) before delegating to the inner strategy. So
-`tell` runs **half the scan iterations**, and for `seed_regenerated`, whose contraction *is* a
-sequential scan, halving it is exactly where the saving lands. Antithetic pairing is usually
-argued for as variance reduction; here it is also the faster configuration.
+the weights before delegating:
+
+    sum_i w_i eps_i  with eps_2k = +e_k and eps_2k+1 = -e_k
+      = sum_k (w_2k - w_2k+1) e_k
+
+which is an exact identity, not an approximation, and holds for any inner strategy because
+`contract` is linear. Verified numerically to 2.4e-07, which is float32 rounding. So `tell`
+runs **half the scan iterations**, and for `seed_regenerated`, whose contraction *is* a
+sequential scan rather than a GEMM, halving the iteration count is exactly where the saving
+lands.
+
+**But the two arms are not sampling the same thing, so this is not "the same computation, done
+faster".** At `N=256` the unmirrored strategy explores 256 independent directions and the
+mirrored one explores 128, each evaluated twice. Both perform 256 model evaluations; only the
+mirrored one halves the contraction, and it does so *because* it has half as many directions
+to contract. Whether 128 antithetic pairs estimate the gradient better or worse than 256
+independent draws is a variance question, it belongs to Phase 0
+(`docs/01-phase0-estimator-harness.md`), and nothing in M1 measures it. Read this row as
+throughput at fixed `N`, not as a verdict on which sampling scheme is better.
 
 **M6 is unchanged from unmirrored**, 21 MiB at `d=512` and 240 at `d=2048`, flat in `D`. That
 is the expected result and worth stating: pairing halves the distinct *directions*, not the
