@@ -1,0 +1,72 @@
+{
+  "cap_seconds": 300.0,
+  "config": {
+    "d_model": 512,
+    "devices": 2,
+    "how": "B",
+    "mode": "weak",
+    "population": 256,
+    "strategy": "iid_gaussian"
+  },
+  "env": {
+    "commit": "5769751baa4af604f56f57d70e7c0637dde9d364",
+    "device_count": 8,
+    "device_kind": "NVIDIA A100-SXM4-80GB",
+    "device_platform": "gpu",
+    "dirty_worktree": false,
+    "hostname": "b046d7f0a48f",
+    "jax": "0.11.0",
+    "jax_platforms": "",
+    "jaxlib": "0.11.0",
+    "numpy": "2.5.1",
+    "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "scipy": "1.18.0",
+    "xla_flags": "--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer="
+  },
+  "generations_run": 8,
+  "guard_precision": "highest",
+  "matmul_precision": "highest",
+  "over_cap": false,
+  "peak_bytes_per_device": 1694504696,
+  "ranks": {
+    "digest": "bc4ad8abdc11cbf9",
+    "n": 256,
+    "ties": 1
+  },
+  "repeats": 5,
+  "seconds_all": [
+    0.013080653036013246,
+    0.013278392842039466,
+    0.013121022842824459,
+    0.013112541986629367,
+    0.013108323095366359
+  ],
+  "seconds_iqr": 1.2699747458100319e-05,
+  "seconds_median": 0.013112541986629367,
+  "shaping": "centered_ranks",
+  "trajectory": {
+    "digest": "c70df788a4fca90c",
+    "norm": 126.47612116152327,
+    "probe": [
+      -79.79592857038182,
+      77.41013602548841,
+      -243.87361680529636,
+      -201.28415742733407,
+      -35.01226256436439,
+      -160.56001820414915,
+      13.538694167075342,
+      -52.31975158259235,
+      -65.53594358395489,
+      103.98463113002504,
+      183.60834127024157,
+      77.71501228823736,
+      105.15559767997578,
+      -27.826740577048223,
+      171.8721625689373,
+      -40.01844817966162
+    ]
+  },
+  "wall_seconds": 25.475454432191327,
+  "warmup": 3
+}

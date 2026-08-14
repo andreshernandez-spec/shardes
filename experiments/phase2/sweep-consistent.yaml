@@ -1,0 +1,50 @@
+# All 256 configurations at one commit, which is the thing Phase 2 does not yet have.
+#
+# `docs/03` currently carries three runs stitched together: `iid_gaussian`, `lowrank_r1` and
+# `mirrored_lr1` from 2026-08-11 at a496345, `seed_regenerated` from 2026-08-13 at 5c18799,
+# and M4 from 5c18799. `ShardedES.apply` changed after both:
+#
+#   a496345   evaluation placed by an output sharding constraint
+#   9cbf0e4   reshape the member axis and vmap, which re-derived the perturbation per row
+#   c6730d5   the split seam, which reuses what `ask` built
+#
+# **All four strategies are re-run, not three.** The obvious economy is to keep the
+# `seed_regenerated` rows, since its per-device FLOPs are 1.000 across every one of those
+# commits. That reasoning does not hold for this strategy: it evaluates with `lax.scan`, and
+# `cost_analysis` counts a `while` body once regardless of trip count, so a FLOP ratio of
+# 1.000 is what it reports whether the scan was partitioned or not
+# (`docs/diagnosis-seed-regenerated-scan.md`). Its `apply` path did change at c6730d5, from
+# re-deriving via `sample` to slicing `split`. Keeping those rows would be trusting the one
+# metric known to be blind to the one strategy it is blind to.
+#
+# **Every knob is copied from `sweep.yaml` unchanged**, so the new numbers drop into the
+# existing tables and the only difference from the 2026-08-06 baseline is the commit.
+# Re-run `feasible.py` against this file if that ever stops being true.
+modes: [strong, weak]
+devices: [1, 2, 4, 8]
+d_model: [512, 2048]
+
+population:
+  512: [256, 1024]
+  2048: [128, 256]
+
+population_per_device:
+  512: [32, 128]
+  2048: [16, 32]
+
+strategies: [iid_gaussian, seed_regenerated, mirrored_lr1, lowrank_r1]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+warmup: 3
+repeats: 5
+
+# Fresh, and that is the point. `results`, `results-postfix` and `results-seedregen` are all
+# populated, and `run.py` skips a configuration whose result file exists, so pointing any
+# existing config at hardware would have measured nothing and exited 0. `--dry-run` now
+# reports PENDING rather than "runnable" and refuses a directory with nothing left to do.
+results_dir: results-consistent
+
+matmul_precision: highest

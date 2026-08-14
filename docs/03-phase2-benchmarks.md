@@ -127,8 +127,8 @@ random one.
 
 ## Results, 2026-08-06
 
-> **Superseded as a description of current behaviour by "Results, 2026-08-11" below, and
-> kept as the before half of a before and after.** Every number here was correctly measured
+> **Superseded as a description of current behaviour by "Results, 2026-08-14", and kept as
+> the before half of a before and after.** Every number here was correctly measured
 > on a program whose evaluation was replicated on every device
 > (`docs/diagnosis-replicated-evaluation.md`). Two claims in this section are now known to be
 > wrong rather than merely dated: the estimate that post-fix bandwidth would stay "under 1%
@@ -287,8 +287,9 @@ different GPU, a newer XLA, or TF32.
 
 ## Results, 2026-08-11, after the sharding fix
 
-> **The `iid_gaussian`, `lowrank_r1` and `mirrored_lr1` numbers below are absolute figures
-> for a program that no longer ships.** They were measured at `a496345`, before
+> **Superseded by "Results, 2026-08-14" below, which measures all four strategies at one
+> commit. The `iid_gaussian`, `lowrank_r1` and `mirrored_lr1` numbers here are absolute
+> figures for a program that no longer ships.** They were measured at `a496345`, before
 > `ShardedES.apply` reshaped the member axis. That change re-derives the perturbation inside
 > the vmap, which is a third materialisation, so current `main` does 1.32x the FLOPs for
 > `iid_gaussian` and about 1.08x for the low-rank strategies, with peak memory up 10 to 18%.
@@ -618,6 +619,173 @@ the memory wall; that argument still rests on M6.
 
 ---
 
+## Results, 2026-08-14: one commit, all 256 configurations
+
+**This section supersedes the three above as a description of current behaviour.** They stay
+as the record of what was measured when, and the sequence is the point: 2026-08-06 measured a
+replicated evaluation, 2026-08-11 measured three strategies after the first fix,
+2026-08-13 measured the fourth after the second. Every one of those tables mixes commits with
+the others. This one does not.
+
+**The run.** 256 configurations from `sweep-consistent.yaml`, which differs from `sweep.yaml`
+by one line, `results_dir`. One 8x A100-SXM4-80GB node (driver 595.71.05, CUDA 13.2, jax
+0.11.0, community cloud), commit `5769751`, 4h09m, $46. **256 written, 0 failed, 0 over cap,
+0 needed more devices**, and every record stamps `dirty_worktree: false` at a single commit.
+
+M4 and `profile.py` ran in the same session on the same node, so the comparison arms and the
+per-part breakdown are the same program as the sweep. `experiments/phase2/results-consistent/`,
+`results-m4-consistent/`, `figures-consistent/`, `profile-consistent.txt`.
+
+### M1, strong scaling
+
+Parallel efficiency `T1/(D*T8)` at `D=8`, **0.292 to 0.939**:
+
+| strategy | `D=8` efficiency | at 2026-08-06 |
+|---|---|---|
+| `seed_regenerated` | **0.470 to 0.939** | 0.124 to 0.142 |
+| `iid_gaussian` | 0.292 to 0.750 | 0.119 to 0.127 |
+| `lowrank_r1` | 0.428 to 0.673 | 0.112 to 0.124 |
+| `mirrored_lr1` | 0.395 to 0.662 | 0.112 to 0.124 |
+
+**`seed_regenerated` is now the best scaler, and it is the strategy that spent two sweeps
+pinned at `1/D`.** That is not a coincidence: its evaluation is a `lax.scan` over members, so
+it has the least per-generation overhead to amortise once the scan is actually divided. The
+worst is `iid_gaussian/A` at 0.292, and `profile.py --static` says why: its `evalFLOP` falls to
+0.125, the ideal, while `fullFLOP` stays at 1.109, because strategy A regenerates and
+contracts the whole population on every device and for a full-rank perturbation that costs
+about what evaluating it does.
+
+### M2, weak scaling
+
+Throughput at `D=8` as a multiple of `D=1`, ideal 8x: **3.00x to 7.61x, median 6.32x**,
+against 1.01x to 1.58x, median 1.20x on 2026-08-06.
+
+### M3, the contraction crossover
+
+`log10(t_B/t_A)` at `D=8` spans **-0.378 to +0.059**, and B is faster in 10 of 16 cells. The
+2026-08-06 reading of "within 14% everywhere" was a statement about a replicated evaluation
+dominating both contractions rather than about the contractions.
+
+### M6, memory: and this is where the story changed
+
+**Two things happened at once, and they need separating.**
+
+**First, the measurement was wrong for every previous run.** `run.py` compiled its memory
+analysis outside the configured `matmul_precision` context, so it measured a DEFAULT-precision
+program while the timings ran at `highest`, and it summed `temp + argument` while omitting
+`output - alias`. The missing term is the parameters the updated state has to hold: a constant
+**6 MiB at `d=512` and 96 MiB at `d=2048`**. Constant, so negligible for a 3 GiB strategy and
+**41% for a 15 MiB one**, which is exactly the number this section used to lead with.
+`seed_regenerated` at `d=512` reads 21 MiB rather than 15, and 240 rather than 144 at
+`d=2048`. The flagship memory claim was understated, so correcting it makes the result
+slightly less impressive rather than more.
+
+**Second, strategy A's per-device memory now falls with the device count.** Measured, strong
+mode, peak GiB per device:
+
+| `iid_gaussian` | `D=1` | `D=8` before | `D=8` now |
+|---|---|---|---|
+| `d=2048, N=256, /A` | 48.69 | 28.09 | **3.25** |
+| `d=2048, N=256, /B` | 48.69 | 6.16 | 6.25 |
+| `d=512, N=1024, /A` | 12.52 | 7.01 | **0.83** |
+| `d=512, N=1024, /B` | 12.52 | 1.57 | 1.58 |
+
+**A is now cheaper than B at `D=8`, where it used to be 4.6x more expensive.** In weak mode
+the same thing: `iid_gaussian/A` at `d=512, N/device=128` read 1610, 1798, 3590, 7174 MiB and
+now reads 1616, 848, 848, 848. 28 of 32 weak-mode series are flat in `D`.
+
+This contradicts what this document said as recently as 2026-08-11: "Strategy A storage does
+not fall with `D` in weak mode, as designed: every device regenerates the whole population, so
+per-device storage tracks total `N`." **That is no longer true and the change is in the code,
+not the measurement**: the `output - alias` correction *adds* memory uniformly and cannot
+produce an 8.6x reduction. `ShardedES.apply` now reuses the perturbation `ask` built rather
+than re-deriving it per row (`docs/proposal-scan-strategies-distribute.md`), and XLA fuses the
+contraction's regeneration into its reduction instead of materialising the full `(n, ...)`
+perturbation first.
+
+**It is correct, not a shortcut.** Strategies A and B agree on the update for **all 128
+configurations** at `rtol=1e-5`, worst disagreement 4.54e-07, which is summation order.
+
+`D=1` is unchanged at 48.69 GiB, so `feasible.py`'s model and the `N=256` ceiling at `d=2048`
+still stand: the ceiling is set at one device, where there is nothing to divide.
+
+### M5, communication against the clock
+
+**7.928 GB/s, 1.32% of an A100's ~600 GB/s NVLink**, at the most demanding configuration
+(`d=2048, N=128, lowrank_r1/B` at `D=8`). Both halves now come from the same commit:
+`comms.py` counts the payload in the compiled HLO and `run.py` times the generation, and
+`bandwidth.py` divides. Previously the bytes and the times were from different programs.
+
+The collective structure is unchanged from every earlier run, verified: same ops, same
+payloads, A at 1,024 to 8,192 bytes and B at 6.29 to 100.66 MB. Communication has never been
+the constraint and still is not.
+
+### M4, against the references
+
+Like for like on one A100, which is what this document asks for:
+
+| `d=512, N=1024`, 1 GPU | ms/gen | tokens/s |
+|---|---|---|
+| shardes `mirrored_lr1/B` | **10.26** | **25.6M** |
+| evosax `Open_ES` | 45.04 | 5.8M |
+| naive ES | 45.24 | 5.8M |
+| shardes `seed_regenerated/B` | 182.90 | 1.4M |
+
+The low-rank path is **3.7x to 8.4x faster than evosax** across the grid, widening with model
+size, which is what a factored perturbation predicts.
+
+**evosax and the naive baseline agree to within 2% at `d=512` and within 8% at `d=2048`**,
+where naive is the faster of the two. An earlier revision of this document said "within 2%
+everywhere", which was true of the shapes it had looked at. The point survives: the incumbent
+and the baseline both papers beat are the same measurement, which is the concrete form of the
+`ravel_pytree` argument in `docs/00`.
+
+With the mesh, which is **not** like for like: at `d=2048, N=256` shardes reaches 10.3M
+tokens/s against evosax's 0.377M, a factor of 27.4. That decomposes into 8.4x algorithmic,
+measured at `D=1` on the same GPU, and 3.3x from sharding across eight devices. evosax and the
+naive arm have no sharding path, so they run on one device whatever the mesh says, and `m4.py`
+prints that caveat above the table.
+
+`seed_regenerated` is 4x slower than evosax at `D=1` and **3.1x faster at `D=8`**. Trading
+throughput for memory on one device and winning it back through device count is Qiu et al.'s
+argument, measured.
+
+### What the guards said
+
+`check.py --results results-consistent --config sweep-consistent.yaml` returns 1, and the
+reason is the noise floor rather than anything about this run: **6 groups reorder their
+population across device counts**, all at `d=512`, the same ones every previous sweep flagged.
+
+    mirrored_lr1/A and /B  d=512 N=256   (1.45e-03)
+    lowrank_r1/A and /B    d=512 N=1024  (1.09e-04)
+    mirrored_lr1/A and /B  d=512 N=1024  (1.17e-04)
+
+Their populations are packed inside float32 resolution, so an ulp of arithmetic reorders them
+and the rank shaping turns that into a different update. It is a property of those
+configurations. **No scaling number above should be quoted for those six groups without
+saying so.**
+
+There were **no errors and no missing rows**: the matrix validation found all 256 expected
+configurations present. Those are the two conditions that would have invalidated the run, and
+both are clean.
+
+### Two defects in the harness, found by running it
+
+**`check.py` returned 1 for three different things**: recorded errors, missing rows, and the
+noise floor. That makes it useless as a mid-session gate, because the noise floor is permanent
+for six `d=512` shapes, so a session gating on it would never proceed and a session ignoring
+it would ignore the errors too. Now **2 means the run is broken** (errors or holes), **1 means
+complete but some group's scaling number would mislead**, and 0 means nothing to report. A
+caller renting hardware should stop on 2 and carry on past 1.
+
+**And the session driver was not gating at all.** The script that ran this sweep printed
+`check rc=1` between the sweep and M4 without branching on it, so a sweep that had errored
+would still have funded the rest of the session. It was harmless here only because the sweep
+was clean. That script lives with the runbook rather than in the repository, so the durable
+half of the fix is the exit code above; the driver has to be the thing that reads it.
+
+---
+
 ## Exit criteria — Gate G2
 
 1. Strong and weak scaling curves across `D ∈ {1,2,4,8}`, with parallel efficiency stated.
@@ -719,3 +887,25 @@ name is EGGROLL's own implementation, and that is not run. Being within its thro
 offering a general API was set as a perfectly good result; we do not know whether we are.
 
 **Criterion 5 is the remaining gate item**, and it is prose rather than measurement.
+
+
+### Status after the 2026-08-14 run
+
+| | criterion | status |
+|---|---|---|
+| 1 | strong and weak curves, efficiency stated | **met**, 0.292 to 0.939 at `D=8`, one commit |
+| 2 | crossover measured, phase diagram | **met**, no contour: the grid is too coarse to carry one |
+| 3 | one comparison against an external reference | **met** by evosax, in the letter |
+| 4 | reproducible from a committed config plus a recorded environment | **met**, and now from a *single* commit |
+| 5 | a limitations paragraph a skeptic would accept as fair | **still needs rewriting, in Andres's words** |
+
+**Criterion 4 is the one that changed.** It was met before in the sense that every number had
+a config and an environment behind it. It was not met in the sense a skeptic means: the tables
+mixed three commits, and two of the three had absolute figures for programs that no longer
+existed. They do not now.
+
+**Criterion 5 is the only gate item left**, and it is prose rather than measurement. The
+material for it is unusually good: this phase found a replicated evaluation, a scan that could
+not be partitioned, a memory measurement that was wrong for every run, a plotting bug that
+showed a quarter of the data, and a checker that passed sweeps that had failed. A limitations
+section that says so is stronger than one that does not.
