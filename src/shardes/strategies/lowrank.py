@@ -258,7 +258,9 @@ class LowRank:
                         # no meaning here: there is no second axis to scale.
                         if is_separable(s):
                             raise ValueError(_SEPARABLE_ON_DENSE.format(shape=leaf.shape))
-                        return leaf + s * lf.a
+                        # In the leaf's dtype, like the factored paths below: an f32 sigma
+                        # must not promote a bf16 forward back to f32.
+                        return leaf + jnp.asarray(s, leaf.dtype) * lf.a
                     if is_separable(s):
                         # `(u v^T) * (A B^T) == (u * A) @ (v * B).T`. Folded into the factors,
                         # so the (m, k) product is still never formed and the forward pass is

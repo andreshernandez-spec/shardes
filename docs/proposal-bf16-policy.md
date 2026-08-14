@@ -1,5 +1,33 @@
 # Proposal: the bf16 dtype policy
 
+**Status: ACCEPTED, 2026-08-14. Policy A, master weights.** Decided by Andres from the
+draft below; the implementation shipped in the same PR, for line-by-line review per
+ground rule 1.
+
+**The accepted shape**: `ShardedES(..., compute_dtype=jnp.bfloat16)`. The state carries
+params at f32 or wider, and one per-generation view cast to `compute_dtype` is what
+`ask` samples noise from, what `apply` hands the model, and what the contraction
+regenerates from, so the noise the forward pass adds and the noise `tell` correlates
+against are the same bits. Only the SGD step touches the master. With no `compute_dtype`
+nothing casts, and `init` refuses sub-f32 params rather than let promotion decide.
+Per-leaf dtype trees are deferred until a model needs one.
+
+**Implementation surfaced one trap the draft missed**: sigma. The state carries it f32,
+and `p + s * e` with an f32 `s` promotes a bf16 forward straight back to f32, undoing
+the compute-dtype cast two lines after it happened. `LowRank` already cast its factors
+for exactly this reason; `IIDGaussian`, `SeedRegenerated` and LowRank's densely
+perturbed leaf path did not, and all three now cast the scale into the leaf's dtype.
+The trace-time dtype assert in `tests/test_bf16_policy.py` is what caught it.
+
+One prediction from the draft held up measurably: device-count invariance under bf16
+compute passes at the f32 test's 1e-6, not the 1e-2 `docs/conventions.md` reserves for
+bf16 accumulation paths, because under A there are no bf16 accumulation paths. The
+noise quantizes identically at every device count and every accumulator is f32.
+
+The draft as decided on follows, unchanged.
+
+---
+
 **Status: DRAFT, decision open. Andres decides.** Two defensible designs, written down
 with their tradeoffs per the working style in `CLAUDE.md`. A recommendation is stated at
 the end and it is only that.

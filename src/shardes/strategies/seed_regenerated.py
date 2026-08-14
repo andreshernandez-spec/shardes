@@ -80,7 +80,11 @@ class SeedRegenerated:
         def g(x: Array) -> Array:
             def step(carry, i):
                 eps = member_noise(pert.base_key, pert.like, i, self.coupling)
-                perturbed = jax.tree.map(lambda p, s, e: p + s * e, params, scale, eps)
+                # `s` in the leaf's dtype, same reason as IIDGaussian: an f32 sigma must
+                # not promote a bf16 forward back to f32.
+                perturbed = jax.tree.map(
+                    lambda p, s, e: p + jnp.asarray(s, p.dtype) * e, params, scale, eps
+                )
                 return carry, model(perturbed, x)
 
             _, out = jax.lax.scan(step, None, pert.member_ids)
