@@ -82,7 +82,12 @@ class IIDGaussian:
 
         def g(x: Array) -> Array:
             def one(eps: PyTree) -> Array:
-                perturbed = jax.tree.map(lambda p, s, e: p + s * e, params, scale, eps)
+                # `s` in the leaf's dtype, or an f32 sigma promotes a bf16 forward back to
+                # f32 through `p + s * e` and the compute-dtype cast upstream is undone.
+                # LowRank casts its factors for the same reason.
+                perturbed = jax.tree.map(
+                    lambda p, s, e: p + jnp.asarray(s, p.dtype) * e, params, scale, eps
+                )
                 return model(perturbed, x)
 
             return jax.vmap(one)(pert.eps)
