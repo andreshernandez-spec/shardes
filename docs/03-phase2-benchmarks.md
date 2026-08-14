@@ -140,7 +140,7 @@ random one.
 `--xla_gpu_deterministic_ops=true --xla_gpu_enable_command_buffer=`; the second is not
 optional on a multi-GPU node and `run.py` now refuses without it, see
 `docs/06-benchmark-runbook.md`. Data in `experiments/phase2/results/`, figures in
-`experiments/phase2/figures/`, guard output from `check.py`.
+`experiments/phase2/figures-history/2026-08-06-prefix/`, guard output from `check.py`.
 
 The figures were drawn by `plot.py` under **matplotlib 3.11.1**. Nothing records that
 automatically: `env.json` and the per-result `env` block cover the numbers, not the
@@ -310,7 +310,7 @@ evaluation was replicated on every device. What changed is the program.
 differs from `sweep.yaml` by one line, `results_dir`. 0 failed, 0 over cap, 3h57m of measured
 wall on 8x A100-SXM4-80GB (driver 595.71.05, CUDA 13.2, jax 0.11.0, community cloud).
 `XLA_FLAGS` and every other knob are unchanged. Data in `experiments/phase2/results-postfix/`,
-figures in `experiments/phase2/figures-postfix/`, commit `a496345`, all 256 records stamped
+figures in `experiments/phase2/figures-history/2026-08-11-postfix/`, commit `a496345`, all 256 records stamped
 `dirty_worktree: false`.
 
 Billed $52.43 against 4h43m of pod uptime. The gap between 3h57m of measurement and 4h43m of
@@ -634,7 +634,7 @@ by one line, `results_dir`. One 8x A100-SXM4-80GB node (driver 595.71.05, CUDA 1
 
 M4 and `profile.py` ran in the same session on the same node, so the comparison arms and the
 per-part breakdown are the same program as the sweep. `experiments/phase2/results-consistent/`,
-`results-m4-consistent/`, `figures-consistent/`, `profile-consistent.txt`.
+`results-m4-consistent/`, `figures-history/2026-08-14-consistent/`, `profile-consistent.txt`.
 
 ### M1, strong scaling
 
@@ -862,10 +862,16 @@ compares the arms to each other.
 is the expected result and worth stating: pairing halves the distinct *directions*, not the
 storage, which was already `O(|params|)` because the noise is regenerated rather than kept.
 
-**The figures cover all five strategies.** `experiments/phase2/figures-all/` is plotted from
-the union of `results-consistent` and `results-qiu`, 320 results:
+**The figures cover all five strategies.** `experiments/phase2/figures/` is plotted from
+the union of `results-consistent` and `results-qiu`, 320 results, and those two directories
+are `plot.py`'s defaults, so this is the no-argument invocation:
 
-    python plot.py --results results-consistent results-qiu --out figures-all
+    python plot.py
+
+Superseded sets moved to `experiments/phase2/figures-history/`, one dated directory per run,
+with a README saying what each was and why it was replaced. They used to sit beside the
+current one as `figures-postfix/`, `figures-consistent/` and so on, where nothing in the
+names said which to read.
 
 `plot.py` takes several directories rather than requiring a combined one, so there is no third
 copy of every result on disk to go stale. Combining them is legitimate
