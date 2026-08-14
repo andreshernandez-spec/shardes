@@ -786,6 +786,53 @@ half of the fix is the exit code above; the driver has to be the thing that read
 
 ---
 
+## Results, 2026-08-14b: the Qiu configuration, measured at last
+
+`Mirrored(SeedRegenerated())` is Qiu et al. as published, and `core.py` has advertised it by
+name since Phase 1:
+
+    ShardedES(strategy=Mirrored(SeedRegenerated()), n=30, ...)          # Qiu et al.
+
+No sweep had ever run it. `sweep.yaml` measures `seed_regenerated` unmirrored and
+`mirrored_lr1` for the low-rank half, so the published pairing of antithetic sampling with
+seed regeneration was the one cell of the design with correctness tests and no performance
+numbers. It is also the configuration that inherited the scan defect and was fixed without
+being measured.
+
+**The run.** 64 configurations from `sweep-qiu.yaml`, which differs from `sweep.yaml` by
+`strategies` and `results_dir`. Same node type, commit `eee4bd1`, ~50 min, ~$10. **64 written,
+0 failed, 0 over cap**, single commit, no dirty worktrees.
+
+| | Qiu, `mirrored_seed` | unmirrored `seed_regenerated` |
+|---|---|---|
+| M1 efficiency at `D=8` | **0.567 to 0.931** | 0.470 to 0.939 |
+| M2 weak `D=8/D=1` | **5.12x to 7.68x**, median 6.77x | median 6.32x across all four |
+| M3 `log10(t_B/t_A)` at `D=8` | -0.154 to -0.083, B faster in 4/4 | -0.057 to -0.027 |
+| M6 weak, MiB per device | 21 and 240, flat in `D` | 21 and 240, flat in `D` |
+
+**It is faster than the unmirrored strategy, not merely equivalent.** At `d=512, N=256, D=8`:
+19.8 ms against 26.5 ms under A, 16.3 against 18.3 under B, and the efficiency floor rises
+from 0.470 to 0.567.
+
+The reason is the contraction rather than the evaluation. `Mirrored` draws `n/2` distinct
+directions and evaluates each at plus and minus sigma, and its `contract` folds the signs into
+the weights (`weights[0::2] - weights[1::2]`) before delegating to the inner strategy. So
+`tell` runs **half the scan iterations**, and for `seed_regenerated`, whose contraction *is* a
+sequential scan, halving it is exactly where the saving lands. Antithetic pairing is usually
+argued for as variance reduction; here it is also the faster configuration.
+
+**M6 is unchanged from unmirrored**, 21 MiB at `d=512` and 240 at `d=2048`, flat in `D`. That
+is the expected result and worth stating: pairing halves the distinct *directions*, not the
+storage, which was already `O(|params|)` because the noise is regenerated rather than kept.
+
+**`check.py` returns 0, which no previous sweep has managed.** No errors, no missing rows, and
+**no noise-floor groups**. Every earlier run flagged six `d=512` groups whose populations pack
+inside float32 resolution so that an ulp reorders them; `mirrored_seed` is not among them,
+because full-rank seed-regenerated perturbations spread the population far enough apart that
+the rank transform has nothing to amplify. The low-rank strategies are the ones that crowd.
+
+---
+
 ## Exit criteria — Gate G2
 
 1. Strong and weak scaling curves across `D ∈ {1,2,4,8}`, with parallel efficiency stated.
