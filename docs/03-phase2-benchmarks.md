@@ -810,9 +810,19 @@ being measured.
 | M3 `log10(t_B/t_A)` at `D=8` | -0.154 to -0.083, B faster in 4/4 | -0.057 to -0.027 |
 | M6 weak, MiB per device | 21 and 240, flat in `D` | 21 and 240, flat in `D` |
 
-**It is faster than the unmirrored strategy at matched `N`, and that comparison needs a
-caveat rather than a headline.** At `d=512, N=256, D=8`: 19.8 ms against 26.5 ms under A,
-16.3 against 18.3 under B, and the efficiency floor rises from 0.470 to 0.567.
+**It is faster than the unmirrored strategy in 7 of 8 cells at matched `N`, and the
+advantage lives almost entirely in contraction A.** Wall clock at `D=8`:
+
+| shape | how | unmirrored | Qiu | speedup |
+|---|---|---|---|---|
+| `d=512, N=256` | A | 26.5 ms | 19.8 | **1.34x** |
+| `d=512, N=1024` | A | 83.6 | 67.8 | **1.23x** |
+| `d=2048, N=128` | A | 59.0 | 45.5 | **1.30x** |
+| `d=2048, N=256` | A | 113.3 | 82.0 | **1.38x** |
+| `d=512, N=256` | B | 18.3 | 16.3 | 1.12x |
+| `d=512, N=1024` | B | 57.7 | 56.0 | 1.03x |
+| `d=2048, N=128` | B | 37.0 | 31.9 | 1.16x |
+| `d=2048, N=256` | B | 59.0 | 60.0 | 0.98x |
 
 The saving is in the contraction rather than the evaluation. `Mirrored` draws `n/2` distinct
 directions and evaluates each at plus and minus sigma, and its `contract` folds the signs into
@@ -821,24 +831,48 @@ the weights before delegating:
     sum_i w_i eps_i  with eps_2k = +e_k and eps_2k+1 = -e_k
       = sum_k (w_2k - w_2k+1) e_k
 
-which is an exact identity, not an approximation, and holds for any inner strategy because
-`contract` is linear. Verified numerically to 2.4e-07, which is float32 rounding. So `tell`
+an exact identity rather than an approximation, valid for any inner strategy because
+`contract` is linear. Verified numerically to 2.4e-07, which is float32 rounding. `tell` then
 runs **half the scan iterations**, and for `seed_regenerated`, whose contraction *is* a
-sequential scan rather than a GEMM, halving the iteration count is exactly where the saving
-lands.
+sequential scan rather than a GEMM, halving the iteration count is where the saving lands.
 
-**But the two arms are not sampling the same thing, so this is not "the same computation, done
+**Why A gains 1.23x to 1.38x and B gains almost nothing.** Under A every device regenerates
+and contracts the whole population, so halving the directions halves a full-population scan on
+every device. Under B each device contracts only its own `n/D` shard, so the same halving is a
+much smaller absolute saving and disappears into other costs; at `d=2048, N=256` it is 2%
+slower. The antithetic identity pays in proportion to how much contraction work is replicated,
+which is a statement about the interaction of two design choices rather than about either one.
+
+**The two arms are not sampling the same thing, so this is not "the same computation, done
 faster".** At `N=256` the unmirrored strategy explores 256 independent directions and the
 mirrored one explores 128, each evaluated twice. Both perform 256 model evaluations; only the
 mirrored one halves the contraction, and it does so *because* it has half as many directions
 to contract. Whether 128 antithetic pairs estimate the gradient better or worse than 256
 independent draws is a variance question, it belongs to Phase 0
-(`docs/01-phase0-estimator-harness.md`), and nothing in M1 measures it. Read this row as
+(`docs/01-phase0-estimator-harness.md`), and nothing in M1 measures it. Read these rows as
 throughput at fixed `N`, not as a verdict on which sampling scheme is better.
+
+Parallel *efficiency* does not follow the wall clock here, and the reason is worth one line:
+under B at `d=2048, N=256` the unmirrored arm reads 0.939 against Qiu's 0.858 while being
+slower in absolute terms, because efficiency is measured against each arm's own `D=1`
+baseline and Qiu's is already faster. Efficiency compares an arm to itself; the table above
+compares the arms to each other.
 
 **M6 is unchanged from unmirrored**, 21 MiB at `d=512` and 240 at `d=2048`, flat in `D`. That
 is the expected result and worth stating: pairing halves the distinct *directions*, not the
 storage, which was already `O(|params|)` because the noise is regenerated rather than kept.
+
+**The figures cover all five strategies.** `experiments/phase2/figures-all/` is plotted from
+the union of `results-consistent` and `results-qiu`, 320 results:
+
+    python plot.py --results results-consistent results-qiu --out figures-all
+
+`plot.py` takes several directories rather than requiring a combined one, so there is no third
+copy of every result on disk to go stale. Combining them is legitimate
+rather than the stitching this document has spent three sections warning about: the two runs
+are at `5769751` and `eee4bd1`, and **`git diff 5769751 eee4bd1 -- src` is empty**. Everything
+between those commits is results, documentation and driver tables, so the library that
+produced both sets of numbers is byte-identical. Each result records its own commit regardless.
 
 **`check.py` returns 0, which no previous sweep has managed.** No errors, no missing rows, and
 **no noise-floor groups**. Every earlier run flagged six `d=512` groups whose populations pack

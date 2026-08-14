@@ -50,8 +50,22 @@ CROSSOVER = LinearSegmentedColormap.from_list(
 )
 
 
-def load(results: pathlib.Path) -> list[dict]:
-    rows = [json.loads(p.read_text()) for p in sorted(results.glob("*.json"))]
+def load(results: list[pathlib.Path]) -> list[dict]:
+    """Rows from one or more results directories.
+
+    **Several, because a strategy added later lands in its own directory.** `results-qiu`
+    holds `mirrored_seed` and `results-consistent` holds the other four, and a figure that
+    showed only one of them would be the omission bug this file has already had three times.
+    Copying them into a combined directory works and leaves a third copy of every result on
+    disk that goes stale the moment either source changes.
+
+    Rows carry their own `env.commit`, so a caller combining directories from different
+    commits still has the provenance per row. Whether combining them is *legitimate* is the
+    caller's judgement, not this function's.
+    """
+    rows = []
+    for d in results:
+        rows += [json.loads(p.read_text()) for p in sorted(d.glob("*.json"))]
     return [r for r in rows if "error" not in r]
 
 
@@ -333,7 +347,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--results", type=pathlib.Path, default=HERE / "results")
+    # `nargs="+"` makes this a list, so the default has to be one too. It was a bare Path
+    # for one commit and `plot.py --out ...` raised "PosixPath object is not iterable".
+    ap.add_argument("--results", type=pathlib.Path, nargs="+",
+                    default=[HERE / "results"])
     ap.add_argument("--out", type=pathlib.Path, default=HERE / "figures")
     args = ap.parse_args(argv)
 
