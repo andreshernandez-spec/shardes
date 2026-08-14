@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """M1, M2 and M3 as figures.
 
-    python plot.py --results results-rehearsal --out figures/
+    python plot.py                                          # the current set, into figures/
+    python plot.py --results results-rehearsal --out figures-rehearsal
 
 `docs/03` makes producing the figures part of the dress rehearsal, not of the rented
 session: "the plotting script runs end-to-end on the rehearsal data and produces the final
@@ -349,8 +350,14 @@ def main(argv=None) -> int:
     )
     # `nargs="+"` makes this a list, so the default has to be one too. It was a bare Path
     # for one commit and `plot.py --out ...` raised "PosixPath object is not iterable".
+    #
+    # The defaults are the current published set, so a bare `plot.py` reproduces `figures/`
+    # rather than overwriting it. They used to be `results/` and `figures/`, which was
+    # harmless while `figures/` held the first run and actively wrong once it held the
+    # current one: the no-argument form would have redrawn the canonical figures from the
+    # oldest, pre-scan-fix data.
     ap.add_argument("--results", type=pathlib.Path, nargs="+",
-                    default=[HERE / "results"])
+                    default=[HERE / "results-consistent", HERE / "results-qiu"])
     ap.add_argument("--out", type=pathlib.Path, default=HERE / "figures")
     args = ap.parse_args(argv)
 
