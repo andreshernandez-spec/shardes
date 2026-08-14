@@ -15,9 +15,9 @@ case EGGROLL's reference implementation raises `NotImplementedError` on (C6c).
 `dense(x, w) = x @ w.T`, so tensors load from safetensors without transposition. Names
 map 1:1 to `model.layers.N.*` (see `load`).
 
-The forward is teacher-forced scoring over a full sequence. Decode with a KV cache is
-the generation loop's job and lives with the Countdown task, not here: this module is
-the model, and scoring is what the logit-validation tests need.
+`forward` is teacher-forced scoring over a full sequence; `generate` is greedy KV-cache
+decode whose correctness bar is token-by-token equivalence with `forward`. The Countdown
+reward stays with the task; this module is the model.
 
 Not an approximation of Qwen2.5: RMSNorm (eps from config), RoPE at theta from config,
 GQA with repeated KV heads, SwiGLU, QKV biases, tied head. `Config.qwen25_05b()` carries
@@ -105,10 +105,14 @@ def _rms_norm(x: Array, scale: Array, eps: float) -> Array:
     return (x.astype(jnp.float32) * jax.lax.rsqrt(var + eps)).astype(x.dtype) * scale
 
 
-def _rope(x: Array, theta: float) -> Array:
-    """x: (..., seq, heads, head_dim). Rotate-half convention, angles in f32."""
+def _rope(x: Array, theta: float, pos0: Array | int = 0) -> Array:
+    """x: (..., seq, heads, head_dim). Rotate-half convention, angles in f32.
+
+    `pos0` shifts the absolute position, which is what decode needs: a single token at
+    step t must see the same angles it would in a full forward at position t.
+    """
     seq, hd = x.shape[-3], x.shape[-1]
-    pos = jnp.arange(seq, dtype=jnp.float32)
+    pos = pos0 + jnp.arange(seq, dtype=jnp.float32)
     inv = theta ** (-jnp.arange(0, hd, 2, dtype=jnp.float32) / hd)
     ang = pos[:, None] * inv[None, :]                      # (seq, hd/2)
     cos, sin = jnp.cos(ang), jnp.sin(ang)
@@ -227,3 +231,71 @@ def load(checkpoint_dir, cfg: Config, dtype=jnp.bfloat16) -> dict:
     if raw:
         raise ValueError(f"unmapped tensors in checkpoint: {sorted(raw)[:5]}")
     return params
+
+# ------------------------------------------------------------------ decode (KV cache)
+
+
+def generate(params: PyTree, ids: Array, plen: Array, cfg: Config, max_new: int) -> Array:
+    """Greedy decode. ids: (b, P) right-padded prompts, plen: (b,) true lengths.
+    Returns (b, P + max_new): the buffer with generated tokens written after each
+    row's prompt. Deterministic, which is what C6d's reproducibility statement needs;
+    temperature sampling is a later, deliberate addition.
+
+    One `lax.scan` over positions covers prefill and decode in the same body: at
+    position t the input token comes from the prompt while `t+1 < plen`, from the
+    model's argmax after. Right-padding keeps every row's positions starting at 0, so
+    rope needs no per-row offset. O(T^2) attention against a fixed-size cache; fine at
+    pilot lengths, and the correctness bar is teacher-forced equivalence with
+    `forward`, which the tiny-config test asserts token by token.
+
+    The cache carries bf16 when the params view is bf16 (its dtype follows the
+    embedding), and the argmax is taken on f32 logits like everywhere else.
+    """
+    b, P = ids.shape
+    T = P + max_new
+    hd, nkv = cfg.head_dim, cfg.n_kv_heads
+    x0 = embed(params["embedding"], ids[:, :1])
+    dtype = x0.dtype
+
+    buf = jnp.concatenate([ids, jnp.zeros((b, max_new), ids.dtype)], axis=1)
+    caches = [
+        (jnp.zeros((b, T, nkv, hd), dtype), jnp.zeros((b, T, nkv, hd), dtype))
+        for _ in params["layers"]
+    ]
+
+    def step(carry, pos):
+        buf, caches = carry
+        tok = jax.lax.dynamic_slice_in_dim(buf, pos, 1, axis=1)          # (b, 1)
+        x = embed(params["embedding"], tok)
+        new_caches = []
+        for p, (ck, cv) in zip(params["layers"], caches):
+            h = _rms_norm(x, p["ln1"], cfg.rms_eps)
+            q = (dense(h, p["wq"]) + p["bq"]).reshape(b, 1, cfg.n_heads, hd)
+            k = (dense(h, p["wk"]) + p["bk"]).reshape(b, 1, nkv, hd)
+            v = (dense(h, p["wv"]) + p["bv"]).reshape(b, 1, nkv, hd)
+            q, k = _rope(q, cfg.rope_theta, pos), _rope(k, cfg.rope_theta, pos)
+            ck = jax.lax.dynamic_update_slice_in_dim(ck, k.astype(dtype), pos, axis=1)
+            cv = jax.lax.dynamic_update_slice_in_dim(cv, v.astype(dtype), pos, axis=1)
+            new_caches.append((ck, cv))
+            kk = jnp.repeat(ck, cfg.n_heads // nkv, axis=2)
+            vv = jnp.repeat(cv, cfg.n_heads // nkv, axis=2)
+            scores = jnp.einsum("bqhd,bkhd->bhqk", q, kk).astype(jnp.float32) * hd**-0.5
+            scores = jnp.where(jnp.arange(T)[None, None, None, :] <= pos, scores, -jnp.inf)
+            attn = jax.nn.softmax(scores, axis=-1).astype(dtype)
+            out = jnp.einsum("bhqk,bkhd->bqhd", attn, vv).reshape(b, 1, cfg.n_heads * hd)
+            x = x + dense(out, p["wo"])
+            h = _rms_norm(x, p["ln2"], cfg.rms_eps)
+            x = x + dense(jax.nn.silu(dense(h, p["w_gate"])) * dense(h, p["w_up"]),
+                          p["w_down"])
+        x = _rms_norm(x, params["ln_f"], cfg.rms_eps)
+        logits = dense(x, params["embedding"]).astype(jnp.float32)       # (b, 1, V)
+        nxt = jnp.argmax(logits[:, 0], axis=-1).astype(buf.dtype)        # (b,)
+        keep = (pos + 1) < plen                                          # prompt continues?
+        cur = jax.lax.dynamic_slice_in_dim(buf, jnp.minimum(pos + 1, T - 1), 1, axis=1)[:, 0]
+        buf = jax.lax.dynamic_update_slice_in_dim(
+            buf, jnp.where(keep, cur, nxt)[:, None], jnp.minimum(pos + 1, T - 1), axis=1)
+        return (buf, new_caches), None
+
+    (buf, _), _ = jax.lax.scan(step, (buf, caches), jnp.arange(T - 1))
+    return buf
+

@@ -123,3 +123,23 @@ def test_loading_maps_every_tensor_or_says_which_it_could_not():
     do not need a checkpoint: an empty directory, and the unmapped-tensor error."""
     with pytest.raises(FileNotFoundError):
         qwen2.load("/nonexistent", CFG)
+
+
+def test_greedy_generate_agrees_with_iterated_forward():
+    """The KV cache earns its keep only if decode is exactly forward, token by token.
+
+    The reference is the model itself: append the argmax of `forward`'s last position,
+    repeat. Any cache indexing, rope offset, or masking bug breaks the agreement at the
+    first divergent token, and did during development.
+    """
+    params = qwen2.init(jax.random.key(0), CFG)
+    ids = jax.random.randint(jax.random.key(1), (2, 6), 0, CFG.vocab)
+    plen = jnp.array([6, 4])  # one full row, one right-padded row
+    got = qwen2.generate(params, ids, plen, CFG, max_new=5)
+
+    for row in range(2):
+        seq = list(map(int, ids[row, : plen[row]]))
+        while len(seq) < plen[row] + 5 and len(seq) < ids.shape[1] + 5:
+            logits = qwen2.forward(params, jnp.asarray([seq]), CFG)
+            seq.append(int(jnp.argmax(logits[0, -1])))
+        assert list(map(int, got[row, : len(seq)])) == seq[: got.shape[1]], f"row {row}"
