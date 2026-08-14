@@ -269,19 +269,13 @@ that it *was*: only one group actually diverged. The right reading is that most 
 sweep's passing invariance results are fragile rather than robust, and would not survive a
 different GPU, a newer XLA, or TF32.
 
-**Draft limitations paragraph** (G2 criterion 5, for Andres to rewrite in his own words):
+**Draft limitations paragraph**, 2026-08-06:
 
-> Scaling was measured on 8x A100-SXM4-80GB at two model sizes, `d=512` and `d=2048`, with a
-> 4-layer transformer block at batch 8 and sequence 32. At those shapes a generation costs
-> 11 to 445 ms, so the measurement is plausibly dominated by per-device overhead rather than
-> by the work being distributed, and the flat strong-scaling curve should be read as a
-> statement about this operating point rather than about the design. The communication
-> instrumentation (M5) that would separate the two was not run. Device-count invariance holds
-> for 30 of 32 groups; the exception is a configuration whose population cannot be separated
-> in float32, and 29 of 44 shapes in the sweep are close enough to that boundary that their
-> agreement across device counts is not robust to a change of hardware or compiler. No
-> external reference was measured, so no claim is made about performance relative to EGGROLL
-> or evosax.
+> **Superseded by "The limitations paragraph" at the end of this document.** This draft
+> predates the sharding fix, the consistent re-run and the EGGROLL arm; its "no external
+> reference was measured" and its noise-floor counts describe a program and a results
+> directory that no longer ship. Kept because the 2026-08-06 status table below refers
+> to it.
 
 ---
 
@@ -1210,3 +1204,56 @@ all, and they stop running where the low-rank arms continue.
 Criterion 3 is now the result it was defined to be: within EGGROLL's own throughput
 while offering a general API, measured with their unmodified code at matched shapes on
 the document's hardware. Criterion 5 remains the only gate item, and it is prose.
+
+
+## The limitations paragraph, 2026-08-14
+
+G2 criterion 5. Adopted as current by Andres on 2026-08-14; every number traces to a
+section above. The 2026-08-06 draft earlier in this document is superseded.
+
+> Everything here was measured on one node: eight A100-SXM4-80GB on NVLink, community
+> cloud, float32 end to end, on a single transformer block of six square matrices at
+> d=512 and d=2048, batch 8, sequence 32. That is two model sizes, one loss landscape,
+> and no embedding under perturbation, and a block is not an LLM: the N/d_eff regime
+> transfers, the landscape does not. Multi-node, bf16 throughput, ranks above 1, and
+> populations beyond 1024 were not measured at all. Strong scaling at D=8 runs 0.292 to
+> 0.939 depending on strategy and contraction, and the low end is a design cost, not
+> noise: strategy A regenerates and contracts the whole population on every device,
+> which for a full-rank perturbation costs about what evaluating it does. The shaping
+> barrier is real but small at these shapes, a gather of 4N bytes (4 KB at n=1024)
+> against strategy B's 6.3 MB model all-reduce at d=512; it grows with population and
+> episode count, and it synchronizes every generation. On the crossover, B is faster in
+> 10 of 16 cells: decisively for full-rank strategies (1.8x to 2.4x), while for the
+> factored strategies the two contractions are within 15% either way and the sign flips
+> with model size, so the grid is too coarse to draw the contour it was designed for.
+> Six configuration groups at d=512 order their populations differently on different
+> device counts because their fitnesses sit within float32 resolution of each other, so
+> rank-based shaping amplifies one ulp of reassociation into a different update; claims
+> of device-count invariance exclude them. The FLOP instrumentation cannot see inside
+> lax.scan, so the seed-regenerated strategy's work split rests on wall clock and an
+> explicit sharding test rather than on cost analysis, and iid_gaussian carries an
+> unexplained uniform 1.108x FLOP overhead that cancels in every reported ratio but
+> keeps its absolute FLOPs from being quotable. The EGGROLL comparison is throughput at
+> matched shapes on one GPU: it supports "a general API costs nothing measurable
+> against their specialised implementation" and nothing more; the arms do not take the
+> same optimization step, their multi-GPU path was not driven, and matched population
+> is not matched sampling, since both their scheme and ours halve the distinct
+> directions under pairing.
+
+Deliberately excluded: the M6 memory-measurement history and the checker exit-code bug.
+Both were found, fixed and narrated in the dated sections above; a limitations paragraph
+is for what is still true of the results, not a confession log.
+
+### Status: G2 passes
+
+| | criterion | status |
+|---|---|---|
+| 1 | strong and weak curves, efficiency stated | **met**, 0.292 to 0.939 at `D=8`, one commit |
+| 2 | crossover measured, phase diagram | **met**, no contour: the grid is too coarse, and the paragraph above says so |
+| 3 | one comparison against an external reference | **met**: EGGROLL's own implementation, benchmark hardware, two runs |
+| 4 | reproducible from a committed config plus a recorded environment | **met** |
+| 5 | a limitations paragraph a skeptic would accept as fair | **met**, adopted 2026-08-14 |
+
+**Phase 2's gate is passed.** What remains in this document's scope is optional depth
+(M5 communication instrumentation, a finer M3 grid, bf16 rounds now that the dtype
+policy is enforced), not gate work.
