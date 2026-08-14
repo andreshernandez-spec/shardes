@@ -92,8 +92,14 @@ def loss(params: PyTree, batch: Batch) -> Array:
 
     This is `f` in `grad f`: `shardes.estimator` applies no sign flip, so the estimate is
     the gradient of this loss, not an ascent direction.
+
+    The reduction accumulates in f32 explicitly. A no-op for the f32 sweeps, and the
+    contract under a bf16 forward: `tell` refuses sub-f32 fitness because comparisons
+    below f32 have already merged members that differ, and the reduction is where f32
+    has to begin.
     """
-    return jnp.mean(jnp.square(forward(params, batch.x) - batch.target))
+    err = forward(params, batch.x) - batch.target
+    return jnp.mean(jnp.square(err), dtype=jnp.float32)
 
 
 def grad(params: PyTree, batch: Batch) -> PyTree:

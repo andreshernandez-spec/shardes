@@ -278,6 +278,39 @@ def _import_eggroll():
     return loaded.EggRoll, f"direct module load ({missing} missing, model zoo not installed)"
 
 
+def _eggroll_provenance():
+    """The revision of the external code the eggroll rows were measured against.
+
+    The loader accepts whatever `hyperscalees` is installed, so a result that records only
+    this repo's commit pins half the comparison: the A100 rows at `a858998` were measured
+    against HyperscaleES `b77f7d6`, and nothing in the file said so. The git SHA is
+    recorded when the installed package is an editable checkout (the documented install),
+    plus a content hash of the two modules actually loaded, which survives a non-git
+    install and catches local edits a SHA alone would not.
+    """
+    if _eggroll_or_reason()[0] == "unavailable":
+        return None
+    import hashlib  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    noiser_dir = Path(sys.modules["hyperscalees.noiser.eggroll"].__file__).parent
+    prov = {}
+    digest = hashlib.sha256()
+    for leaf in ("base_noiser", "eggroll"):  # the modules the arm executes, in load order
+        digest.update((noiser_dir / f"{leaf}.py").read_bytes())
+    prov["modules_sha256"] = digest.hexdigest()[:16]
+    try:
+        git = lambda *a: subprocess.run(  # noqa: E731
+            ["git", "-C", str(noiser_dir), *a],
+            capture_output=True, text=True, timeout=10, check=True,
+        ).stdout.strip()
+        prov["commit"] = git("rev-parse", "HEAD")
+        prov["dirty_worktree"] = bool(git("status", "--porcelain"))
+    except Exception:  # noqa: BLE001 - a plain pip install has no repo; the hash stands
+        prov["commit"] = None
+    return prov
+
+
 def _eggroll_or_reason():
     """`_import_eggroll` once, cached, with the failure turned into a printable reason.
 
@@ -500,6 +533,8 @@ def main(argv=None) -> int:
     # being clean. `run.py` had the same bug: a directory it wrote but had not declared was
     # counted as a foreign untracked file, and every record stamped itself unreproducible.
     env = harness.capture_env(HERE, (*OUTPUTS, args.out.name))
+    # The external half of the comparison, pinned next to ours. None when absent.
+    env["hyperscalees"] = _eggroll_provenance()
     rows = []
     if d > 1:
         print("NOTE: only the shardes arms use the mesh. naive_es and evosax run on one\n"

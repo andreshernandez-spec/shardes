@@ -145,3 +145,22 @@ def test_a_missing_hyperscalees_is_a_reason_not_a_crash():
     """The suite has to pass without it, and `--dry-run` has to say why it is absent."""
     got = m4._eggroll_or_reason()
     assert got[0] != "unavailable" or isinstance(got[1], str) and got[1]
+
+
+def test_results_record_the_external_revision():
+    """A result that pins only this repo's commit pins half the comparison. The A100 rows
+    at a858998 were measured against HyperscaleES b77f7d6 and nothing in the file said
+    so; this is the regression test for the fix."""
+    _eggroll()
+    prov = m4._eggroll_provenance()
+    assert prov is not None
+    assert len(prov["modules_sha256"]) == 16
+    # commit is None on a non-git install, a full SHA on the documented editable one.
+    assert prov["commit"] is None or len(prov["commit"]) == 40
+
+
+def test_provenance_is_none_when_the_arm_is_absent():
+    """The env field must say 'absent' rather than crash the whole run."""
+    if m4._eggroll_or_reason()[0] != "unavailable":
+        pytest.skip("hyperscalees installed; the absent path is exercised on CI-like envs")
+    assert m4._eggroll_provenance() is None
