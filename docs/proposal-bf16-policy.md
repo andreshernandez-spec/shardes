@@ -24,6 +24,17 @@ compute passes at the f32 test's 1e-6, not the 1e-2 `docs/conventions.md` reserv
 bf16 accumulation paths, because under A there are no bf16 accumulation paths. The
 noise quantizes identically at every device count and every accumulator is f32.
 
+**Amended 2026-08-14, on review.** The draft's fitness section said f32 fitness was
+"recorded here so nobody optimizes it later", and recording was not enough: with the
+policy in place, a model whose loss reduces in bf16 handed `tell` a bf16 fitness and
+nothing raised. Reproduced at 4/8 distinct values in a population of 8, the Q3 collapse
+in miniature, reachable through the public API. `tell` now refuses sub-f32 fitness with
+the fix in the error message, `transformer_block.loss` reduces with
+`dtype=jnp.float32` explicitly, and the probe's Q1 exercises the post-decision
+contract (refusal without `compute_dtype`, f32 master with a bf16 model view) rather
+than the pre-decision defect it was written against, which `init` now refuses to run.
+Q1's original output survives as the quotation in the draft below.
+
 The draft as decided on follows, unchanged.
 
 ---
