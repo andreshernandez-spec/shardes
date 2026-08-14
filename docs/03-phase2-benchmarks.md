@@ -1011,3 +1011,151 @@ material for it is unusually good: this phase found a replicated evaluation, a s
 not be partitioned, a memory measurement that was wrong for every run, a plotting bug that
 showed a quarter of the data, and a checker that passed sweeps that had failed. A limitations
 section that says so is stronger than one that does not.
+
+
+## The EGGROLL arm, 2026-08-14
+
+Criterion 3 has been met "in the letter and not in the spirit" since the first sweep: evosax
+is a fair external reference, but the comparison this document asks for by name is EGGROLL's
+own implementation, and the question it was written to answer was whether this library is
+within their throughput while offering a general API. **It is: on one GPU the two are within
+run-to-run variation of each other, across two runs and four shapes.**
+
+### There was never an adapter to write
+
+The arm was stubbed for a year on the belief that their library targets RWKV language models
+and would need porting. That was wrong, and reading `src/hyperscalees/noiser/base_noiser.py`
+is enough to see it. Their `Noiser` is model-agnostic:
+
+| theirs | here |
+|---|---|
+| `do_mm(..., param, key, iterinfo, x)` | `dense(x, w)` |
+| `do_Tmm(...)` | `dense` with the transpose the other way |
+| `do_emb(...)` | `embed(table, ids)` |
+
+Both libraries reached the same design: route every parameter read through a seam, and a
+factored perturbation becomes expressible without touching the model. Theirs takes the noiser
+as an argument, this one substitutes a structured weight into the params tree, and that is the
+whole difference. `do_mm` is `x @ param.T` plus a rank-`r` correction, the same transpose
+convention as `dense`.
+
+So the arm is **their `EggRoll`, unmodified**, driven by a forward pass written here that
+routes this project's transformer block through their seams. Six call sites. Not a port, and
+nothing that has to track their model code. Their `do_emb` raises `NotImplementedError`, which
+costs nothing here because this block has no embedding, and which is the case `shardes.nn`
+already cites as the reason `embed` is a separate seam.
+
+`ESHyperscale/HyperscaleES` at `b77f7d6`, GPL-3.0. **Not one line is copied**, and the arm
+skips cleanly when the package is absent, which is the normal state. Vendoring it into an
+Apache-2.0 repository would relicense the result and a benchmark is not worth that.
+
+### The install is the awkward part, and the workaround is a judgement call
+
+`hyperscalees/__init__.py` imports their model zoo, which needs gymnax, distrax, transformers,
+datasets, torch and more. The `noiser` package this benchmark exercises imports `jax`, `optax`
+and stdlib, and nothing else: checked across every file in `src/hyperscalees/noiser/`.
+
+`_import_eggroll` tries the ordinary import first and uses it when it works. Otherwise it
+loads their two noiser modules from the installed package directory, with a package skeleton
+registered so their relative import resolves. Their code runs unmodified; only the route to it
+skips `__init__`.
+
+**This has two defensible answers and the other one was rejected for a stated reason.**
+Installing their full dependency set puts torch's CUDA stack beside JAX's on the benchmark
+node, and a throughput measurement is the wrong place to discover whether those coexist. The
+cost is that this reaches past a package boundary and breaks if they move the file. It breaks
+loudly, and there is a test for it. Worth revisiting if the arm ever runs anywhere it matters.
+
+    git clone https://github.com/ESHyperscale/HyperscaleES.git   # b77f7d6, GPL-3.0
+    pip install -e HyperscaleES --no-deps                        # never in pyproject.toml
+
+### Three choices decide whether the comparison is fair
+
+None of them is visible in the number, and two were nearly wrong.
+
+**`rank=1`,** matching `LowRank(r=1)`, with `es_map` marking all six matrices `MM_PARAM` so
+every one takes their low-rank path. Nothing frozen, nothing falling back to a dense
+perturbation.
+
+**`noise_reuse=1`.** Their default is `0`, and `0` means *reuse forever*, not "no reuse":
+`true_epoch = 0 if noise_reuse == 0 else epoch // noise_reuse`. A default-constructed noiser
+evaluates the same perturbations every generation. Their own experiment scripts pass the flag.
+Timing barely moves either way, but a reader assumes fresh sampling and would be wrong.
+
+**Their scheme is antithetic by construction**, `thread_id // 2` with the sign from
+`thread_id % 2`. `N` EGGROLL members are `N/2` directions. **So the matched arm is
+`mirrored_lr1`, not `lowrank_r1`**, and pairing it against the unmirrored arm would have let a
+factor of two in sampling be reported as throughput. This is asserted in
+`tests/test_m4_eggroll.py` rather than trusted from reading their source, along with the
+rank of the correction and the fact that a perturbation is applied at all. A silently
+unperturbed arm removes work, so it would surface as a throughput win rather than as an error.
+
+### The result, one GPU
+
+Two runs, `python m4.py --config sweep-consistent.yaml --devices 1 --out results-m4-local`
+and `--out results-m4-local-2`, commits `a668b15` and `b805e44`, every record
+`dirty_worktree: false`. **RTX 3080 Laptop, jax 0.11.0.** ms/gen, run 1 / run 2:
+
+| shape | shardes `mirrored_lr1/B` | EGGROLL `rank1` | ratio | naive ES | evosax |
+|---|---|---|---|---|---|
+| `d=512, N=256` | 11.11 / 12.26 | 11.02 / 10.89 | 1.008 / 1.125 | 29.30 | 38.75 |
+| `d=512, N=1024` | 42.64 / 41.15 | 42.07 / 41.60 | 1.014 / 0.989 | 118.69 | OOM |
+| `d=2048, N=128` | 54.48 / 55.51 | 56.83 / 56.00 | 0.959 / 0.991 | OOM | OOM |
+| `d=2048, N=256` | 108.29 / 106.10 | 107.08 / 106.48 | 1.011 / 0.996 | OOM | OOM |
+
+**Parity, and it is reported as two runs because one run would have overstated it.** The
+second run is here for a reason: a single run put the arms within 2.6% and reading that as
+precision would have been wrong. Across both, the ratio ranges 0.959 to 1.125, and which arm
+leads changes between runs at three of the four shapes.
+
+The variation is not uniform. At `d=2048` the two runs agree to about 3% and the arms agree to
+about 4%. At `d=512, N=256`, the smallest and shortest configuration, the same arm moves 10%
+between runs, which is more than the gap being measured. That shape is where a laptop GPU's
+clocks and a 11 ms generation stop being a measuring instrument.
+
+So the defensible statement is the one that was set as the target: **a general, sharded API
+costs nothing measurable against a specialised implementation of the same scheme, on one
+GPU.** Not that this library is faster than EGGROLL. Nothing here would survive being quoted
+as a percentage.
+
+The naive and evosax columns are a memory result rather than a speed one: both fall over at
+shapes both low-rank arms handle, on a 16 GB card. That is the `ravel_pytree` argument from
+`docs/00` showing up as an allocation failure rather than as an argument.
+
+### What this does not establish
+
+**It is not on the A100 node, so it cannot join the M4 table above.** That table is 8x
+A100-SXM4-80GB, where `mirrored_lr1/B` at `d=512, N=1024` reads 10.26 ms against 41.17 here, a
+4x hardware gap. Merging the two would be exactly the stitching this document has spent three
+sections warning against. **Criterion 3 stays "met in the letter" until M4 is re-run with this
+arm on one node**, which is a single-GPU booking rather than an 8x one, since M4's like-for-like
+comparison is `--devices 1`.
+
+**D=1 only, so nothing here is about sharding.** The EGGROLL arm has no mesh path in this
+harness, which is fair at one device and would not be at eight. The interesting question that
+follows, and that this measurement sets up rather than answers, is whether the parity survives
+when this library shards and theirs does not.
+
+**Throughput, not solution quality.** The arms do not take the same step: their update z-scores
+fitness and applies optax, this one uses centred ranks and plain SGD. `m4.py` has said so since
+it was written and it is not fixed by this arm.
+
+**One thing is measured and unexplained.** `cost_analysis` puts the two arms within 0.4% at
+`d=512, N=256` and 15% apart at `d=2048, N=256`, where shardes does *fewer* FLOPs for 2% more
+wall clock. The likely cause is dull: their update contracts `N` rank-1 outer products per
+matrix, roughly 12.9 GFLOP at that shape, which is the order of the gap, and the arms were
+never claimed to take the same step. It is recorded rather than claimed, because this document
+has already been wrong once about what `cost_analysis` counts.
+
+### Status after the EGGROLL arm
+
+| | criterion | status |
+|---|---|---|
+| 1 | strong and weak curves, efficiency stated | **met**, 0.292 to 0.939 at `D=8`, one commit |
+| 2 | crossover measured, phase diagram | **met**, no contour: the grid is too coarse |
+| 3 | one comparison against an external reference | **met** by evosax; EGGROLL now measured, but on the wrong hardware to report beside M4 |
+| 4 | reproducible from a committed config plus a recorded environment | **met** |
+| 5 | a limitations paragraph a skeptic would accept as fair | **still needs rewriting, in Andres's words** |
+
+Criterion 3's spirit now needs one single-GPU session rather than an unwritten adapter, which
+is the part worth recording: the blocker was a wrong belief about their code, not work.
