@@ -121,6 +121,8 @@ def test_strategy_a_must_be_bitwise_identical_across_devices(tmp_path, capsys):
     the guard reaches for the rank digest before calling this a contraction bug."""
     _write(tmp_path, 1, "A", _fingerprint(1.0, [1.0, 2.0], digest="same"))
     _write(tmp_path, 2, "A", _fingerprint(1.0, [1.0, 2.0], digest="different"))
+    # 1: the run is complete, but this group's scaling number would compare different
+    # computations. Distinct from 2, which means the run itself is broken.
     assert check.main(["--results", str(tmp_path)]) == 1
     assert "not bitwise identical" in capsys.readouterr().out
 
@@ -197,7 +199,10 @@ def test_a_recorded_error_fails_the_guard_without_crashing_it(tmp_path, capsys):
                                "population": 16, "strategy": "s", "how": "A"},
                     "error": "RuntimeError: out of memory"})
     )
-    assert check.main(["--results", str(tmp_path)]) == 1
+    # 2, not 1: an error means the run is incomplete, which is a different severity from
+    # "complete but one group's scaling number would mislead". A session gating on this has
+    # to stop on 2 and carry on past 1, or the noise floor blocks every run forever.
+    assert check.main(["--results", str(tmp_path)]) == 2
 
 
 def test_the_probe_catches_a_change_the_norm_would_miss():
