@@ -56,14 +56,23 @@ _X0 = jnp.ones((D,), jnp.bfloat16)
 
 
 def _loss(params, x):
-    """Quadratic in every parameter, read only through the seams."""
+    """Quadratic in every parameter, read only through the seams.
+
+    The reductions accumulate in f32 explicitly: the forward is bf16, the loss is not.
+    `tell` refuses sub-f32 fitness, so a test loss that summed in bf16 would be testing
+    the refusal rather than the policy.
+    """
     h = dense(jnp.eye(D, dtype=x.dtype), params["w"])
-    return jnp.sum(h**2) + jnp.sum(params["b"] ** 2) + 0.0 * jnp.sum(x)
+    return (jnp.sum(jnp.square(h), dtype=jnp.float32)
+            + jnp.sum(jnp.square(params["b"]), dtype=jnp.float32)
+            + 0.0 * jnp.sum(x, dtype=jnp.float32))
 
 
 def _linear(params, x):
     """Linear fitness with a constant, known gradient: dL/dW = 1 x0^T, dL/db = 1."""
-    return jnp.sum(dense(_X0[None, :], params["w"])) + jnp.sum(params["b"]) + 0.0 * jnp.sum(x)
+    return (jnp.sum(dense(_X0[None, :], params["w"]), dtype=jnp.float32)
+            + jnp.sum(params["b"], dtype=jnp.float32)
+            + 0.0 * jnp.sum(x, dtype=jnp.float32))
 
 
 def test_bf16_params_without_a_policy_are_refused():
@@ -100,6 +109,9 @@ def test_the_model_runs_in_the_compute_dtype(make):
 
     fit = es.apply(model, st, pert)(jnp.zeros((), jnp.bfloat16))
     assert fit.shape == (8,)
+    # The dtype too, not just the shape: a bf16 fitness reaching tell is the collapse the
+    # proposal measured (256 distinct losses become 2), and shape says nothing about it.
+    assert fit.dtype == jnp.float32
 
 
 @pytest.mark.parametrize("make", MAKES, ids=IDS)
@@ -200,3 +212,20 @@ def test_device_invariance_holds_under_bf16_compute(make, how):
     for a, b in zip(jax.tree.leaves(ref), jax.tree.leaves(got)):
         err = float(abs(a - b).max() / (abs(a).max() + 1e-30))
         assert err < 1e-6, f"{how}: relative error {err:.2e} across device counts"
+
+
+def test_sub_f32_fitness_is_refused_by_tell():
+    """A loss that reduces in bf16 has already merged members that differ; casting its
+    ranks to f32 later recovers nothing. Refused at the seam, with the fix in the error."""
+    es = _es(IIDGaussian)
+    st = es.init(jax.random.key(0), _params(jnp.bfloat16))
+    pert, st = es.ask(st)
+
+    def bf16_loss(params, x):
+        h = dense(jnp.eye(D, dtype=x.dtype), params["w"])
+        return jnp.sum(h**2) + jnp.sum(params["b"] ** 2) + 0.0 * jnp.sum(x)
+
+    fit = es.apply(bf16_loss, st, pert)(jnp.zeros((), jnp.bfloat16))
+    assert fit.dtype == jnp.bfloat16  # the hazard is real, not hypothetical
+    with pytest.raises(ValueError, match="fitness is bfloat16"):
+        es.tell(st, pert, fit)

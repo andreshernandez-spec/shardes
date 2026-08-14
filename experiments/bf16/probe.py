@@ -32,23 +32,48 @@ from shardes.strategies.seed_regenerated import SeedRegenerated  # noqa: E402
 
 
 def q1_dtype_drift():
-    """bf16 in, what out? One ask/apply/tell cycle per strategy."""
-    print("Q1: params dtype after one tell (input bf16)")
+    """bf16 in, what out? One ask/apply/tell cycle per strategy.
+
+    Measured on the pre-policy code (commit `a858998`), this printed
+    `params: bfloat16 -> float32` for both strategies: `tell` stepped with an f32 update,
+    promotion kept the result, and generation 0 evaluated a different dtype than every
+    generation after. That output is quoted in the proposal as the motivating defect.
+
+    Under the accepted policy A the same probe exercises the contract that replaced it:
+    bf16 params without `compute_dtype` are refused loudly, and with it the master stays
+    f32 while the model sees bf16. A bf16 fitness is likewise refused at `tell` (Q3 is
+    the measurement behind that), so the loss here reduces in f32.
+    """
+    print("Q1: dtype contract, one ask/apply/tell cycle (input bf16)")
     mesh = sharding.make_mesh(1)
+    params = {"w": jnp.full((4, 4), 0.05, dtype=jnp.bfloat16)}
+
+    try:
+        ShardedES(IIDGaussian(), n=8, sigma=0.01, lr=0.05, mesh=mesh).init(
+            jax.random.key(0), params
+        )
+        print("  no compute_dtype: ACCEPTED (policy regression: this must be refused)")
+    except ValueError:
+        print("  no compute_dtype: refused, as policy A requires")
+
     for name, strat in (
         ("iid_gaussian", IIDGaussian()),
         ("mirrored_seed", Mirrored(SeedRegenerated())),
     ):
-        es = ShardedES(strat, n=8, sigma=0.01, lr=0.05, mesh=mesh)
-        params = {"w": jnp.full((4, 4), 0.05, dtype=jnp.bfloat16)}
+        es = ShardedES(strat, n=8, sigma=0.01, lr=0.05, mesh=mesh,
+                       compute_dtype=jnp.bfloat16)
         st = es.init(jax.random.key(0), params)
         pert, st = es.ask(st)
-        fit = es.apply(lambda p, x: jnp.sum(p["w"] * x), st, pert)(
-            jnp.ones((4, 4), jnp.bfloat16)
-        )
+        seen = {}
+
+        def model(p, x, seen=seen):
+            seen["dtype"] = p["w"].dtype
+            return jnp.sum(p["w"] * x, dtype=jnp.float32)
+
+        fit = es.apply(model, st, pert)(jnp.ones((4, 4), jnp.bfloat16))
         st2 = es.tell(st, pert, fit)
-        print(f"  {name:14} params: bfloat16 -> {st2.params['w'].dtype}, "
-              f"fitness: {fit.dtype}")
+        print(f"  {name:14} master: {st.params['w'].dtype} -> {st2.params['w'].dtype}, "
+              f"model sees: {seen['dtype']}, fitness: {fit.dtype}")
     print()
 
 

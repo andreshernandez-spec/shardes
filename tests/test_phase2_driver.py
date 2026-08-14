@@ -96,6 +96,21 @@ def test_a_partial_write_is_never_left_behind(tmp_path):
     assert list(tmp_path.glob("*.tmp")) == [], "a temp file survived the failure"
 
 
+def test_skipped_configurations_fail_the_run_unless_partial_is_allowed(tmp_path):
+    """An eight-device sweep started on a four-device node used to measure the runnable
+    subset and exit 0: a complete-looking results directory missing half its matrix.
+    Skipped is undone, and undone is non-zero unless --allow-partial says otherwise.
+    The suite runs with 8 simulated devices, so devices: [16] skips everything."""
+    import yaml
+
+    cfg = dict(CFG, devices=[16], results_dir=str(tmp_path / "results"))
+    cfg_path = tmp_path / "cfg.yaml"
+    cfg_path.write_text(yaml.safe_dump(cfg))
+
+    assert run.main(["--config", str(cfg_path)]) == 1
+    assert run.main(["--config", str(cfg_path), "--allow-partial"]) == 0
+
+
 # --------------------------------------------------------------------------- the guard
 
 

@@ -447,6 +447,10 @@ def main(argv=None) -> int:
                     help="per-device HBM in GB; warns about configs that cannot fit")
     ap.add_argument("--cap", type=float, default=300.0,
                     help="per-config wall-clock cap, s: flagged after the fact, see below")
+    ap.add_argument("--allow-partial", action="store_true",
+                    help="exit 0 even when configurations were skipped for needing more "
+                         "devices than this node has. Without it a skipped configuration "
+                         "is incompleteness and the exit code says so.")
     ap.add_argument("--budget", type=float, default=8 * 3600.0,
                     help="stop scheduling once the session has used this many seconds")
     args = ap.parse_args(argv)
@@ -574,8 +578,12 @@ def main(argv=None) -> int:
               f"(budget {args.budget / 3600:.2f} h). Re-run to continue; results resume.")
     # **Non-zero when anything failed or was left undone.** This returned 0 unconditionally,
     # so a sweep that errored on every configuration exited successfully and the only signal
-    # was a line of stdout nobody reads on a detached run.
-    if failed or stopped_early:
+    # was a line of stdout nobody reads on a detached run. `skipped` counts as undone for
+    # the same reason: an eight-device sweep started on a four-device node measures the
+    # runnable subset and used to exit 0, which is a complete-looking results directory
+    # missing half its matrix. `--allow-partial` is the explicit opt-in for measuring a
+    # subset on smaller hardware, and the line above still reports the count.
+    if failed or stopped_early or (skipped and not args.allow_partial):
         print("EXITING NON-ZERO: the results directory is incomplete.")
         return 1
     return 0
