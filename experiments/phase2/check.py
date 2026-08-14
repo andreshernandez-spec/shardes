@@ -319,9 +319,23 @@ def main(argv=None) -> int:
             print(f"  {k}")
         print("  A checker that only reads what is present cannot see a sweep that stopped.")
 
-    if failures or floored or errors or missing:
-        if failures or floored:
-            print("\nA scaling number from these results would compare different computations.")
+    # **Three severities, not one exit code.** This returned 1 for errors, missing rows and
+    # the noise floor alike, which makes it useless as a mid-session gate: the noise floor is
+    # a permanent property of six `d=512` shapes and would block every run forever, so a
+    # session that gated on this would never proceed and a session that ignored it would
+    # ignore the errors too.
+    #
+    #   2  the run is broken: a configuration errored, or the matrix has holes
+    #   1  the run is complete but a scaling number from some group would be misleading
+    #   0  nothing to report
+    #
+    # A caller gating a rented session should stop on 2 and carry on past 1, having read
+    # which groups were named.
+    if errors or missing:
+        print("\nEXIT 2: this run is incomplete. Fix or re-run before quoting anything.")
+        return 2
+    if failures or floored:
+        print("\nA scaling number from these results would compare different computations.")
         return 1
     covered = f", covering all of {args.config.name}" if args.config else ""
     print(f"OK: {len(groups)} strong-scaling groups, every device count ran the same "
