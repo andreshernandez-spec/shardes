@@ -58,7 +58,10 @@ class State(NamedTuple):
     """The distribution state, plus what makes the run reproducible.
 
     `params` is the distribution mean and keeps its pytree structure throughout: nothing
-    here is ever flattened (invariant 1).
+    here is ever flattened (invariant 1). **It is the master copy, at least f32** even when
+    the model runs in bf16 (`compute_dtype`, policy A in `docs/proposal-bf16-policy.md`):
+    hundreds of small steps accumulate here, and below f32 they round away. Checkpoint it
+    as is; cast down only at the point of use.
 
     `sigma` lives in the state rather than on the object because it is distribution state,
     not configuration — an adaptive rule would change it per generation, and this is where
@@ -108,6 +111,7 @@ class ShardedES:
         mesh: Mesh,
         shaping: Callable[[Array], Array] = centered_ranks,
         how: str = "B",
+        compute_dtype=None,
     ):
         # Validated once, here, where the error names the configuration that caused it
         # rather than surfacing as a shape mismatch inside shard_map three calls later.
@@ -127,8 +131,31 @@ class ShardedES:
         self.mesh = mesh
         self.shaping = shaping
         self.how = how
+        # Policy A, master weights (docs/proposal-bf16-policy.md). When set, the state
+        # carries params in f32 and every place that samples noise or runs the model sees
+        # a view cast to this dtype: `ask`, `apply` and the contraction, so the noise the
+        # forward pass adds and the noise `tell` regenerates are the same bits. Only the
+        # SGD step touches the master. None means no cast anywhere, which is exact for the
+        # f32 models this repo runs; `init` refuses sub-f32 params without it rather than
+        # let promotion decide (measured: bf16 params silently became f32 after one tell).
+        self.compute_dtype = None if compute_dtype is None else jnp.dtype(compute_dtype)
 
     # ----------------------------------------------------------------------------------
+
+    def _view(self, params: PyTree) -> PyTree:
+        """The params the model and the noise see: the master cast to the compute dtype.
+
+        One cast per generation, |params| elementwise, next to nothing beside a single
+        member's forward pass. Non-float leaves pass through untouched. With no
+        `compute_dtype` this is the identity, so the f32 path is exactly what it was.
+        """
+        if self.compute_dtype is None:
+            return params
+        return jax.tree.map(
+            lambda x: x.astype(self.compute_dtype)
+            if jnp.issubdtype(x.dtype, jnp.inexact) else x,
+            params,
+        )
 
     def init(self, key: Key, params: PyTree) -> State:
         """Params replicated, everything else scalar. No solution is ever flattened.
@@ -153,8 +180,33 @@ class ShardedES:
                         "divides by n * sigma, so a zero or negative step size gives NaN or "
                         "a reversed update rather than an error."
                     )
+        # Policy A: the master is at least f32. Sub-f32 leaves are upcast when
+        # `compute_dtype` says what the model should run in, and refused when it does not,
+        # because the alternative is what the code used to do silently: `tell` steps with an
+        # f32 update, promotion keeps the result, and generation 0 evaluates a different
+        # dtype than every generation after it. An f32 or wider tree passes through
+        # untouched either way, so existing callers see identical bits.
+        narrow = [
+            leaf.dtype
+            for leaf in jax.tree.leaves(params)
+            if jnp.issubdtype(leaf.dtype, jnp.inexact) and jnp.dtype(leaf.dtype).itemsize < 4
+        ]
+        if narrow and self.compute_dtype is None:
+            raise ValueError(
+                f"params contain {narrow[0]} leaves but no compute_dtype was given. The "
+                "state carries an f32 master and casts to the model's dtype per generation "
+                "(docs/proposal-bf16-policy.md); pass ShardedES(..., "
+                f"compute_dtype={narrow[0]}) to say the model runs in {narrow[0]}, or hand "
+                "f32 params."
+            )
+        master = jax.tree.map(
+            lambda x: x.astype(jnp.float32)
+            if jnp.issubdtype(x.dtype, jnp.inexact) and jnp.dtype(x.dtype).itemsize < 4
+            else x,
+            params,
+        )
         return State(
-            params=params,
+            params=master,
             sigma=jax.tree.map(jnp.float32, self.sigma),
             key=key,
             generation=jnp.int32(0),
@@ -169,7 +221,11 @@ class ShardedES:
         """
         base_key = jax.random.fold_in(state.key, state.generation)
         ids = sharding.member_ids(self.n, self.mesh)
-        pert = self.strategy.sample(base_key, state.params, ids)
+        # The view, not the master: noise dtype derives from the tree the strategy is
+        # handed (`sample` reads shapes and dtypes off it), and it must match what the
+        # forward pass and the contraction will regenerate, or seed regeneration
+        # reconstructs different bits than were evaluated.
+        pert = self.strategy.sample(base_key, self._view(state.params), ids)
         return pert, state._replace(generation=state.generation + 1)
 
     def apply(
@@ -253,10 +309,13 @@ class ShardedES:
         # `SeedPerturbation.like` is the params tree and has no member axis, and
         # `MirroredPerturbation.inner` has n/2 rather than n.
         split, axes = self.strategy.split(pert, d)
+        # Cast once per generation, outside the vmap, so the model runs in the compute
+        # dtype rather than in the master's f32.
+        view = self._view(state.params)
 
         def row(p_row, x_row: Array) -> Array:
             """One device's worth of members. `n/D` of them, and the strategy's own shape."""
-            return self.strategy.apply(model, state.params, p_row, state.sigma)(x_row)
+            return self.strategy.apply(model, view, p_row, state.sigma)(x_row)
 
         def evaluate(x: Array) -> Array:
             x = jax.lax.with_sharding_constraint(x, sharding.replicated(self.mesh))
@@ -340,10 +399,15 @@ class ShardedES:
             )
         weights = jax.lax.with_sharding_constraint(weights, sharding.members(self.mesh))
 
+        # The view again, for the same reason as `ask`: the contraction regenerates the
+        # noise from the tree it is handed, and those bits must be the ones the forward
+        # pass evaluated. The update comes back f32 regardless, because every accumulator
+        # on the contract path is f32 (docs/conventions.md), and the step below lands on
+        # the f32 master.
         update = contraction.contract(
             self.strategy,
             pert.base_key,
-            state.params,
+            self._view(state.params),
             pert.member_ids,
             weights,
             self.mesh,
