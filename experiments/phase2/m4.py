@@ -37,9 +37,15 @@ otherwise. That is the same shape as `CLAUDE.md`'s "evosax is a comparison targe
 dependency", and it is a licence boundary rather than a packaging preference: do not
 "simplify" it later by copying their code in.
 
-Their library is built for RWKV language models, so an arm that drives it at this project's
-transformer-block shapes is adaptation work rather than an import. It is stubbed until that
-is done, and `--dry-run` says so.
+Their library ships RWKV models, but their `Noiser` is not tied to them: `do_mm`, `do_Tmm`
+and `do_emb` are the same three seams as this project's `dense` and `embed`, down to the
+transpose. So the arm is their `EggRoll` unmodified, driven by a forward pass written here
+that routes this project's transformer block through those seams. No adapter, no port, and
+nothing that has to track their model code.
+
+Installing them is the awkward part, not calling them: `hyperscalees/__init__.py` pulls a
+model zoo needing torch, gymnax, distrax, transformers and more, while the `noiser` package
+being benchmarked needs only `jax` and `optax`. See `_import_eggroll`.
 """
 
 from __future__ import annotations
@@ -50,6 +56,7 @@ import json
 import statistics
 import sys
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -72,6 +79,9 @@ from shardes.strategies.mirrored import Mirrored  # noqa: E402
 from shardes.strategies.seed_regenerated import SeedRegenerated  # noqa: E402
 
 OUTPUTS = ("results-m4", "env.json")
+
+#: Cache for `_eggroll_or_reason`. Their loader has side effects in `sys.modules`.
+_EGGROLL = None
 SEED, SIGMA, LR = 0, 0.01, 0.05
 
 
@@ -216,16 +226,172 @@ def arm_evosax(shape: Shape, mesh):
     return step, state
 
 
-def arm_eggroll(shape: Shape, mesh):
-    """EGGROLL's own implementation. Not wired up; see the module docstring on GPL-3.0.
+def _import_eggroll():
+    """Their `EggRoll`, unmodified, from the installed package. Never a copy.
 
-    Returns a reason rather than None so `--dry-run` can print why the most valuable arm in
-    `docs/03` is missing instead of leaving a blank the reader has to interpret.
+    The ordinary import is tried first and used when it works. It usually does not, and the
+    reason is packaging rather than anything about the algorithm: `hyperscalees/__init__.py`
+    imports their model zoo, which needs gymnax, distrax, transformers, datasets, torch and
+    six more. The `noiser` subpackage that this benchmark actually exercises imports `jax`,
+    `optax` and stdlib, and nothing else. Checked at `b77f7d6`, every import in
+    `src/hyperscalees/noiser/*.py`.
+
+    So the fallback loads their two noiser modules from the installed package directory with
+    a package skeleton registered first, which makes `from .base_noiser import Noiser`
+    resolve. Their code runs unmodified; only the route to it skips `__init__`.
+
+    **This is a decision with two defensible answers and it is flagged in `docs/03`.** The
+    other is to install their full dependency set. That was rejected because it puts torch's
+    CUDA stack beside JAX's on the benchmark node, and a throughput measurement is the wrong
+    place to find out whether those two coexist. The cost is that this reaches past a
+    package boundary, so it breaks if they move the file. It breaks loudly.
     """
-    if importlib.util.find_spec("hyperscalees") is None:
-        return ("unavailable", "hyperscalees not installed (GPL-3.0, never vendored here)")
-    return ("unavailable", "installed, but no adapter yet: their API targets RWKV, not this "
-                           "transformer block. Adaptation work, not an import.")
+    try:
+        from hyperscalees.noiser.eggroll import EggRoll
+        return EggRoll, "package import"
+    except ModuleNotFoundError as exc:
+        missing = exc.name
+        if missing is not None and missing.startswith("hyperscalees"):
+            raise  # their package is broken or absent, not merely under-installed
+
+    spec = importlib.util.find_spec("hyperscalees")
+    if spec is None or not spec.origin:
+        raise ModuleNotFoundError("hyperscalees")
+    root = Path(spec.origin).parent
+    for name, path in (("hyperscalees", root), ("hyperscalees.noiser", root / "noiser")):
+        if name not in sys.modules:
+            mod = types.ModuleType(name)
+            mod.__path__ = [str(path)]
+            # A stub without `__spec__` makes a later `find_spec("hyperscalees")` raise
+            # `ValueError: __spec__ is None` rather than answering the question. The second
+            # call into this arm did exactly that.
+            mod.__spec__ = importlib.util.spec_from_loader(name, loader=None, is_package=True)
+            mod.__spec__.submodule_search_locations = [str(path)]
+            sys.modules[name] = mod
+    loaded = None
+    for leaf in ("base_noiser", "eggroll"):  # base first: eggroll imports it
+        full = f"hyperscalees.noiser.{leaf}"
+        s = importlib.util.spec_from_file_location(full, root / "noiser" / f"{leaf}.py")
+        loaded = importlib.util.module_from_spec(s)
+        sys.modules[full] = loaded
+        s.loader.exec_module(loaded)
+    return loaded.EggRoll, f"direct module load ({missing} missing, model zoo not installed)"
+
+
+def _eggroll_or_reason():
+    """`_import_eggroll` once, cached, with the failure turned into a printable reason.
+
+    Cached because `main` probes availability and then builds the arm per shape, and the
+    load registers modules in `sys.modules` as a side effect.
+    """
+    global _EGGROLL
+    if _EGGROLL is None:
+        try:
+            _EGGROLL = _import_eggroll()
+        except ModuleNotFoundError as exc:
+            _EGGROLL = ("unavailable", f"{exc.name} not importable "
+                                       "(hyperscalees is GPL-3.0, never vendored here)")
+        except Exception as exc:  # noqa: BLE001 - the failure itself is the datum
+            _EGGROLL = ("unavailable", f"{type(exc).__name__}: {exc}")
+    return _EGGROLL
+
+
+def _eggroll_forward(eggroll, frozen, noiser, params, keys, iterinfo, x):
+    """`transformer_block.forward`, with every matmul routed through their `do_mm`.
+
+    Their `Noiser` is model-agnostic: `do_mm` is `x @ W.T` plus the member's rank-`r`
+    correction, computed from the key and never materialized. That is the same contract as
+    this project's `shardes.nn.dense`, down to the transpose, so this is a rewrite of six
+    call sites rather than an adapter.
+
+    `_rms_norm` is reused from `transformer_block` rather than copied. A copy could drift,
+    and then the two arms would be timing different models while appearing to time one.
+    """
+    def mm(name, h):
+        return eggroll.do_mm(frozen, noiser, params[name], keys[name], iterinfo, h)
+
+    d = x.shape[-1]
+    h = transformer_block._rms_norm(x)
+    q, k, v = mm("wq", h), mm("wk", h), mm("wv", h)
+    scores = jnp.einsum("bqd,bkd->bqk", q, k) * d**-0.5
+    attn = jax.nn.softmax(scores, axis=-1)
+    x = x + mm("wo", jnp.einsum("bqk,bkd->bqd", attn, v))
+
+    h = transformer_block._rms_norm(x)
+    return x + mm("w_down", jax.nn.gelu(mm("w_up", h)))
+
+
+def arm_eggroll(shape: Shape, mesh):
+    """EGGROLL's own implementation, driven at this project's shapes.
+
+    Not one line of `hyperscalees` is copied here; see the module docstring on GPL-3.0.
+    `_import_eggroll` loads their `EggRoll` and this drives it.
+
+    **Three choices that decide whether the comparison is fair, stated here because none of
+    them is visible in the number:**
+
+    `rank=1` matches `LowRank(r=1)`, and `es_map` marks all six matrices `MM_PARAM` so every
+    one takes their low-rank path. Nothing is frozen and nothing falls back to a dense
+    perturbation, which would quietly change what is being timed.
+
+    `noise_reuse=1` gives fresh noise each generation. **Their default of 0 means reuse
+    forever**, not "no reuse": `true_epoch = 0 if noise_reuse == 0 else epoch // noise_reuse`,
+    so a default-constructed noiser evaluates the same perturbations every generation. Their
+    own experiment scripts pass the flag. Timing barely moves either way; the point is that
+    a reader assumes fresh sampling and would be wrong.
+
+    **Their scheme is antithetic by construction**, `thread_id // 2` with the sign from
+    `thread_id % 2`, so `N` members are `N/2` directions. The matched arm on this side is
+    `mirrored_lr1`, not `lowrank_r1`. Pairing it against the unmirrored arm would compare
+    `N` directions with `N/2` and read as a throughput result.
+
+    Fitness is `-loss`: they maximize, this project minimizes. It does not affect the timing
+    and it keeps the arm descending rather than diverging.
+    """
+    got = _eggroll_or_reason()
+    if got[0] == "unavailable":
+        return got
+    eggroll, how = got
+
+    n = shape.population
+    if n % 2:
+        return ("unavailable", f"population {n} is odd; their antithetic pairing needs even")
+
+    import optax  # noqa: PLC0415 - optional, like the arm itself
+
+    key = jax.random.key(SEED)
+    params = transformer_block.init(key, d_model=shape.d_model)
+    batch = transformer_block.make_batch(
+        jax.random.fold_in(key, 1), d_model=shape.d_model, batch=shape.batch, seq=shape.seq
+    )
+    names = sorted(params)
+    keys = dict(zip(names, jax.random.split(jax.random.fold_in(key, 2), len(names))))
+    es_map = {name: 1 for name in params}  # MM_PARAM: their low-rank path, per models/common
+
+    frozen, noiser_params = eggroll.init_noiser(
+        params, SIGMA, LR, solver=optax.sgd, rank=1, noise_reuse=1
+    )
+
+    @jax.jit
+    def step(state):
+        noiser, params_, gen = state
+        iterinfos = (jnp.full(n, gen, dtype=jnp.int32), jnp.arange(n, dtype=jnp.int32))
+
+        def member(epoch, thread_id):
+            out = _eggroll_forward(
+                eggroll, frozen, noiser, params_, keys, (epoch, thread_id), batch.x
+            )
+            return jnp.mean(jnp.square(out - batch.target))
+
+        losses = jax.vmap(member)(*iterinfos)
+        fitness = eggroll.convert_fitnesses(frozen, noiser, -losses)
+        noiser, params_ = eggroll.do_updates(
+            frozen, noiser, params_, keys, fitness, iterinfos, es_map
+        )
+        return noiser, params_, gen + 1
+
+    step.eggroll_how = how
+    return step, (noiser_params, params, jnp.int32(0))
 
 
 # ------------------------------------------------------------------------------------
@@ -314,8 +480,11 @@ def main(argv=None) -> int:
     # would be comparing a library against a library plus seven idle GPUs. `docs/03` asks for
     # "same GPU, same shapes, same N", so the primary comparison is `--devices 1`; the D=8
     # column shows what sharding adds and is not a like-for-like ratio.
+    # `eggroll` sits next to `mirrored_lr1` deliberately: their scheme is antithetic by
+    # construction, so that is the arm with the same rank and the same direction count.
     arms = [("shardes/mirrored_lr1/B", lambda s: arm_shardes(s, "mirrored_lr1", "B", mesh), True),
             ("shardes/seed_regenerated/B", lambda s: arm_shardes(s, "seed_regenerated", "B", mesh), True),
+            ("eggroll/rank1", lambda s: arm_eggroll(s, mesh), False),
             ("naive_es", lambda s: arm_naive(s, mesh), False),
             ("evosax/Open_ES", lambda s: arm_evosax(s, mesh), False)]
 
@@ -327,7 +496,10 @@ def main(argv=None) -> int:
         return 0
 
     args.out.mkdir(parents=True, exist_ok=True)
-    env = harness.capture_env(HERE, OUTPUTS)
+    # `--out` is an output whatever it is called, so it does not count against the worktree
+    # being clean. `run.py` had the same bug: a directory it wrote but had not declared was
+    # counted as a foreign untracked file, and every record stamped itself unreproducible.
+    env = harness.capture_env(HERE, (*OUTPUTS, args.out.name))
     rows = []
     if d > 1:
         print("NOTE: only the shardes arms use the mesh. naive_es and evosax run on one\n"
