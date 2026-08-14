@@ -1159,3 +1159,54 @@ has already been wrong once about what `cost_analysis` counts.
 
 Criterion 3's spirit now needs one single-GPU session rather than an unwritten adapter, which
 is the part worth recording: the blocker was a wrong belief about their code, not work.
+
+
+## The EGGROLL arm on the benchmark hardware, 2026-08-14
+
+The section above ends with "criterion 3 stays met in the letter until M4 is re-run with
+this arm on the benchmark node, which is a single-GPU booking". This is that booking:
+one A100-SXM4-80GB (driver 595.71.05, CUDA 13.2, community cloud, jax 0.11.0, the same
+`XLA_FLAGS` as every prior session), 33 minutes of uptime, $0.76. Two runs, both at
+commit `a858998`, every record `dirty_worktree: false`.
+`experiments/phase2/results-m4-a100-run1/` and `-run2/`.
+
+ms/gen at `--devices 1`, run 1 / run 2:
+
+| shape | shardes `mirrored_lr1/B` | EGGROLL `rank1` | ratio | naive ES (run 1) | evosax (run 1) |
+|---|---|---|---|---|---|
+| `d=512, N=256` | 3.12 / 3.08 | **2.96 / 3.01** | 1.052 / 1.022 | 12.59 | 12.25 |
+| `d=512, N=1024` | **10.10 / 10.07** | 10.35 / 10.26 | 0.977 / 0.982 | 47.72 | 45.35 |
+| `d=2048, N=128` | 11.12 / 11.04 | **10.74 / 10.74** | 1.036 / 1.028 | 80.33 | 87.26 |
+| `d=2048, N=256` | 20.48 / 20.49 | 20.48 / 20.44 | 1.000 / 1.003 | 160.11 | 173.83 |
+
+**Parity on the hardware the rest of this document reports.** The ratio spans 0.977 to
+1.052 and the lead alternates by shape. Unlike the laptop measurement, the two runs
+agree to about 1% everywhere, including the smallest shape, so the spread between the
+arms is now larger than the noise and it still does not favour either side. Both
+low-rank implementations are 4x faster than the naive and evosax references at `d=512`
+and 8x at `d=2048`, from the same factorisation.
+
+**These numbers can sit beside the existing M4 table, and the overlap proves it.** The
+prior session measured `mirrored_lr1/B` at `d=512, N=1024` as 10.26 ms on the 8x node;
+this session reads 10.10 / 10.07 on one GPU of the same model and driver. evosax: 45.04
+there, 45.35 / 46.96 here. Same program, same hardware, agreement within about 2%,
+which is what "the D=1 rows do not depend on the other seven GPUs" predicts.
+
+**On an 80 GB card the naive and evosax arms complete at every shape**, so the memory
+verdict from the laptop session (both OOM at three of four shapes on 16 GB) and the
+throughput verdict now exist separately: they are 4x to 8x slower where they run at
+all, and they stop running where the low-rank arms continue.
+
+### Status after the benchmark-node run
+
+| | criterion | status |
+|---|---|---|
+| 1 | strong and weak curves, efficiency stated | **met**, 0.292 to 0.939 at `D=8`, one commit |
+| 2 | crossover measured, phase diagram | **met**, no contour: the grid is too coarse |
+| 3 | one comparison against an external reference | **met, in the letter and in the spirit**: EGGROLL's own implementation, benchmark hardware, two runs |
+| 4 | reproducible from a committed config plus a recorded environment | **met** |
+| 5 | a limitations paragraph a skeptic would accept as fair | **still needs rewriting, in Andres's words** |
+
+Criterion 3 is now the result it was defined to be: within EGGROLL's own throughput
+while offering a general API, measured with their unmodified code at matched shapes on
+the document's hardware. Criterion 5 remains the only gate item, and it is prose.
