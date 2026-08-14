@@ -76,6 +76,10 @@ STRATEGIES = {
     "seed_regenerated": SeedRegenerated,
     "mirrored_lr1": lambda: Mirrored(LowRank(r=1)),
     "lowrank_r1": lambda: LowRank(r=1),
+    # Qiu et al. as `core.py`'s own docstring advertises it. Absent from every sweep until
+    # 2026-08-14, which meant one of the two published algorithms this library exists to
+    # support had correctness tests and no performance numbers.
+    "mirrored_seed": lambda: Mirrored(SeedRegenerated()),
 }
 
 SEED, SIGMA, LR = 0, 0.01, 0.05

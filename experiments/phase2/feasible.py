@@ -47,7 +47,10 @@ _MATERIALISE = 2.0
 #: `seed_regenerated` sits at 0.01 GB (d=512) and 0.15 GB (d=2048) for every N tried, while
 #: the batched strategies grow linearly. It pays in wall clock, about 4x the low-rank path at
 #: d=2048, N=512, which is the trade worth reporting rather than hiding.
-SEQUENTIAL = {"seed_regenerated"}
+#: Strategies whose evaluation is a loop rather than a batched op, so only one
+#: member is live at a time. `mirrored_seed` wraps `seed_regenerated` and inherits
+#: its scan, which is why it inherits its memory profile too.
+SEQUENTIAL = {"seed_regenerated", "mirrored_seed"}
 
 
 def activation_bytes(d_model: int, members_here: int, batch: int = 8, seq: int = 32) -> int:
@@ -68,10 +71,13 @@ def perturbation_bytes(strategy: str, d_model: int, members_contracted: int) -> 
     - `seed_regenerated` re-derives members instead of storing them, so this is ~independent
       of `N`. Measured 0.01 GB at d=512 for every N tried, 0.15 GB at d=2048. It buys that
       with time: 4x slower than the low-rank path at d=2048, N=512.
+    - `mirrored_seed` is `Mirrored(SeedRegenerated())`, Qiu et al. as published. It wraps the
+      same regeneration, so it stores the same couple of buffers: antithetic pairing halves
+      the *distinct directions* and not the storage, which was already `O(|params|)`.
     - the low-rank path never materialises an `(m, n)` perturbation at all (invariant 3), so
       it stores `N * r * (m + n)`, which is ~1 MB where the old model predicted 1.5 GB.
     """
-    if strategy in ("seed_regenerated",):
+    if strategy in ("seed_regenerated", "mirrored_seed"):
         return 2 * params_bytes(d_model)              # a couple of param-sized buffers
     if strategy in ("lowrank_r1", "mirrored_lr1"):
         rank = 1

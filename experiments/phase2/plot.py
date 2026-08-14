@@ -14,8 +14,8 @@ a scaling curve. The watermark is in the image rather than the caption because i
 pasted into slides without their captions.
 
 Colour follows the entity, never its rank: each strategy keeps its hue as configurations are
-filtered in and out. The three hues are slots 1-3 of the reference categorical order, used in
-fixed order rather than cycled.
+filtered in and out. Five hues, assigned in fixed order rather than cycled, so adding a
+strategy never repaints the ones already there.
 """
 
 from __future__ import annotations
@@ -35,10 +35,11 @@ from matplotlib.ticker import NullLocator  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent
 
-#: Slots 1-3 of the reference categorical order, in order. Keyed by entity so a filtered
-#: plot never repaints the survivors.
+#: Keyed by entity so a filtered plot never repaints the survivors. Slot 5 is `mirrored_seed`,
+#: added 2026-08-14. A strategy with no entry raises a KeyError at plot time rather than
+#: silently recycling a colour, which is the right way for this to fail.
 HUES = {"iid_gaussian": "#2a78d6", "seed_regenerated": "#eb6834", "mirrored_lr1": "#1baf7a",
-        "lowrank_r1": "#eda100"}
+        "lowrank_r1": "#eda100", "mirrored_seed": "#8a5fd0"}
 MARKERS = {"A": "o", "B": "s"}
 INK, MUTED = "#0b0b0b", "#52514e"
 
