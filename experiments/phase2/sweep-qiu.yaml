@@ -1,0 +1,42 @@
+# Mirrored(SeedRegenerated), Qiu et al. as published, which no sweep has ever measured.
+#
+# `core.py`'s docstring advertises this configuration by name:
+#
+#     ShardedES(strategy=Mirrored(SeedRegenerated()), n=30, ...)          # Qiu et al.
+#
+# and until 2026-08-14 it had correctness tests and no performance numbers. `sweep.yaml` runs
+# `seed_regenerated` unmirrored and `mirrored_lr1` for the low-rank half, so the published
+# pairing of antithetic sampling with seed regeneration was the one cell of the design nobody
+# had timed. It is also the configuration that inherited the scan defect
+# (`docs/diagnosis-seed-regenerated-scan.md`) and was fixed without ever being measured.
+#
+# **Every knob is copied from `sweep.yaml` except `strategies` and `results_dir`**, so these
+# 64 rows drop into the existing tables beside the other four strategies.
+#
+# Mirrored needs a whole number of antithetic pairs per device. `check_population` refuses
+# anything else at construction, and with these populations and device counts the smallest
+# per-device count is 16, so every configuration is safely even.
+modes: [strong, weak]
+devices: [1, 2, 4, 8]
+d_model: [512, 2048]
+
+population:
+  512: [256, 1024]
+  2048: [128, 256]
+
+population_per_device:
+  512: [32, 128]
+  2048: [16, 32]
+
+strategies: [mirrored_seed]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+warmup: 3
+repeats: 5
+
+results_dir: results-qiu
+
+matmul_precision: highest
