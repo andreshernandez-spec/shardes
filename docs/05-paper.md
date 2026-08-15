@@ -175,6 +175,43 @@ rather than hedged here. `docs/BACKLOG.md` records the decision to treat this as
 
 ---
 
+### C6 — The noise-structure axis, measured on a real fine-tuning task for the first time
+
+**Status: designed 2026-08-14, not yet run.** The experiment is E13. This is the claim the
+two 2025 papers cannot make and cannot test against each other: Qiu et al. is full-rank
+only, EGGROLL is welded to RWKV, and no implementation before this one can vary the noise
+structure while holding the task, model, budget and seeds fixed.
+
+The setup: Countdown (verifiable arithmetic reward) on Qwen2.5-0.5B, `N = 30` matched to
+Qiu, bf16 compute under the accepted dtype policy, and the perturbation strategy swept
+`Mirrored(SeedRegenerated())` vs `Mirrored(LowRank(r))`, `r in {1, 4, 16}`. One GRPO curve
+(TRL, Qiu's published hyperparameters, cited, untuned by us) as a reference line at matched
+GPU-hours, so a reader can place ES at all. GRPO is context, not the subject; C6 stands or
+falls on the within-ES comparison.
+
+Four sub-claims, each falsifiable and each a finding whichever way it lands:
+
+- **C6a, cost at matched quality.** M4 prices full-rank seed regeneration at ~15x the
+  per-generation wall clock of rank-1 at matched shapes. If rank-r matches full-rank final
+  reward, that is Qiu's result at an order of magnitude less compute, with EGGROLL's trick,
+  in a regime EGGROLL never tested. If it does not match, it is the first measurement of
+  what full rank buys, which is Qiu's bet quantified instead of asserted.
+- **C6b, F5 predictivity.** E1 measured estimator quality vs `N/d_eff` for full-rank,
+  rank-1 and rank-4 on the synthetic block. C6b asks whether that curve predicts the
+  fine-tuning outcome ordering. The E12 rule applies in both directions: a positive result
+  that only exists in estimator space does not ship, and this is the experiment that either
+  grounds F5 in task space or shows the smoothing caveat is load-bearing.
+- **C6c, embeddings under perturbation.** Qwen's tied embedding is ~27% of the 0.5B
+  parameters, and EGGROLL's reference raises NotImplementedError there. The `embed` seam
+  perturbs it without forming the table. Ablation: embedding frozen vs perturbed, at rank 1.
+- **C6d, reproducibility.** The full training run is a pure function of one seed,
+  device-count invariant (demonstrated at `D in {1, 8}`). No PPO/GRPO trainer offers this.
+  A methods statement with a test behind it, not a benchmark.
+
+What is deliberately not claimed: beating GRPO on final reward. That is Qiu's result; at
+pilot scale it may not reproduce, and no sub-claim above depends on it.
+
+
 ## Experiment matrix
 
 Tiers are defined in `docs/06-benchmark-runbook.md`. Short version: **T0** CPU (free),
@@ -196,6 +233,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 | **E10** | Shaping-barrier cost (global rank sort) | C1 | T1 | ~4 | $0 |
 | **E11** | Ablations: `r`, σ, dtype, accumulation precision | all | T1 | ~15 | $0 |
 | **E12** | End-to-end task validation, ≥3 seeds | C2 | T3 | ~15 | ~$8 |
+| **E13** | Countdown, Qwen2.5-0.5B: rank sweep + GRPO reference | **C6** | T2→T5 | ~30 | ~$30-80 |
 
 Roughly **150 free accelerator-hours** and **one paid 6-hour GPU session**.
 
@@ -223,6 +261,17 @@ half: both published algorithms running end to end from one API. That halves its
 
 The rule was right and is worth keeping for whatever claim comes next — a positive result that
 only exists in estimator space does not go in the paper as a positive result.
+
+**E13 is that next claim, and the rule binds it.** C6b is exactly a claim crossing from
+estimator space to task space, so it ships only if the F5 ordering survives contact with
+Countdown. Structure: the port of Qwen2.5-0.5B to the `dense`/`embed` seams is local, free,
+and the long pole (validated against reference logits before any rented hour); the rank
+arms are the cheap ones, so the expensive full-rank run is bought once per seed and the
+sweep rides on low-rank pricing. Single A100-80GB throughout, no multi-GPU booking
+anywhere in E13. Baseline discipline: GRPO hyperparameters are Qiu's published ones,
+cited, untuned by us in either direction. Runtime estimates are FLOP arithmetic on
+decode until the pilot's first hour turns them into measurements, and the pilot is
+designed to be cheap to abort.
 
 ---
 
