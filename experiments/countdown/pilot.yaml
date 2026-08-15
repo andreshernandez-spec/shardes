@@ -1,0 +1,27 @@
+# E13 pilot, ES arm. Committed before any rented run and cited by SHA, per ground rule 3.
+#
+# N=30 matches Qiu et al.'s population (their choice, matched to GRPO's group size).
+# sigma and lr are pilot starting points, not their tuned values: their per-model
+# hyperparameters are for full-rank ES on larger models, and the pilot's first job is
+# a learning signal at all, not a replication. Recorded so the numbers are attributable.
+#
+# strategy is overridden per arm from the command line... no, it is not: one config per
+# arm, one results_dir per arm, so a result file can never mistake its strategy. Copy
+# this file per arm and change exactly `strategy` and `results_dir`.
+
+model: Qwen/Qwen2.5-0.5B-Instruct
+strategy: mirrored_seed          # the Qiu algorithm; lr arms get their own configs
+population: 30
+sigma: 0.002
+lr: 0.01
+seed: 0
+
+puzzle_seed: 7
+n_puzzles: 256                   # the rotating pool
+puzzles_per_gen: 8
+pad_to: 128                      # prompt budget; measured max for this template is ~110
+max_new: 96
+generations: 300
+checkpoint_every: 10
+
+results_dir: results-es-mirrored-seed
