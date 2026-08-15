@@ -330,3 +330,46 @@ def test_perturbation_conforms_to_the_protocol(strategy, params):
     pert = strategy.sample(jax.random.key(10), params, jnp.arange(4))
     assert hasattr(pert, "base_key") and hasattr(pert, "member_ids")
     assert jnp.array_equal(pert.member_ids, jnp.arange(4))
+
+
+def test_chunked_seed_regenerated_matches_sequential():
+    """chunk is a bandwidth optimization, not an algorithm: same members, same noise,
+    same outputs up to vmap-vs-scan reassociation. Held tight because if chunking
+    changed results the whole E13 wall-clock story would be buying different science."""
+    import jax
+    import jax.numpy as jnp
+
+    from shardes import sharding
+    from shardes.core import ShardedES
+    from shardes.strategies.mirrored import Mirrored
+    from shardes.strategies.seed_regenerated import SeedRegenerated
+
+    def run(chunk):
+        es = ShardedES(Mirrored(SeedRegenerated(chunk=chunk)), n=8, sigma=0.01, lr=0.05,
+                       mesh=sharding.make_mesh(1))
+        params = {"w": 0.05 * jax.random.normal(jax.random.key(0), (6, 6))}
+        st = es.init(jax.random.key(1), params)
+        pert, st = es.ask(st)
+        fit = es.apply(lambda p, x: jnp.sum(p["w"] ** 2) + 0.0 * x, st, pert)(jnp.zeros(()))
+        return fit, es.tell(st, pert, fit).params["w"]
+
+    (f1, w1), (f4, w4) = run(1), run(4)
+    assert jnp.allclose(f1, f4, rtol=1e-6), "chunked fitness diverged from sequential"
+    assert jnp.allclose(w1, w4, rtol=1e-6), "chunked update diverged from sequential"
+
+
+def test_chunk_must_divide_the_per_device_population():
+    import jax
+    import jax.numpy as jnp
+    import pytest
+
+    from shardes import sharding
+    from shardes.core import ShardedES
+    from shardes.strategies.seed_regenerated import SeedRegenerated
+
+    es = ShardedES(SeedRegenerated(chunk=3), n=8, sigma=0.01, lr=0.05,
+                   mesh=sharding.make_mesh(1))
+    st = es.init(jax.random.key(0), {"w": jnp.ones((4, 4))})
+    pert, st = es.ask(st)
+    with pytest.raises(ValueError, match="chunk"):
+        es.apply(lambda p, x: jnp.sum(p["w"]) + 0.0 * x, st, pert)(jnp.zeros(()))
