@@ -1,0 +1,9 @@
+# The GRPO venv. Separate from the JAX env so the two CUDA stacks never share a
+# process or an install; run_grpo.py imports task.py and never shardes.
+# Versions recorded by the run log, not pinned here: the pod installs fresh and the
+# log's env block is the record that matters.
+trl
+transformers
+datasets
+torch
+pyyaml
