@@ -135,7 +135,7 @@ def test_greedy_generate_agrees_with_iterated_forward():
     params = qwen2.init(jax.random.key(0), CFG)
     ids = jax.random.randint(jax.random.key(1), (2, 6), 0, CFG.vocab)
     plen = jnp.array([6, 4])  # one full row, one right-padded row
-    got = qwen2.generate(params, ids, plen, CFG, max_new=5)
+    got = qwen2.generate(params, ids, plen, CFG, max_new=5, prefill=int(plen.min()))
 
     for row in range(2):
         seq = list(map(int, ids[row, : plen[row]]))

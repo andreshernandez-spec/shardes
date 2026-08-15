@@ -125,9 +125,22 @@ def main(argv=None) -> int:
 
     def model(p, batch):
         ids, plen = batch
-        return qwen2.generate(p, ids, plen, mcfg, cfg["max_new"])
+        return qwen2.generate(p, ids, plen, mcfg, cfg["max_new"], prefill=prefill_len)
+
+    # Jitted once, traced once: without this the vmap/scan dispatches op by op and the
+    # GPU idles between kernels. Measured: the un-jitted loop held ~330 s/generation on
+    # the laptop with prefill making no difference, because dispatch, not compute, was
+    # the bottleneck; the A100 probe's 600 s/generation was the same defect at scale.
+    @jax.jit
+    def evaluate(state, pert, ids, plen):
+        return es.apply(model, state, pert)((ids, plen))
 
     eos = tok.eos_token_id
+    # One prefill length for the whole run, the pool-wide minimum: a per-generation
+    # value changes the prefill's static shape and forces a recompile every generation,
+    # which the re-timed smoke measured as eating the entire prefill saving.
+    _, all_plen = tokenize(tok, puzzles, cfg["pad_to"])
+    prefill_len = int(all_plen.min())
     while int(state.generation) < cfg["generations"]:
         g = int(state.generation)
         batch_puzzles = [puzzles[(g * B + j) % len(puzzles)] for j in range(B)]
@@ -135,7 +148,7 @@ def main(argv=None) -> int:
 
         t0 = time.perf_counter()
         pert, state = es.ask(state)
-        gen = np.asarray(es.apply(model, state, pert)((ids, plen)))  # (n, B, T)
+        gen = np.asarray(evaluate(state, pert, ids, plen))  # (n, B, T)
         rewards = np.zeros((cfg["population"], B), np.float32)
         for m in range(cfg["population"]):
             for j in range(B):
