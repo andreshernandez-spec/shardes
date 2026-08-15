@@ -235,7 +235,8 @@ def load(checkpoint_dir, cfg: Config, dtype=jnp.bfloat16) -> dict:
 # ------------------------------------------------------------------ decode (KV cache)
 
 
-def generate(params: PyTree, ids: Array, plen: Array, cfg: Config, max_new: int) -> Array:
+def generate(params: PyTree, ids: Array, plen: Array, cfg: Config, max_new: int,
+             prefill: int = 0) -> Array:
     """Greedy decode. ids: (b, P) right-padded prompts, plen: (b,) true lengths.
     Returns (b, P + max_new): the buffer with generated tokens written after each
     row's prompt. Deterministic, which is what C6d's reproducibility statement needs;
@@ -258,10 +259,46 @@ def generate(params: PyTree, ids: Array, plen: Array, cfg: Config, max_new: int)
     dtype = x0.dtype
 
     buf = jnp.concatenate([ids, jnp.zeros((b, max_new), ids.dtype)], axis=1)
+
+    # Batched prefill over the positions every row still spends inside its prompt:
+    # 0..Pmin-2 in one full-width pass instead of one scan step each. The scan below is
+    # unchanged and takes over at Pmin-1, so rows with longer prompts keep reading their
+    # remaining prompt tokens from `buf` exactly as before. The probe measured the
+    # sequential prefill as the bulk of 600 s/generation at pilot shape; prompts from
+    # one template differ by a few digits, so Pmin is nearly the whole prompt.
+    # `prefill` is a static int from the caller, who holds plen concretely before jit;
+    # deriving it from the traced plen here concretized a tracer under vmap.
+    Pmin = prefill if prefill > 1 else None
+    start = 0
     caches = [
         (jnp.zeros((b, T, nkv, hd), dtype), jnp.zeros((b, T, nkv, hd), dtype))
         for _ in params["layers"]
     ]
+    if Pmin is not None and Pmin > 1:
+        n_pre = Pmin - 1
+        x = embed(params["embedding"], ids[:, :n_pre])
+        new = []
+        for p, (ck, cv) in zip(params["layers"], caches):
+            h = _rms_norm(x, p["ln1"], cfg.rms_eps)
+            q = (dense(h, p["wq"]) + p["bq"]).reshape(b, n_pre, cfg.n_heads, hd)
+            k = (dense(h, p["wk"]) + p["bk"]).reshape(b, n_pre, nkv, hd)
+            v = (dense(h, p["wv"]) + p["bv"]).reshape(b, n_pre, nkv, hd)
+            q, k = _rope(q, cfg.rope_theta), _rope(k, cfg.rope_theta)
+            ck = ck.at[:, :n_pre].set(k.astype(dtype))
+            cv = cv.at[:, :n_pre].set(v.astype(dtype))
+            new.append((ck, cv))
+            kk = jnp.repeat(k, cfg.n_heads // nkv, axis=2)
+            vv = jnp.repeat(v, cfg.n_heads // nkv, axis=2)
+            scores = jnp.einsum("bqhd,bkhd->bhqk", q, kk).astype(jnp.float32) * hd**-0.5
+            scores = jnp.where(jnp.tril(jnp.ones((n_pre, n_pre), bool)), scores, -jnp.inf)
+            attn = jax.nn.softmax(scores, axis=-1).astype(dtype)
+            out = jnp.einsum("bhqk,bkhd->bqhd", attn, vv).reshape(b, n_pre, cfg.n_heads * hd)
+            x = x + dense(out, p["wo"])
+            h = _rms_norm(x, p["ln2"], cfg.rms_eps)
+            x = x + dense(jax.nn.silu(dense(h, p["w_gate"])) * dense(h, p["w_up"]),
+                          p["w_down"])
+        caches = new
+        start = n_pre
 
     def step(carry, pos):
         buf, caches = carry
@@ -296,6 +333,6 @@ def generate(params: PyTree, ids: Array, plen: Array, cfg: Config, max_new: int)
             buf, jnp.where(keep, cur, nxt)[:, None], jnp.minimum(pos + 1, T - 1), axis=1)
         return (buf, new_caches), None
 
-    (buf, _), _ = jax.lax.scan(step, (buf, caches), jnp.arange(T - 1))
+    (buf, _), _ = jax.lax.scan(step, (buf, caches), jnp.arange(start, T - 1))
     return buf
 
