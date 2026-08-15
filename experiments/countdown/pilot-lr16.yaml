@@ -15,7 +15,14 @@ model: Qwen/Qwen2.5-0.5B-Instruct
 strategy: mirrored_lr16
 population: 30
 sigma: 0.001
-lr: 5.0e-4
+# lr = alpha * sigma = 5e-4 * 0.001. Their update is theta += (alpha/N) * sum(z_i eps_i)
+# with NO division by sigma (es-fine-tuning-paper worker_extension.py line 103:
+# "coeffs[i] should be: (alpha / population_size) * normalized_reward"); our tell steps
+# by lr/(N*sigma). Their alpha fed to our lr therefore oversteps by 1/sigma = 1000x,
+# which the 2026-08-15 probe measured as total reward collapse after one generation.
+# Residual difference: their z-scored fitness has ~3.5x the scale of our centered
+# ranks; recorded, not corrected, since sigma-relative step size is the load-bearing part.
+lr: 5.0e-7
 seed: 0
 
 puzzle_seed: 7
