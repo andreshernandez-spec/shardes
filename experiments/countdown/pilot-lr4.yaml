@@ -12,7 +12,7 @@
 # this file per arm and change exactly `strategy` and `results_dir`.
 
 model: Qwen/Qwen2.5-0.5B-Instruct
-strategy: mirrored_seed          # the Qiu algorithm; lr arms get their own configs
+strategy: mirrored_lr4
 population: 30
 sigma: 0.001
 # lr = alpha * sigma = 5e-4 * 0.001. Their update is theta += (alpha/N) * sum(z_i eps_i)
@@ -39,4 +39,4 @@ max_new: 96
 generations: 500
 checkpoint_every: 10
 
-results_dir: results-es-mirrored-seed
+results_dir: results-es-mirrored-lr4

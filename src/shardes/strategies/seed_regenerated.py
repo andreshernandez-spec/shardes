@@ -52,8 +52,20 @@ class SeedRegenerated:
     of (stream, member_id), so there is nothing extra to store and nothing to synchronize.
     """
 
-    def __init__(self, coupling: Coupling = GAUSSIAN):
+    def __init__(self, coupling: Coupling = GAUSSIAN, chunk: int = 1):
+        # `chunk` trades the O(|params|) memory guarantee for decode bandwidth: the scan
+        # evaluates `chunk` members per step through one vmap, so their forward passes
+        # share each weight read. At chunk=1 (the default) nothing changes and the
+        # module docstring's memory promise holds exactly. The E13 probe measured why
+        # this exists: 30 members decoding 96 tokens strictly sequentially read the
+        # whole model 2880 times per generation, 285 s/generation on an A100 for a
+        # 0.5B model. Peak memory grows by chunk * |params| plus chunk KV caches, which
+        # the caller sizes to the device. Results are identical up to float
+        # reassociation, and a test holds chunk=1 against chunk=4.
+        if chunk < 1:
+            raise ValueError(f"chunk must be >= 1, got {chunk}")
         self.coupling = coupling
+        self.chunk = int(chunk)
 
     def sample(self, base_key: Key, params: PyTree, member_ids: Array) -> SeedPerturbation:
         """Does no work. That is the whole idea: the noise is a function of (key, id)."""
@@ -77,18 +89,36 @@ class SeedRegenerated:
         # factored form for a Separable to stay in.
         scale = densify(per_leaf(sigma, params))
 
-        def g(x: Array) -> Array:
-            def step(carry, i):
-                eps = member_noise(pert.base_key, pert.like, i, self.coupling)
-                # `s` in the leaf's dtype, same reason as IIDGaussian: an f32 sigma must
-                # not promote a bf16 forward back to f32.
-                perturbed = jax.tree.map(
-                    lambda p, s, e: p + jnp.asarray(s, p.dtype) * e, params, scale, eps
-                )
-                return carry, model(perturbed, x)
+        def one(i):
+            eps = member_noise(pert.base_key, pert.like, i, self.coupling)
+            # `s` in the leaf's dtype, same reason as IIDGaussian: an f32 sigma must
+            # not promote a bf16 forward back to f32.
+            return jax.tree.map(
+                lambda p, s, e: p + jnp.asarray(s, p.dtype) * e, params, scale, eps
+            )
 
-            _, out = jax.lax.scan(step, None, pert.member_ids)
-            return out
+        def g(x: Array) -> Array:
+            n = pert.member_ids.shape[0]
+            if self.chunk == 1 or n == 1:
+                def step(carry, i):
+                    return carry, model(one(i), x)
+
+                _, out = jax.lax.scan(step, None, pert.member_ids)
+                return out
+
+            if n % self.chunk:
+                raise ValueError(
+                    f"{n} members per device is not a multiple of chunk={self.chunk}; "
+                    "pick a chunk that divides the per-device population, or 1."
+                )
+            rows = pert.member_ids.reshape(n // self.chunk, self.chunk)
+
+            def step(carry, idrow):
+                perturbed = jax.vmap(one)(idrow)
+                return carry, jax.vmap(model, in_axes=(0, None))(perturbed, x)
+
+            _, out = jax.lax.scan(step, None, rows)
+            return out.reshape(n, *out.shape[2:])
 
         return g
 
