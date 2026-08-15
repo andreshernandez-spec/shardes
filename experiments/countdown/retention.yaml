@@ -1,0 +1,14 @@
+checkpoint_every: 10
+generations: 3
+lr: 5.0e-07
+max_new: 48
+model: Qwen/Qwen2.5-0.5B-Instruct
+n_puzzles: 256
+pad_to: 128
+population: 4
+puzzle_seed: 7
+puzzles_per_gen: 2
+results_dir: results-es-retention-smoke
+seed: 0
+sigma: 0.001
+strategy: mirrored_seed
