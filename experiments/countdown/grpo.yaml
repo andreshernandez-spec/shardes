@@ -1,0 +1,31 @@
+# E13 GRPO reference arm. Committed before the run, cited by SHA.
+#
+# Hyperparameters transcribed from Qiu et al. (arXiv:2509.24372, Appendix A.1,
+# Table 4): for GRPO-z on Qwen-0.5B-Instruct the checkmarked best configuration is
+# (beta, alpha) = (1e-3, 1e-5), read from the table figure on p.16 of the PDF, since
+# the HTML text layer loses the checkmark alignment. Group size 30 is their own
+# "aligning with the population size in ES" arm; they also ran N=8. Their GRPO-z
+# implementation is GRPO-Zero, whose config corroborates lr 1e-5 and group 8.
+# Ours is TRL, and that substitution is recorded in docs/05 E13's baseline notes.
+
+model: Qwen/Qwen2.5-0.5B-Instruct
+seed: 0
+
+puzzle_seed: 7                  # same pool as the ES arm, by construction
+n_puzzles: 256
+pad_to: 128
+max_new: 96
+
+group_size: 30                  # matches ES N=30, which is Qiu's own matching
+prompts_per_step: 8
+steps: 300
+checkpoint_every: 50
+
+lr: 1.0e-5                      # Table 4 checkmark, Qwen-0.5B-Instruct
+kl_beta: 1.0e-3                 # Table 4 checkmark, Qwen-0.5B-Instruct
+temperature: 1.0                # not stated in the paper; 1.0 = unscaled
+                                # sampling. Verify against GRPO-Zero's sampler
+                                # before the reportable run; the log records it.
+bf16: true
+
+results_dir: results-grpo
