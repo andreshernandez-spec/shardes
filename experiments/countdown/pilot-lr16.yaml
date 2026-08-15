@@ -25,6 +25,12 @@ sigma: 0.001
 lr: 5.0e-7
 seed: 0
 
+# Members evaluated together per decode pass (SeedRegenerated only; LowRank's
+# evaluation is already batched). 15 mirrored directions / chunk 5 = 3 scan steps.
+# Memory: chunk * |params| in bf16 plus chunk KV caches, ~7 GB at 0.5B, sized for the
+# A100's 80 GB with room for the f32 master.
+eval_chunk: 5
+
 puzzle_seed: 7
 n_puzzles: 256                   # the rotating pool
 puzzles_per_gen: 8

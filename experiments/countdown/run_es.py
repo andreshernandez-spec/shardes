@@ -52,7 +52,7 @@ from shardes.strategies.seed_regenerated import SeedRegenerated  # noqa: E402
 OUTPUTS = ("results-es",)
 
 STRATEGIES = {
-    "mirrored_seed": lambda cfg: Mirrored(SeedRegenerated()),
+    "mirrored_seed": lambda cfg: Mirrored(SeedRegenerated(chunk=cfg.get("eval_chunk", 1))),
     "mirrored_lr1": lambda cfg: Mirrored(LowRank(r=1)),
     "mirrored_lr4": lambda cfg: Mirrored(LowRank(r=4)),
     "mirrored_lr16": lambda cfg: Mirrored(LowRank(r=16)),
