@@ -135,6 +135,13 @@ def main(argv=None) -> int:
     def evaluate(state, pert, ids, plen):
         return es.apply(model, state, pert)((ids, plen))
 
+    # tell needs the same treatment, and it was the bigger half: un-jitted, its contract
+    # scan re-lowered every generation (the per-generation key and params view enter as
+    # constants, and the executable cache misses on fresh constants). The A100 phase
+    # probe measured steady-state eval at 4.1 s and tell at ~314 s, gens 2 and 3 alike.
+    # Jitted, the arrays are traced arguments and the compile happens once.
+    tell = jax.jit(es.tell)
+
     eos = tok.eos_token_id
     # One prefill length for the whole run, the pool-wide minimum: a per-generation
     # value changes the prefill's static shape and forces a recompile every generation,
@@ -157,7 +164,7 @@ def main(argv=None) -> int:
                 text = tok.decode(row[: stop[0]] if len(stop) else row)
                 rewards[m, j] = task.reward(text, batch_puzzles[j])
         fitness = jnp.asarray(-rewards.mean(axis=1), jnp.float32)  # tell descends
-        state = es.tell(state, pert, fitness)
+        state = tell(state, pert, fitness)
         dt = time.perf_counter() - t0
 
         rec = {"generation": g, "seconds": dt,
