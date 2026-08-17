@@ -66,6 +66,28 @@ def make_puzzles(seed: int, count: int, n_numbers: int = 4) -> list:
     return out
 
 
+def make_eval_puzzles(seed: int, count: int, train: list) -> list:
+    """A held-out set provably disjoint from `train`, matching Qiu's train/test split.
+
+    A different seed alone does not guarantee disjointness (numbers are drawn from a
+    small pool, so collisions happen), so puzzles already in the training pool are
+    dropped and the generator runs until `count` clean ones exist. Identity is the
+    (numbers, target) pair; two puzzles with the same numbers in a different order
+    are different prompts and both may stay.
+    """
+    seen = set(train)
+    out, batch_seed = [], seed
+    while len(out) < count:
+        for p in make_puzzles(batch_seed, count):
+            if p not in seen:
+                seen.add(p)
+                out.append(p)
+                if len(out) == count:
+                    break
+        batch_seed += 1
+    return out
+
+
 # ---------------------------------------------------------------- expression checking
 
 
