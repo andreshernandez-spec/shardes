@@ -18,7 +18,11 @@ max_new: 96
 
 group_size: 30                  # matches ES N=30, which is Qiu's own matching
 prompts_per_step: 8
-steps: 300
+# 500, not 300: Qiu stops RL at matched total sample evaluations, and the ES arms
+# consume 500 generations x 30 members x 8 puzzles = 120,000. At 8 prompts x 30
+# completions per optimizer step, 500 steps is the same 120,000. (The 2026-08-17
+# run used 300 and is short by 48k evaluations; its README says so.)
+steps: 500
 checkpoint_every: 50
 
 lr: 1.0e-5                      # Table 4 checkmark, Qwen-0.5B-Instruct
@@ -35,5 +39,12 @@ temperature: 1.0
 top_p: 1.0
 top_k: 0
 bf16: true
+
+# Same held-out set as the ES arms: same eval_seed against the same training pool
+# gives byte-identical puzzles, so the two arms' eval curves share an x-axis of
+# sample evaluations and a y-axis measured on the same 2000 prompts.
+eval_seed: 1007
+eval_puzzles: 2000
+eval_batch: 250
 
 results_dir: results-grpo

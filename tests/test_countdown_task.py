@@ -72,3 +72,16 @@ def test_first_generation_format_signal_exists():
     """The 0.1 tier exists so N=30 sees a gradient at generation zero. If every tier
     below correct collapses to 0, that design decision has been silently lost."""
     assert 0.0 < task.reward("<answer>3 + 5</answer>", P) < 1.0
+
+
+def test_eval_puzzles_disjoint_from_train():
+    """The held-out set must never contain a training puzzle: numbers come from a
+    small pool, so seed separation alone does not give disjointness and the
+    generator filters. Identity is the (numbers, target) pair."""
+    train = task.make_puzzles(7, 64)
+    ev = task.make_eval_puzzles(1007, 128, train)
+    assert len(ev) == 128
+    assert not set(ev) & set(train)
+    assert len(set(ev)) == 128, "eval set has internal duplicates"
+    again = task.make_eval_puzzles(1007, 128, train)
+    assert ev == again, "eval set is not deterministic"
