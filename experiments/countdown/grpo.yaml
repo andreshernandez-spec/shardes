@@ -23,9 +23,15 @@ checkpoint_every: 50
 
 lr: 1.0e-5                      # Table 4 checkmark, Qwen-0.5B-Instruct
 kl_beta: 1.0e-3                 # Table 4 checkmark, Qwen-0.5B-Instruct
-temperature: 1.0                # not stated in the paper; 1.0 = unscaled
-                                # sampling. Verify against GRPO-Zero's sampler
-                                # before the reportable run; the log records it.
+# Verified against GRPO-Zero's sampler (github.com/policy-gradient/GRPO-Zero,
+# grpo.py rollout, checked 2026-08-17): softmax then multinomial, no temperature
+# scaling, no top-p, no top-k, and evaluation uses the same sampler. That is
+# temperature 1.0 with all filters off. top_p/top_k are passed explicitly because
+# requirements-grpo.txt does not pin trl and a default drift would change the
+# sampler silently; trl main's defaults are neutral today (1.0 and 0).
+temperature: 1.0
+top_p: 1.0
+top_k: 0
 bf16: true
 
 results_dir: results-grpo
