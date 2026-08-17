@@ -216,7 +216,7 @@ class LowRank:
         # Split off the design families outside the vmap: they are per (leaf, side, column)
         # and must not depend on the member.
         columns = [
-            None if x.ndim != 2 else tuple(jax.random.split(s, 2 * self.r))
+            None if x.ndim != 2 else jax.random.split(s, 2 * self.r)
             for s, x in zip(streams, leaves)
         ]
 
@@ -228,9 +228,16 @@ class LowRank:
                     out.append(LeafFactors(a, None))
                     continue
                 m, k = leaf.shape
-                stack = lambda d, ks: jnp.stack(  # noqa: E731
-                    [self.coupling(c, i, d, leaf.dtype) for c in ks], axis=-1
-                )
+                # vmap over the column keys, not a Python loop: the loop unrolled 2r
+                # coupling subgraphs per leaf into the trace, and sample is regenerated
+                # inside tell's jitted graph, so XLA compile time scaled with r
+                # (measured 63 s at r=1 vs 963 s at r=16 on CPU at 12 layers; 6600 s
+                # on an A100 at 0.5B). vmap of a draw over keys is defined to equal
+                # the stacked per-key calls, so the noise is bit-identical; the seed
+                # contract test holds it there.
+                stack = lambda d, ks: jax.vmap(  # noqa: E731
+                    lambda c: self.coupling(c, i, d, leaf.dtype), out_axes=-1
+                )(ks)
                 out.append(LeafFactors(stack(m, cols[: self.r]), stack(k, cols[self.r :])))
             return jax.tree.unflatten(treedef, out)
 
