@@ -38,6 +38,16 @@ def build_dataset(cfg, tokenizer):
          "numbers": list(p.numbers), "target": p.target}
         for p in puzzles
     ]
+    # The prompt budget the ES arm enforces in tokenize(), enforced here directly:
+    # TRL removed GRPOConfig.max_prompt_length (gone by trl 1.10), and a truncated
+    # prompt would be a silent task change anyway. Refuse instead.
+    longest = max(
+        len(tokenizer.apply_chat_template(r["prompt"], tokenize=True,
+                                          add_generation_prompt=True))
+        for r in rows
+    )
+    if longest > cfg["pad_to"]:
+        raise ValueError(f"prompt of {longest} tokens exceeds pad_to={cfg['pad_to']}")
     return Dataset.from_list(rows)
 
 
@@ -75,13 +85,19 @@ def main(argv=None) -> int:
     from trl import GRPOConfig, GRPOTrainer  # noqa: PLC0415
 
     out = HERE / cfg["results_dir"]
+    # TRL's batch counts completions, not prompts, and must divide by
+    # num_generations: one micro-batch is one prompt's whole group, and the
+    # accumulation steps are the prompts. One optimizer step therefore consumes
+    # prompts_per_step * group_size completions (240 at the committed config),
+    # which is the sample-evaluation accounting grpo.yaml's steps are matched on.
     targs = GRPOConfig(
         output_dir=str(out),
-        per_device_train_batch_size=cfg["prompts_per_step"],
+        per_device_train_batch_size=cfg["group_size"],
+        gradient_accumulation_steps=cfg["prompts_per_step"],
         num_generations=cfg["group_size"],
-        max_prompt_length=cfg["pad_to"],
         max_completion_length=cfg["max_new"],
         learning_rate=cfg["lr"],
+        lr_scheduler_type=cfg["lr_schedule"],
         beta=cfg["kl_beta"],
         temperature=cfg["temperature"],
         top_p=cfg["top_p"],
