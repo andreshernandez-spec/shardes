@@ -58,8 +58,16 @@ def main(argv=None) -> int:
             batch = tok(prompts[lo:lo + EB], return_tensors="pt", padding=True,
                         add_special_tokens=False).to(device)
             with torch.no_grad():
+                # repetition_penalty=1.0 explicitly: the checkpoint ships a
+                # generation_config.json with repetition_penalty 1.1, and HF generate
+                # applies it even under do_sample=False. Measured on 12 prompts, the
+                # penalty flips the first content token on every one (it penalizes
+                # '>' because '>' appears in the prompt), which is a different decode
+                # rule than the ES arm's plain argmax and made the two arms'
+                # baselines on identical weights differ (0.105 vs 0.054).
                 gen = model.generate(**batch, max_new_tokens=cfg["max_new"],
-                                     do_sample=False, pad_token_id=tok.eos_token_id)
+                                     do_sample=False, repetition_penalty=1.0,
+                                     pad_token_id=tok.eos_token_id)
             texts = tok.batch_decode(gen[:, batch["input_ids"].shape[1]:],
                                      skip_special_tokens=True)
             for j, (t, p) in enumerate(zip(texts, ev[lo:lo + EB])):
