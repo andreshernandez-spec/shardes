@@ -30,5 +30,8 @@ Two operational notes, both with evidence here:
   eval 4.1 s, tell ~314 s). Fixed in PR #30; `gate-probe.jsonl` is the same
   probe after the fix, passing at 4.3 s/gen.
 - lr16's total is 4.7 h despite 7.2 s/gen steady state: generations 0 and 1
-  spent 6622 s and 6845 s in XLA compile. The r=16 low-rank path compiles
-  pathologically where r=1 and r=4 take minutes. Not diagnosed yet.
+  spent 6622 s and 6845 s in XLA compile. Diagnosed after the run: tell
+  regenerates the factors from seeds, and LowRank.sample unrolled a Python
+  loop over the 2r column keys into that graph, so compile time scaled with
+  rank. Fixed by vmapping the coupling over the column keys (bit-identical
+  noise); `experiments/lowrank_compile_diag.py` has the before/after numbers.

@@ -373,3 +373,43 @@ def test_chunk_must_divide_the_per_device_population():
     pert, st = es.ask(st)
     with pytest.raises(ValueError, match="chunk"):
         es.apply(lambda p, x: jnp.sum(p["w"]) + 0.0 * x, st, pert)(jnp.zeros(()))
+
+
+def test_lowrank_sample_column_seed_contract():
+    """Pins the per-column seed layout: column j of member i's A factor is
+    coupling(cols[j], i, m) with cols = split(leaf stream, 2r), and the b side offset
+    by r. tell regenerates factors from seeds through exactly this map (contraction
+    re-runs sample), so any implementation of sample must reproduce it bit for bit;
+    drift here is a different update, not a tolerance question."""
+    from shardes.coupling import GAUSSIAN
+    from shardes.strategies._noise import leaf_streams
+    from shardes.strategies.lowrank import LowRank
+
+    r, m, k = 5, 7, 6
+    params = {"w": jnp.zeros((m, k), jnp.float32)}
+    pert = LowRank(r=r).sample(jax.random.key(3), params, jnp.arange(2))
+    (stream,) = leaf_streams(jax.random.key(3), 1)
+    cols = jax.random.split(stream, 2 * r)
+    lf = pert.factors["w"]
+    for i in range(2):
+        member = jnp.int32(i)
+        for j in range(r):
+            assert jnp.array_equal(lf.a[i, :, j], GAUSSIAN(cols[j], member, m, jnp.float32))
+            assert jnp.array_equal(lf.b[i, :, j], GAUSSIAN(cols[r + j], member, k, jnp.float32))
+
+
+def test_lowrank_sample_graph_is_rank_independent():
+    """sample sits inside tell's jitted graph (contraction regenerates the factors
+    from seeds), so a graph that grows with r multiplies XLA compile time: measured
+    63 s at r=1 vs 963 s at r=16 per compile on CPU at 12 layers, and 6600 s on an
+    A100 at 0.5B. The jaxpr size must not scale with r."""
+    from shardes.strategies.lowrank import LowRank
+
+    params = {"w": jnp.zeros((6, 5)), "v": jnp.zeros((4,))}
+
+    def lines(r):
+        f = lambda ids: LowRank(r=r).sample(jax.random.key(0), params, ids).factors
+        return str(jax.make_jaxpr(f)(jnp.arange(2))).count("\n")
+
+    l1, l8 = lines(1), lines(8)
+    assert l8 <= l1 + 8, f"sample's graph grows with rank: {l1} lines at r=1, {l8} at r=8"
