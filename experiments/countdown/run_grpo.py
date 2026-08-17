@@ -63,10 +63,15 @@ def reward_fn(completions, numbers, target, **kwargs):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=Path, required=True)
+    ap.add_argument("--seed", type=int, default=None,
+                    help="override the config seed; the results dir gets a -sN suffix "
+                         "so seeds never share a directory")
     ap.add_argument("--dry-run", action="store_true",
                     help="build everything, score one canned completion, train nothing")
     args = ap.parse_args(argv)
     cfg = yaml.safe_load(args.config.read_text())
+    if args.seed is not None:
+        cfg.update(seed=args.seed, results_dir=cfg["results_dir"] + f"-s{args.seed}")
 
     from transformers import AutoTokenizer  # noqa: PLC0415
 

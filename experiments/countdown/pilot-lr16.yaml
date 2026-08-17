@@ -40,3 +40,13 @@ generations: 500
 checkpoint_every: 10
 
 results_dir: results-es-mirrored-lr16
+
+# Held-out evaluation, Qiu's 2000-sample test discipline. The set is disjoint from
+# the training pool by construction (task.make_eval_puzzles drops collisions), the
+# decode is greedy on the master weights, and eval.jsonl gets one line per pass:
+# generation 0 pre-training, every eval_every-th generation, and once after the
+# last update. eval_batch must divide eval_puzzles.
+eval_seed: 1007
+eval_puzzles: 2000
+eval_every: 50
+eval_batch: 250
