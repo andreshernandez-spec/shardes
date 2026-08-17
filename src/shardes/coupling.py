@@ -60,6 +60,12 @@ class Coupling(Protocol):
         Unit per-entry second moment is the contract every strategy relies on to keep sigma
         meaningful, and it must hold marginally for each member, not just on average over
         the population.
+
+        Implementations must also be vmappable over `stream`, not just `member_id`:
+        LowRank regenerates its factors by vmapping the coupling over a column-key
+        array inside tell's jitted graph (the fix for compile time scaling with rank),
+        so a coupling that branches in Python on the key value breaks there. Anything
+        composed from jax.random satisfies this without trying.
         """
         ...
 
