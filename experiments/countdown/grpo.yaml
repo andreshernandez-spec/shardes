@@ -22,6 +22,8 @@ steps: 300
 checkpoint_every: 50
 
 lr: 1.0e-5                      # Table 4 checkmark, Qwen-0.5B-Instruct
+lr_schedule: constant           # GRPO-Zero has no scheduler or warmup (train.py,
+                                # checked 2026-08-17); TRL's default would decay to 0
 kl_beta: 1.0e-3                 # Table 4 checkmark, Qwen-0.5B-Instruct
 # Verified against GRPO-Zero's sampler (github.com/policy-gradient/GRPO-Zero,
 # grpo.py rollout, checked 2026-08-17): softmax then multinomial, no temperature
