@@ -97,6 +97,7 @@ def main(argv=None) -> int:
         num_generations=cfg["group_size"],
         max_completion_length=cfg["max_new"],
         learning_rate=cfg["lr"],
+        lr_scheduler_type=cfg["lr_schedule"],
         beta=cfg["kl_beta"],
         temperature=cfg["temperature"],
         top_p=cfg["top_p"],
