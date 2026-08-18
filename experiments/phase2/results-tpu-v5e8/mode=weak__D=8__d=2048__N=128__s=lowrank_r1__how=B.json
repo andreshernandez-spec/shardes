@@ -1,0 +1,72 @@
+{
+  "cap_seconds": 300.0,
+  "config": {
+    "d_model": 2048,
+    "devices": 8,
+    "how": "B",
+    "mode": "weak",
+    "population": 128,
+    "strategy": "lowrank_r1"
+  },
+  "env": {
+    "commit": "c93cf5d426b752ad4ad8007b815b50b005a2d07a",
+    "device_count": 8,
+    "device_kind": "TPU v5 lite",
+    "device_platform": "tpu",
+    "dirty_worktree": false,
+    "hostname": "4bbe10c47332",
+    "jax": "0.11.1",
+    "jax_platforms": "",
+    "jaxlib": "0.11.1",
+    "numpy": "2.5.0",
+    "platform": "Linux-6.6.143+-x86_64-with-glibc2.41",
+    "python": "3.12.13",
+    "scipy": "1.18.0",
+    "xla_flags": ""
+  },
+  "generations_run": 8,
+  "guard_precision": "highest",
+  "matmul_precision": "highest",
+  "over_cap": false,
+  "peak_bytes_per_device": 307444736,
+  "ranks": {
+    "digest": "2ede8deb12805501",
+    "n": 128,
+    "ties": 0
+  },
+  "repeats": 5,
+  "seconds_all": [
+    0.008298779999677208,
+    0.008061868998993305,
+    0.008068239998465287,
+    0.00841876000049524,
+    0.00776650000079826
+  ],
+  "seconds_iqr": 0.0002369110006839037,
+  "seconds_median": 0.008068239998465287,
+  "shaping": "centered_ranks",
+  "trajectory": {
+    "digest": "ba3ff7c0638c5f98",
+    "norm": 654.0096753023779,
+    "probe": [
+      344.40895569682425,
+      -137.08215410318195,
+      -23.113258395143873,
+      -272.0804885069882,
+      -381.6064386435649,
+      -332.2960274032015,
+      -53.941409227531395,
+      258.730257679935,
+      793.918393240348,
+      425.06672022331094,
+      -160.96237498518562,
+      -235.11961545981552,
+      600.2364472214765,
+      -1840.9820748659395,
+      648.5919891566618,
+      -235.49022791042
+    ]
+  },
+  "wall_seconds": 41.21974073599904,
+  "warmup": 3
+}
