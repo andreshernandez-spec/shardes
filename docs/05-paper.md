@@ -177,8 +177,9 @@ rather than hedged here. `docs/BACKLOG.md` records the decision to treat this as
 
 ### C6 — The noise-structure axis, measured on a real fine-tuning task for the first time
 
-**Status: C6a and C6b measured (campaign 2026-08-17, three seeds,
-`experiments/countdown/results/e13-a100-2026-08-17`); C6c and C6d open.** The
+**Status: C6a, C6b and C6c measured (campaign 2026-08-17 plus the 2026-08-18
+frozen-embedding arm, three seeds each,
+`experiments/countdown/results/e13-a100-2026-08-17`); C6d open.** The
 experiment is E13. This is the claim the
 two 2025 papers cannot make and cannot test against each other: Qiu et al. is full-rank
 only, EGGROLL is welded to RWKV, and no implementation before this one can vary the noise
@@ -215,9 +216,18 @@ Four sub-claims, each falsifiable and each a finding whichever way it lands:
   `N/d_eff`, on curves whose slope never wavers from one half; E1 has no rank-16
   curve, so lr16 rides on the r1/r4 trend. `experiments/countdown/analysis_c6b.py`
   reproduces every number from committed artifacts.
-- **C6c, embeddings under perturbation.** Qwen's tied embedding is ~27% of the 0.5B
-  parameters, and EGGROLL's reference raises NotImplementedError there. The `embed` seam
-  perturbs it without forming the table. Ablation: embedding frozen vs perturbed, at rank 1.
+- **C6c, embeddings under perturbation. MEASURED, and freezing costs nothing here.**
+  Qwen's tied embedding is ~27% of the 0.5B parameters, and EGGROLL's reference
+  raises NotImplementedError there; the `embed` seam perturbs it without forming
+  the table, which is what makes the ablation runnable at all. Three seeds of
+  rank 1 with the embedding frozen behind the model closure land at 0.154
+  [0.149-0.157] held-out reward against the live arm's 0.155 [0.152-0.158]: on
+  Countdown at this scale, perturbing and updating the tied table buys nothing
+  detectable, so the capability's value here is the choice it enables (27% of
+  the parameters can sit out for free), not a quality win. A task whose reward
+  depends on token-level knowledge rather than arithmetic composition is where
+  the two arms could still separate; that is a scope note, not a finding.
+  `results/e13-a100-2026-08-17/es-lr1-frozen-embed-*` alongside the campaign.
 - **C6d, reproducibility.** The full training run is a pure function of one seed,
   device-count invariant (demonstrated at `D in {1, 8}`). No PPO/GRPO trainer offers this.
   A methods statement with a test behind it, not a benchmark.
