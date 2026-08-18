@@ -1,0 +1,20 @@
+{"generation": 0, "seconds": 530.9108874041121, "reward_mean": 0.02500000223517418, "reward_max": 1.0, "solved_frac": 0.0078125, "format_frac": 0.1796875, "env": {"commit": "87195b6b0eab03cbfff491d3f1eca37f2164dee7", "dirty_worktree": true, "jax": "0.11.0", "jaxlib": "0.11.0", "numpy": "2.5.2", "scipy": "1.18.0", "python": "3.12.3", "platform": "Linux-6.8.0-124-generic-x86_64-with-glibc2.39", "hostname": "81dec4ed2562", "device_count": 8, "device_kind": "NVIDIA A100-SXM4-80GB", "device_platform": "gpu", "xla_flags": "", "jax_platforms": ""}, "config": {"checkpoint_every": 20, "devices": 1, "eval_batch": 8, "eval_chunk": 1, "eval_every": 1000, "eval_puzzles": 8, "eval_seed": 1007, "generations": 20, "lr": 5e-07, "max_new": 96, "model": "Qwen/Qwen2.5-0.5B-Instruct", "n_puzzles": 256, "pad_to": 128, "population": 32, "puzzle_seed": 7, "puzzles_per_gen": 8, "results_dir": "results-c6d-d1-g20", "seed": 0, "sigma": 0.001, "strategy": "mirrored_seed"}}
+{"generation": 1, "seconds": 576.2957150430884, "reward_mean": 0.021484375, "reward_max": 1.0, "solved_frac": 0.00390625, "format_frac": 0.1796875, "env": null}
+{"generation": 2, "seconds": 8.706387921003625, "reward_mean": 0.03125, "reward_max": 1.0, "solved_frac": 0.00390625, "format_frac": 0.27734375, "env": null}
+{"generation": 3, "seconds": 8.683335293084383, "reward_mean": 0.03867187350988388, "reward_max": 1.0, "solved_frac": 0.01171875, "format_frac": 0.28125, "env": null}
+{"generation": 4, "seconds": 8.65594457811676, "reward_mean": 0.0390625, "reward_max": 1.0, "solved_frac": 0.0078125, "format_frac": 0.3203125, "env": null}
+{"generation": 5, "seconds": 8.712730735074729, "reward_mean": 0.02968749962747097, "reward_max": 0.10000000149011612, "solved_frac": 0.0, "format_frac": 0.296875, "env": null}
+{"generation": 6, "seconds": 8.715756399091333, "reward_mean": 0.05000000447034836, "reward_max": 1.0, "solved_frac": 0.0078125, "format_frac": 0.4296875, "env": null}
+{"generation": 7, "seconds": 8.676767204888165, "reward_mean": 0.05624999850988388, "reward_max": 1.0, "solved_frac": 0.01953125, "format_frac": 0.38671875, "env": null}
+{"generation": 8, "seconds": 8.705673940014094, "reward_mean": 0.03828125447034836, "reward_max": 0.10000000149011612, "solved_frac": 0.0, "format_frac": 0.3828125, "env": null}
+{"generation": 9, "seconds": 8.675256758928299, "reward_mean": 0.05507813021540642, "reward_max": 1.0, "solved_frac": 0.01171875, "format_frac": 0.4453125, "env": null}
+{"generation": 10, "seconds": 8.726633293787017, "reward_mean": 0.05820312723517418, "reward_max": 1.0, "solved_frac": 0.02734375, "format_frac": 0.3359375, "env": null}
+{"generation": 11, "seconds": 8.71496312902309, "reward_mean": 0.05585937947034836, "reward_max": 1.0, "solved_frac": 0.01171875, "format_frac": 0.453125, "env": null}
+{"generation": 12, "seconds": 8.663513873005286, "reward_mean": 0.05156250298023224, "reward_max": 1.0, "solved_frac": 0.0078125, "format_frac": 0.4453125, "env": null}
+{"generation": 13, "seconds": 8.704032792942598, "reward_mean": 0.05898437649011612, "reward_max": 1.0, "solved_frac": 0.01171875, "format_frac": 0.484375, "env": null}
+{"generation": 14, "seconds": 8.722568832105026, "reward_mean": 0.07968750596046448, "reward_max": 1.0, "solved_frac": 0.0234375, "format_frac": 0.5859375, "env": null}
+{"generation": 15, "seconds": 8.713004352059215, "reward_mean": 0.04726563021540642, "reward_max": 0.10000000149011612, "solved_frac": 0.0, "format_frac": 0.47265625, "env": null}
+{"generation": 16, "seconds": 8.713736918987706, "reward_mean": 0.05781250819563866, "reward_max": 1.0, "solved_frac": 0.00390625, "format_frac": 0.54296875, "env": null}
+{"generation": 17, "seconds": 8.70977913797833, "reward_mean": 0.0859375074505806, "reward_max": 1.0, "solved_frac": 0.015625, "format_frac": 0.71875, "env": null}
+{"generation": 18, "seconds": 8.726776786148548, "reward_mean": 0.08750001341104507, "reward_max": 1.0, "solved_frac": 0.015625, "format_frac": 0.734375, "env": null}
+{"generation": 19, "seconds": 8.729413585970178, "reward_mean": 0.07500000298023224, "reward_max": 1.0, "solved_frac": 0.01953125, "format_frac": 0.57421875, "env": null}
