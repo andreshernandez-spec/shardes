@@ -1,0 +1,26 @@
+# E8, the cost surface. Committed before any rented or quota'd run, cited by SHA.
+#
+# Axes chosen for C4's question, not for symmetry. d spans laptop to the edge of a
+# 16 GB TPU chip; N spans Qiu's 30-ish regime to EGGROLL's tens of thousands;
+# iid_gaussian is the naive dense baseline both papers beat, seed regeneration is
+# Qiu's fix (storage, not throughput), the low-rank family is EGGROLL's fix; bf16
+# vs f32 because the MXU/tensor-core story is dtype-shaped. Cells that exceed a
+# device are recorded as undersized, which is part of the surface (the memory
+# ceiling IS one of the axes' endpoints).
+#
+# matmul_precision `default` on purpose: E8 claims throughput at the precision a
+# practitioner would run, and the precision is recorded in every result. The
+# trajectory-correctness story lives in run.py's sweep, not here.
+
+d_model: [512, 1024, 2048, 4096]
+population: [64, 256, 1024, 4096, 16384]
+strategy: [iid_gaussian, seed_regenerated, mirrored_seed, mirrored_lr1, mirrored_lr4, mirrored_lr16]
+dtype: [float32, bfloat16]
+
+batch: 8
+seq: 32
+warmup: 3
+repeats: 5
+matmul_precision: default
+
+results_dir: results-cost
