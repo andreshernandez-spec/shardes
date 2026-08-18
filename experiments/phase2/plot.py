@@ -125,11 +125,21 @@ def strong_scaling(rows, out: pathlib.Path) -> str | None:
     for j, cell in enumerate(cells):
         d_model, population = cell
         ax1, ax2 = axes[0][j], axes[1][j]
+        top = 1.15
         for (strategy, how), by_d in sorted(series[cell].items()):
             ds = sorted(by_d)
             ts = [by_d[d] for d in ds]
             ax1.plot(ds, ts, marker=MARKERS[how], ms=7, lw=2, color=HUES[strategy])
-            ax2.plot(ds, [ts[0] / (d * by_d[d]) for d in ds], marker=MARKERS[how], ms=7,
+            # Normalized to the smallest MEASURED device count, not to D=1. On the TPU
+            # v5e-8 sweep iid_gaussian/B has no D=1 point (it OOMs a 16 GB chip at
+            # d=2048, N=256), and dividing its T_2 by D produced a line pinned at 0.5
+            # that read as an efficiency collapse. With d0=1 this is the same formula
+            # as before; with d0>1 the series reads 1.0 at its own baseline, which is
+            # what "efficiency" can honestly mean for it.
+            d0, t0 = ds[0], ts[0]
+            eff = [(t0 * d0) / (d * by_d[d]) for d in ds]
+            top = max(top, max(eff) * 1.05)
+            ax2.plot(ds, eff, marker=MARKERS[how], ms=7,
                      lw=2, color=HUES[strategy], label=f"{strategy} / {how}")
 
         # No single ideal line on the time panel. With several series it can only be anchored
@@ -140,10 +150,12 @@ def strong_scaling(rows, out: pathlib.Path) -> str | None:
 
         ideal_d = sorted({d for by_d in series[cell].values() for d in by_d})
         ax1.set(xscale="log", yscale="log", xlabel="devices")
-        ax2.set(xscale="log", xlabel="devices", ylim=(0, 1.15))
+        # The top is data-driven because TPU superlinear points (compiler gets a better
+        # layout at higher D) were being clipped by a fixed 1.15.
+        ax2.set(xscale="log", xlabel="devices", ylim=(0, top))
         if j == 0:
             ax1.set_ylabel("seconds / generation")
-            ax2.set_ylabel("parallel efficiency  $T_1/(D\\,T_D)$")
+            ax2.set_ylabel("parallel efficiency  $D_0 T_{D_0}/(D\\,T_D)$")
         for ax in (ax1, ax2):
             ax.set_xticks(ideal_d)
             ax.set_xticklabels([str(d) for d in ideal_d])
