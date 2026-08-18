@@ -1,0 +1,14 @@
+{
+  "id": "USERNAME/shardes-t3barrier",
+  "title": "shardes t3 barrier",
+  "code_file": "t3barrier.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
