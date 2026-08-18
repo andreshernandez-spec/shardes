@@ -1,0 +1,11 @@
+{"step": 0, "eval_reward": 0.10525001585483551, "eval_solved": 0.0085, "eval_format": 0.976}
+{"step": 50, "eval_reward": 0.14634999632835388, "eval_solved": 0.0515, "eval_format": 1.0}
+{"step": 100, "eval_reward": 0.14274999499320984, "eval_solved": 0.0475, "eval_format": 1.0}
+{"step": 150, "eval_reward": 0.13735000789165497, "eval_solved": 0.0415, "eval_format": 1.0}
+{"step": 200, "eval_reward": 0.10000001639127731, "eval_solved": 0.0, "eval_format": 1.0}
+{"step": 250, "eval_reward": 0.12655000388622284, "eval_solved": 0.0295, "eval_format": 1.0}
+{"step": 300, "eval_reward": 0.14635001122951508, "eval_solved": 0.0515, "eval_format": 1.0}
+{"step": 350, "eval_reward": 0.14589999616146088, "eval_solved": 0.051, "eval_format": 1.0}
+{"step": 400, "eval_reward": 0.14499999582767487, "eval_solved": 0.05, "eval_format": 1.0}
+{"step": 450, "eval_reward": 0.14454998075962067, "eval_solved": 0.0495, "eval_format": 1.0}
+{"step": 500, "eval_reward": 0.14544999599456787, "eval_solved": 0.0505, "eval_format": 1.0}
