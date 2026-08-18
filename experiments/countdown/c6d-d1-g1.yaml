@@ -6,7 +6,7 @@
 checkpoint_every: 1
 devices: 1
 eval_batch: 8
-eval_chunk: 5
+eval_chunk: 1
 eval_every: 1000
 eval_puzzles: 8
 eval_seed: 1007
