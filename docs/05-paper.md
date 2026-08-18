@@ -320,6 +320,7 @@ designed to be cheap to abort.
 | F4 | Low-rank vs dense cost surface, TPU vs GPU | E8 | C4; the cross-platform inversion |
 | F5 | Estimator quality vs `N/d_eff`, full-rank / rank-1 / rank-4 panels | E1 | C5. **Exists**: `experiments/phase0/figures/` |
 | F6 | End-to-end task curves, seed-variance bands | E12 | C2: both algorithms run end to end. *Was also C5 validation; dropped with C5.* |
+| F7 | E13 held-out curves: four ES ranks + frozen embedding + GRPO, seed bands, base-model floor | E13 | **Exists**: `experiments/countdown/figures/`. C6 in one panel |
 | TB1 | Baseline throughput table, matched shapes | E9 | C2 |
 | TB2 | Communication accounting: analytic vs measured | E0, E4 | Rigor; catches bugs |
 | TB3 | Ablation table | E11 | Reviewer defence |
