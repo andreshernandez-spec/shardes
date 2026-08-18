@@ -177,9 +177,9 @@ rather than hedged here. `docs/BACKLOG.md` records the decision to treat this as
 
 ### C6 — The noise-structure axis, measured on a real fine-tuning task for the first time
 
-**Status: C6a, C6b and C6c measured (campaign 2026-08-17 plus the 2026-08-18
-frozen-embedding arm, three seeds each,
-`experiments/countdown/results/e13-a100-2026-08-17`); C6d open.** The
+**Status: all four sub-claims measured (the 2026-08-17 campaign, the
+frozen-embedding arm, and the 2026-08-18 8-GPU demo;
+`experiments/countdown/results/`).** The
 experiment is E13. This is the claim the
 two 2025 papers cannot make and cannot test against each other: Qiu et al. is full-rank
 only, EGGROLL is welded to RWKV, and no implementation before this one can vary the noise
@@ -228,9 +228,20 @@ Four sub-claims, each falsifiable and each a finding whichever way it lands:
   depends on token-level knowledge rather than arithmetic composition is where
   the two arms could still separate; that is a scope note, not a finding.
   `results/e13-a100-2026-08-17/es-lr1-frozen-embed-*` alongside the campaign.
-- **C6d, reproducibility.** The full training run is a pure function of one seed,
-  device-count invariant (demonstrated at `D in {1, 8}`). No PPO/GRPO trainer offers this.
-  A methods statement with a test behind it, not a benchmark.
+- **C6d, reproducibility. MEASURED, and the claim sharpened into three.** At 0.5B
+  on 8 real A100s: (1) same program, same seed is *bitwise* deterministic across
+  processes (two independent 20-generation D=8 runs agree exactly in all 494M
+  final parameters and every logged reward; no PPO/GRPO trainer offers this);
+  (2) the update path is device-count invariant at tolerance (fixed fitness,
+  D=1 vs D=8, 6.3e-06 norm relative error on the full tree); (3) end-to-end
+  trajectory equality across *different compiled programs* is not a bf16
+  property, and the demo measured why: greedy argmax flips near-ties under
+  different XLA fusion/autotuning choices, so the D=1 and D=8 trajectories part
+  at generation 0 even though a D=1 and a D=8 program were also observed
+  producing bit-identical tokens for all 32 members. The divergence tracks the
+  program, not the device count; an XLA upgrade would do the same. Stating this
+  boundary is part of the claim.
+  `results/c6d-a100x8-2026-08-18`, with the decomposition script beside it.
 
 What is deliberately not claimed: beating GRPO on final reward. That is Qiu's result; at
 pilot scale it may not reproduce, and no sub-claim above depends on it.
