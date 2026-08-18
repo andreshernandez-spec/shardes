@@ -177,7 +177,9 @@ rather than hedged here. `docs/BACKLOG.md` records the decision to treat this as
 
 ### C6 — The noise-structure axis, measured on a real fine-tuning task for the first time
 
-**Status: designed 2026-08-14, not yet run.** The experiment is E13. This is the claim the
+**Status: C6a and C6b measured (campaign 2026-08-17, three seeds,
+`experiments/countdown/results/e13-a100-2026-08-17`); C6c and C6d open.** The
+experiment is E13. This is the claim the
 two 2025 papers cannot make and cannot test against each other: Qiu et al. is full-rank
 only, EGGROLL is welded to RWKV, and no implementation before this one can vary the noise
 structure while holding the task, model, budget and seeds fixed.
@@ -191,16 +193,28 @@ falls on the within-ES comparison.
 
 Four sub-claims, each falsifiable and each a finding whichever way it lands:
 
-- **C6a, cost at matched quality.** M4 prices full-rank seed regeneration at ~15x the
-  per-generation wall clock of rank-1 at matched shapes. If rank-r matches full-rank final
-  reward, that is Qiu's result at an order of magnitude less compute, with EGGROLL's trick,
-  in a regime EGGROLL never tested. If it does not match, it is the first measurement of
-  what full rank buys, which is Qiu's bet quantified instead of asserted.
-- **C6b, F5 predictivity.** E1 measured estimator quality vs `N/d_eff` for full-rank,
-  rank-1 and rank-4 on the synthetic block. C6b asks whether that curve predicts the
-  fine-tuning outcome ordering. The E12 rule applies in both directions: a positive result
-  that only exists in estimator space does not ship, and this is the experiment that either
-  grounds F5 in task space or shows the smoothing caveat is load-bearing.
+- **C6a, cost at matched quality. MEASURED, and rank matches.** Twelve runs (four
+  arms, three seeds) land in 0.149-0.162 held-out reward with within-arm seed
+  spread covering the between-arm spread; rank 1 runs 2.0 s/generation steady
+  against full rank's 4.5. That is Qiu's result at less than half the wall clock
+  with EGGROLL's trick, in a regime EGGROLL never tested, on a held-out metric.
+  The results directory README carries the campaign detail and the decode caveats.
+- **C6b, F5 predictivity. MEASURED, and F5 called the tie.** The naive reading of
+  the rank axis says rank 1 samples in a 640x smaller space than full rank, so at
+  `N = 30` it should dominate. F5's fitted curves say otherwise: the low-rank
+  panel's intercept (the projection loss E1 priced at ~2.2x per member) almost
+  exactly cancels the `d_eff` advantage, so at E13's operating point the
+  prediction is near-parity, a spread of at most 2x in cosine (full 1.7e-4,
+  r1 2.7e-4, r4 2.8e-4; slope 0.50 on every fitted curve, both shaping slices).
+  The observed outcome is a statistical tie, which is what near-parity in
+  estimator quality looks like through 500 sigma-scaled steps. E13 has no power
+  to adjudicate the residual 2x (the insignificant observed gap even points the
+  other way), so what ships is exactly this: F5 predicted quality-flatness ex
+  ante where the dimension-counting intuition predicted dominance, and the task
+  agreed. Extrapolation is one to three decades below E1's smallest measured
+  `N/d_eff`, on curves whose slope never wavers from one half; E1 has no rank-16
+  curve, so lr16 rides on the r1/r4 trend. `experiments/countdown/analysis_c6b.py`
+  reproduces every number from committed artifacts.
 - **C6c, embeddings under perturbation.** Qwen's tied embedding is ~27% of the 0.5B
   parameters, and EGGROLL's reference raises NotImplementedError there. The `embed` seam
   perturbs it without forming the table. Ablation: embedding frozen vs perturbed, at rank 1.
