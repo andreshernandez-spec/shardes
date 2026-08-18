@@ -1,0 +1,24 @@
+# E8 on TPU v5e, the other half of C4's cross-platform comparison. Committed before
+# the run, cited by SHA.
+#
+# **The grid is identical to cost-sweep.yaml on purpose.** docs/05: E8 needs matched
+# shapes across platforms, not matched memory. A v5e chip has 16 GB against the A100's
+# 80, so more cells will be recorded undersized here, and where the ceiling sits on
+# each platform is the platform result. Shrinking the grid to fit would erase it.
+#
+# matmul_precision `default` for the same reason as the GPU run: E8 claims throughput
+# at the precision a practitioner would use, which on the MXU means bf16 multiplies.
+# The precision is recorded in every result.
+
+d_model: [512, 1024, 2048, 4096]
+population: [64, 256, 1024, 4096, 16384]
+strategy: [iid_gaussian, seed_regenerated, mirrored_seed, mirrored_lr1, mirrored_lr4, mirrored_lr16]
+dtype: [float32, bfloat16]
+
+batch: 8
+seq: 32
+warmup: 3
+repeats: 5
+matmul_precision: default
+
+results_dir: results-cost-tpu-v5e8

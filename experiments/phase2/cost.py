@@ -141,6 +141,11 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--allow-partial", action="store_true",
                     help="exit 0 even when undersized configurations were skipped")
+    ap.add_argument("--budget", type=float, default=None,
+                    help="stop scheduling once the session has used this many seconds. "
+                         "For quota'd sessions (Kaggle TPU) that kill the process at a "
+                         "wall-clock cap; a budget stop is clean, resumable, and named "
+                         "in the output, none of which the cap gives you.")
     args = ap.parse_args(argv)
     import yaml  # noqa: PLC0415
 
@@ -158,7 +163,14 @@ def main(argv=None) -> int:
     results.mkdir(exist_ok=True)
     env = harness.capture_env(HERE, (*OUTPUTS, cfg.get("results_dir", "results-cost")))
     skipped = []
+    done = 0
+    started = time.perf_counter()
+    stopped_early = None
     for i, c in enumerate(pending):
+        elapsed = time.perf_counter() - started
+        if args.budget is not None and elapsed > args.budget:
+            stopped_early = (i, elapsed)
+            break
         print(f"[{i + 1}/{len(pending)}] {c.slug()}", flush=True)
         try:
             rec = measure(c, cfg, results)
@@ -171,8 +183,18 @@ def main(argv=None) -> int:
             print(f"  undersized on {dev.device_kind}: recorded and skipped", flush=True)
         rec["env"] = env
         (results / f"{c.slug()}.json").write_text(json.dumps(rec, indent=1))
+        done += 1
 
-    print(f"done: {len(pending) - len(skipped)} measured, {len(skipped)} undersized")
+    # A real counter, not len(pending) - len(skipped): under a budget stop the
+    # arithmetic version counted every unvisited cell as measured.
+    print(f"done: {done - len(skipped)} measured, {len(skipped)} undersized")
+    if stopped_early:
+        i, elapsed = stopped_early
+        # A budget stop is incomplete no matter what --allow-partial says: that flag
+        # accepts undersized cells (a property of the device), not unvisited ones.
+        print(f"STOPPED at {i}/{len(pending)} after {elapsed / 3600:.2f} h "
+              f"(budget {args.budget / 3600:.2f} h). Re-run to continue; results resume.")
+        return 1
     if skipped and not args.allow_partial:
         print("undersized configurations present; pass --allow-partial to accept a "
               "partial surface (the skips are recorded either way)")
