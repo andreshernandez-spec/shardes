@@ -1,0 +1,25 @@
+# C6d demo config, committed before the run. Not the pilot: population 32, not 30,
+# because 30 members cannot shard over 8 devices with Mirrored's pairs intact, and
+# this is a methods demonstration (determinism and device-count invariance at full
+# model scale), not a training result. Everything else matches pilot.yaml; eval is
+# reduced to a token 8-puzzle pass so the machinery is exercised without cost.
+checkpoint_every: 20
+devices: 1
+eval_batch: 8
+eval_chunk: 1
+eval_every: 1000
+eval_puzzles: 8
+eval_seed: 1007
+generations: 20
+lr: 5.0e-07
+max_new: 96
+model: Qwen/Qwen2.5-0.5B-Instruct
+n_puzzles: 256
+pad_to: 128
+population: 32
+puzzle_seed: 7
+puzzles_per_gen: 8
+results_dir: results-c6d-d1-g20
+seed: 0
+sigma: 0.001
+strategy: mirrored_seed
