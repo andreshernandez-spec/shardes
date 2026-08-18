@@ -1,0 +1,12 @@
+# The dress rehearsal for cost.py: tiny grid, any device, minutes. Debugs the
+# harness for free so the quota'd run arrives already working (docs/03's rule).
+d_model: [128]
+population: [16, 64]
+strategy: [iid_gaussian, seed_regenerated, mirrored_lr1]
+dtype: [float32, bfloat16]
+batch: 4
+seq: 16
+warmup: 1
+repeats: 3
+matmul_precision: default
+results_dir: results-cost-rehearsal
