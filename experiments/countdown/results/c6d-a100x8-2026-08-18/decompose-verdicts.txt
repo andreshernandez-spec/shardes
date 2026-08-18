@@ -1,0 +1,3 @@
+D=1: tell done
+D=8: tell done
+(b) fixed-fitness update, D=1 vs D=8: norm rel err 6.31e-06, worst leaf max-abs/leaf-scale 7.86e-04
