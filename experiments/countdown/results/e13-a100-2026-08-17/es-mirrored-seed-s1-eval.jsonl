@@ -1,0 +1,11 @@
+{"generation": 0, "eval_reward": 0.054600007832050323, "eval_solved": 0.0125, "eval_format": 0.4335, "eval_seconds": 30.200026355683804}
+{"generation": 50, "eval_reward": 0.13485001027584076, "eval_solved": 0.039, "eval_format": 0.9975, "eval_seconds": 25.99997077137232}
+{"generation": 100, "eval_reward": 0.15354998409748077, "eval_solved": 0.0595, "eval_format": 1.0, "eval_seconds": 7.946749996393919}
+{"generation": 150, "eval_reward": 0.15489999949932098, "eval_solved": 0.061, "eval_format": 1.0, "eval_seconds": 8.065632201731205}
+{"generation": 200, "eval_reward": 0.14994999766349792, "eval_solved": 0.0555, "eval_format": 1.0, "eval_seconds": 7.954874988645315}
+{"generation": 250, "eval_reward": 0.15219999849796295, "eval_solved": 0.058, "eval_format": 1.0, "eval_seconds": 8.018802117556334}
+{"generation": 300, "eval_reward": 0.155799999833107, "eval_solved": 0.062, "eval_format": 1.0, "eval_seconds": 8.085492841899395}
+{"generation": 350, "eval_reward": 0.1512499898672104, "eval_solved": 0.057, "eval_format": 0.9995, "eval_seconds": 8.021151166409254}
+{"generation": 400, "eval_reward": 0.14949999749660492, "eval_solved": 0.055, "eval_format": 1.0, "eval_seconds": 8.043884918093681}
+{"generation": 450, "eval_reward": 0.15219999849796295, "eval_solved": 0.058, "eval_format": 1.0, "eval_seconds": 7.919714596122503}
+{"generation": 500, "eval_reward": 0.15354998409748077, "eval_solved": 0.0595, "eval_format": 1.0, "eval_seconds": 7.89161791652441}
