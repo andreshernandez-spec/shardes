@@ -105,6 +105,18 @@ def main(argv=None) -> int:
     mcfg = qwen2.Config.qwen25_05b()
     params = qwen2.load(ckpt, mcfg, dtype=jnp.bfloat16)
 
+    # C6c ablation: with freeze_embedding the embedding leaf never enters the ES
+    # state. It is closed over the model function as a constant, so it is neither
+    # perturbed nor updated and the strategy's d_eff drops accordingly; the tied
+    # table still serves both seams (embed in, head out) through `frozen`. The
+    # comparison arm is the ordinary run, where the same leaf lives in the state.
+    frozen = {}
+    if cfg.get("freeze_embedding"):
+        frozen["embedding"] = params.pop("embedding")
+
+    def with_frozen(p):
+        return {**p, **frozen} if frozen else p
+
     mesh = sharding.make_mesh(cfg.get("devices"))
     es = ShardedES(
         STRATEGIES[cfg["strategy"]](cfg), n=cfg["population"], sigma=cfg["sigma"],
@@ -132,7 +144,8 @@ def main(argv=None) -> int:
 
     def model(p, batch):
         ids, plen = batch
-        return qwen2.generate(p, ids, plen, mcfg, cfg["max_new"], prefill=prefill_len)
+        return qwen2.generate(with_frozen(p), ids, plen, mcfg, cfg["max_new"],
+                              prefill=prefill_len)
 
     # Jitted once, traced once: without this the vmap/scan dispatches op by op and the
     # GPU idles between kernels. Measured: the un-jitted loop held ~330 s/generation on
@@ -171,7 +184,8 @@ def main(argv=None) -> int:
     @jax.jit
     def eval_decode(params, ids, plen):
         view = jax.tree.map(lambda p: p.astype(jnp.bfloat16), params)
-        return qwen2.generate(view, ids, plen, mcfg, cfg["max_new"], prefill=ev_prefill)
+        return qwen2.generate(with_frozen(view), ids, plen, mcfg, cfg["max_new"],
+                              prefill=ev_prefill)
 
     def run_eval(state):
         g = int(state.generation)
