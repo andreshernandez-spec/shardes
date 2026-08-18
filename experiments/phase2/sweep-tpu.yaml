@@ -1,0 +1,68 @@
+# The real Phase 2 sweep. Committed before the run and cited by SHA in the results
+# (docs/03, and CLAUDE.md ground rule 2). Do not edit it during a session: a benchmark config
+# changed mid-run produces numbers nobody can reproduce, and the driver stamps the commit into
+# every result precisely so that shows up.
+#
+# Sized for T1, Kaggle TPU v5e-8: 8 chips, 16 GB HBM each, verified 2026-08-01 (docs/06).
+#
+# **Shapes are chosen so D in {1,2,4,8} all fit at the same per-device population.** Otherwise
+# the scaling curve compares different computations at different device counts, which is the
+# failure docs/03 spends most of its guard table preventing.
+#
+# Two model sizes, because M3 needs a (N, d) grid to have a crossover contour at all, and one
+# of the two has to be large enough that a model-size all-reduce (strategy B) stops being
+# free. d=512 matches Phase 0's block, so estimator results and systems results describe the
+# same model.
+modes: [strong, weak]
+devices: [1, 2, 4, 8]
+d_model: [512, 2048]
+
+# **Populations are per model size, because the memory ceiling is, and `iid_gaussian` sets
+# it.** That strategy materialises the population and strategy A regenerates all N on EVERY
+# device, so its storage does not fall with D at all. At d=2048 a member costs 100.7 MB and
+# is held more than once, so N=512 needs ~99 GB per device: over an 80 GB A100 at every
+# device count, D=1 included, and D=1 is the baseline every parallel-efficiency figure
+# divides by.
+#
+# N=256 at d=2048 is the largest that fits with headroom. That ceiling is a **result**, not
+# just a constraint: `docs/03` M6 asks where A/B storage becomes binding, and this is it.
+# `seed_regenerated` and the low-rank path are unaffected, sitting at 0.15 and 3.15 GB where
+# `iid_gaussian` needs 99, which is the concrete case for seed regeneration.
+#
+# `python feasible.py --config sweep.yaml --hbm 80` is the check, and it exits non-zero.
+# The model behind it is fitted to measurement (T4 and RTX 3080, 32 configurations, worst
+# under-prediction 13%), not derived. Re-run it after touching anything here.
+#
+# Strong: fixed total, divisible by 8 so every device count splits evenly.
+population:
+  512: [256, 1024]
+  2048: [128, 256]
+
+# Weak: per device, so the total is this times D.
+population_per_device:
+  512: [32, 128]
+  2048: [16, 32]
+
+# All four, including lowrank_r1 unmirrored: M3's crossover is a property of the contraction
+# strategy, and the structured path is where "never materialized" is supposed to pay off.
+strategies: [iid_gaussian, seed_regenerated, mirrored_lr1, lowrank_r1]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+# docs/03: at least three warm-up generations discarded, at least five timed repeats.
+warmup: 3
+repeats: 5
+
+results_dir: results-tpu-v5e8
+
+# The MXU multiplies in bf16 by default and an Ampere GPU uses TF32, either of which makes
+# strategy B disagree across device counts by ~1e-3 to 1e-2. The trajectory guard always runs
+# at "highest" regardless; this is the precision the TIMED generations use, and it is recorded
+# in every result because a throughput number without its precision is not a number.
+matmul_precision: highest
+
+# TPU T1 sessions: identical grid to sweep.yaml, its own results dir so the A100
+# results stay a different platform rather than a resume target. Sessions resume
+# each other: each kernel run commits its increment and the next clone carries it.
