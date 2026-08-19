@@ -248,6 +248,37 @@ def test_a_structured_weight_is_not_a_sequence():
     assert w.shape == (6, 4) and w.dtype == jnp.float32
 
 
+@pytest.mark.parametrize("dtype", [jnp.bfloat16, jnp.float32])
+def test_rank1_pad_is_numerically_invisible(dtype):
+    """The r=1 paths pad their factors to a rank-2 dot before contracting.
+
+    Why there is a pad at all: XLA strength-reduces a contracting-dim-1 dot into a
+    multiply chain, and the TPU scheduler keeps activation-sized f32 copies alive
+    around that chain, so rank 1 OOMed sweep cells that rank 4 ran
+    (experiments/phase2/results-cost-tpu-v5e8, probe_lr1.py). This test pins the other
+    half of the argument: the zero column's product is identically zero, so the padded
+    expression equals the unpadded one bitwise in bf16, and within ulps in f32, where
+    a k=2 dot may accumulate differently than a multiply and bitwise is not promised.
+    """
+    kx, kw, ka, kb = jax.random.split(jax.random.key(7), 4)
+    x = jax.random.normal(kx, (2, N, K), dtype)
+    w = jax.random.normal(kw, (M, K), dtype)
+    a = jax.random.normal(ka, (M, 1), dtype)
+    b = jax.random.normal(kb, (K, 1), dtype)
+    scale = jnp.asarray(0.3, dtype)
+    lw = LowRankWeight(w, a, b, scale)
+    ids = jnp.array([0, 3, 5, 3])
+
+    want_apply = x @ w.T + ((x @ b) @ a.T) * scale
+    want_gather = w[ids] + (a[ids] @ b.T) * scale
+    if dtype == jnp.bfloat16:
+        assert jnp.array_equal(lw.apply_to(x), want_apply)
+        assert jnp.array_equal(lw.gather(ids), want_gather)
+    else:
+        assert jnp.allclose(lw.apply_to(x), want_apply, rtol=RTOL)
+        assert jnp.allclose(lw.gather(ids), want_gather, rtol=RTOL)
+
+
 # --------------------------------------------------------------------------------------
 # Separable sigma: the per-coordinate family a factored perturbation can carry.
 # docs/proposal-review-fixes.md, implemented 2026-08-11.

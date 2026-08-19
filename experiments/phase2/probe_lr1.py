@@ -30,9 +30,16 @@ dot fusions, pinning full f32 activation copies. The GPU compiler makes the
 same shapes monotonic in r (measured: 24.05 GiB at r=1 vs 32.03 at r=4 for
 the N=16384 cell), which is why the A100 sweep shows no such anomaly.
 
-This script is the evidence, re-runnable; the fix, if one is wanted, is a
-strategy-code decision (e.g. expressing the r=1 correction so it survives
-canonicalization) and is not made here.
+The fix: `LowRankWeight._factors` pads r=1 to a rank-2 dot with a zero column
+(bitwise-equal in bf16, 1-2 ulp in f32; `test_rank1_pad_is_numerically_
+invisible` pins that). Hand-writing the multiply instead was measured first
+and changed nothing (temp identical to the broken path), which is how the pad
+earned its place: the multiply chain itself is what the TPU scheduler handles
+badly, not who writes it. With the pad, the failing cell compiles at 14.25 G
+and the halved shape drops from 10.19 to 7.18 GiB.
+
+So this script is now the regression check: step 1 asserts the once-failing
+cell COMPILES, and exits non-zero if the OOM ever comes back.
 """
 
 from __future__ import annotations
@@ -94,19 +101,20 @@ def compile_for_v5e(r: int, d_model: int, n: int):
 
 
 def main() -> int:
-    print("1. The failing cell, verbatim (d=512, N=16384, bf16):")
+    print("1. The once-failing cell (d=512, N=16384, bf16), must compile:")
     try:
-        compile_for_v5e(1, 512, 16384)
-        print("   r=1 compiled; the anomaly did NOT reproduce (compiler changed?)")
-        return 1
+        c = compile_for_v5e(1, 512, 16384)
     except Exception as e:  # noqa: BLE001
-        msg = str(e).splitlines()[0]
-        print(f"   r=1: {msg}")
+        print(f"   REGRESSION, r=1 fails again: {str(e).splitlines()[0]}")
+        return 1
+    print(f"   r=1: compiles, temp "
+          f"{c.memory_analysis().temp_size_in_bytes / 2**30:.2f} GiB "
+          "(was RESOURCE_EXHAUSTED at 16.08 G before the pad)")
     c = compile_for_v5e(4, 512, 16384)
     print(f"   r=4: compiles, temp "
           f"{c.memory_analysis().temp_size_in_bytes / 2**30:.2f} GiB")
 
-    print("\n2. Halved shape (N=8192), where r=1's optimized HLO exists:")
+    print("\n2. Halved shape (N=8192), graph structure by rank:")
     for r in (1, 2, 4):
         c = compile_for_v5e(r, 512, 8192)
         txt = c.as_text()
@@ -116,7 +124,8 @@ def main() -> int:
         print(f"   r={r}: temp {c.memory_analysis().temp_size_in_bytes / 2**30:5.2f} GiB"
               f"   f32-activation converts {conv}, producers {prod},"
               f"   materialized (N,m,k) tensors {mat}")
-    print("\nExpected: r=1 is the structural outlier; materialized count 0 at "
+    print("\nExpected with the pad in: r=1 is no longer the structural outlier "
+          "(before it held 10.19 GiB against r=4's 7.44); materialized count 0 at "
           "every rank (invariant 3).")
     return 0
 
