@@ -266,7 +266,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 | **E8** | Low-rank vs dense cost surface, TPU **and** GPU | **C4** | T1 + T4 | **done both** (`results-cost`, `results-cost-tpu-v5e8`; F4 drawn) | ~$3.50 |
 | **E9** | Baselines: naive ES, EGGROLL ref impl, evosax | C2 | T4 + T1 | **done on GPU** (docs/03 M4); TPU side open | spent |
 | **E10** | Shaping-barrier cost (global rank sort) | C1 | T1 | **done** (`results-barrier-tpu-v5e8`: gather 2.4-6 us, sort 12.1 ms at N=2^18, D-independent) | $0 |
-| **E11** | Ablations: `r`, σ, dtype, accumulation precision | all | T1 | ~15 | $0 |
+| **E11** | Ablations: `r`, σ, dtype, accumulation precision | all | T1 | **mostly assembled** (`tb3.py` from E1/E8/E13 + tests); one session open (T4: precision ratio + lr1 re-measure) | $0 |
 | **E12** | End-to-end task validation, ≥3 seeds | C2 | T3 | ~15 | ~$8 |
 | **E13** | Countdown, Qwen2.5-0.5B: rank sweep + GRPO reference | **C6** | T2→T5 | ~30 | ~$30-80 |
 
@@ -285,6 +285,15 @@ slice — see the application-timing warning in the runbook.
 **E8 needs matched shapes across platforms**, not matched memory. v5e has 16 GB/chip
 against A100's 80 GB, so per-device population must be matched deliberately rather than
 "whatever fits." State the matching rule in the paper.
+
+**E11 is assembly, not a campaign.** Walked claim by claim (2026-08-19), every axis but
+one is already measured somewhere committed: r by E1/E8/C6a, σ by E1, dtype cost by E8
+(and it is ~1.0x at default precision on both platforms, so dtype is a memory choice),
+dtype correctness by the bf16 policy doc and `tell`'s guard. `tb3.py` builds TB3 from
+those directories. The one new number is what `highest` costs over `default` on identical
+cells (cost-precision-tpu.yaml, session T4). Deliberately NOT run: task-level σ and dtype
+sweeps, ~30 GPU-hours of pre-emptive reviewer defence; if a reviewer asks, each is a
+scoped follow-up, and this line is where that decision is recorded.
 
 **E9's honest framing**: being *within* EGGROLL's own throughput while offering a general
 API is a good result. Report it that way. Faster is a bonus, not the claim.
