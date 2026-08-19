@@ -1,0 +1,36 @@
+{
+ "config": {
+  "population": 16384,
+  "devices": 2,
+  "shaping": "centered"
+ },
+ "chain_length": 100,
+ "seconds_all": [
+  7.808299999965129e-06,
+  7.4084999999968205e-06,
+  7.3772000001781635e-06,
+  7.1014000002378455e-06,
+  6.927790000190726e-06
+ ],
+ "seconds_median": 7.3772000001781635e-06,
+ "seconds_iqr": [
+  7.1014000002378455e-06,
+  7.4084999999968205e-06
+ ],
+ "env": {
+  "commit": "bf477ddb900dd91016de1864a6a5566946f18d3b",
+  "dirty_worktree": false,
+  "jax": "0.11.1",
+  "jaxlib": "0.11.1",
+  "numpy": "2.5.0",
+  "scipy": "1.18.0",
+  "python": "3.12.13",
+  "platform": "Linux-6.6.143+-x86_64-with-glibc2.41",
+  "hostname": "c352dbcab1aa",
+  "device_count": 8,
+  "device_kind": "TPU v5 lite",
+  "device_platform": "tpu",
+  "xla_flags": "",
+  "jax_platforms": ""
+ }
+}
