@@ -12,12 +12,12 @@ measure at 245-309 ms, restoring lr1 <= lr4 <= lr16 everywhere all three fit. Th
 remaining lr1 OOMs are shared by every rank at those shapes, so the memory ceiling is
 monotonic in rank again.
 
-**The lr1 column is mixed-program and that is a real caveat:** lr1 cells measured in
-session 1 ran the pre-pad program; session 2's ran the padded one. The pad moves a
-little work into the correction GEMMs, so pre-pad lr1 timings may flatter lr1 by up
-to roughly the lr1-to-lr4 gap. Re-measuring the lr1 column at b065e65 costs well
-under an hour of quota (fast cells) and would make the column single-program; do
-that before citing lr1-specific TPU numbers tighter than the C4 headline.
+**The lr1 column is single-program again (session T4, 2026-08-19):** the 28 pre-pad
+lr1 records were deleted and re-measured under the padded program (28 measured, 0
+undersized). lr1 records now stamp b065e65 or 72f6ada, between which the lowrank
+code is identical; everything else stamps its own session. The re-measured column
+keeps the C4 story and sharpens it: rank 1 at 0.08x of dense (geometric mean over
+the cells where both fit), monotone in rank.
 
 232 of the 240 cells of `cost-sweep-tpu.yaml`, from the `kaggle/t2cost/` kernel pinned
 at d908c1a: 183 measured, 49 recorded undersized, budget stop at 6.79 h against the 6 h
