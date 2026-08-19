@@ -1,4 +1,23 @@
-# E8 on TPU v5e, session 1 of 2 (Kaggle), 2026-08-18
+# E8 on TPU v5e (Kaggle), complete: 240 of 240 cells
+
+Two sessions of the `kaggle/t2cost/` kernel. Session 1 (pinned d908c1a) visited 232
+cells and budget-stopped; session 2 (pinned b065e65, after the r=1 pad fix in PR #54)
+ran the 8 remaining cells plus the 10 lr1 cells whose stale undersized records were
+deleted for it. Final surface: 189 measured, 51 undersized. Every record stamps its
+own commit and both worktrees were clean.
+
+**The r=1 pad fix is validated on hardware by session 2:** the four cells where only
+lr1 went undersized before the fix (d=512 N=16384, d=2048 N=4096, both dtypes) now
+measure at 245-309 ms, restoring lr1 <= lr4 <= lr16 everywhere all three fit. The
+remaining lr1 OOMs are shared by every rank at those shapes, so the memory ceiling is
+monotonic in rank again.
+
+**The lr1 column is mixed-program and that is a real caveat:** lr1 cells measured in
+session 1 ran the pre-pad program; session 2's ran the padded one. The pad moves a
+little work into the correction GEMMs, so pre-pad lr1 timings may flatter lr1 by up
+to roughly the lr1-to-lr4 gap. Re-measuring the lr1 column at b065e65 costs well
+under an hour of quota (fast cells) and would make the column single-program; do
+that before citing lr1-specific TPU numbers tighter than the C4 headline.
 
 232 of the 240 cells of `cost-sweep-tpu.yaml`, from the `kaggle/t2cost/` kernel pinned
 at d908c1a: 183 measured, 49 recorded undersized, budget stop at 6.79 h against the 6 h
