@@ -29,8 +29,13 @@ What the surface says against the GPU run (`results-cost/`), same grid, same dri
   activation-sized f32 temporaries, consistent with XLA canonicalizing the r=1
   correction's contracting-dim-1 dot `(x @ B) @ A.T` into a broadcast-multiply chain
   that neither stays bf16 nor fuses on TPU. The GPU compiler keeps the same shapes
-  monotonic in r, which is why the A100 surface shows no anomaly. Any fix is a
-  strategy-code decision (expressing the r=1 correction to survive canonicalization).
+  monotonic in r, which is why the A100 surface shows no anomaly. **Fixed** by padding
+  r=1 to a rank-2 dot with a zero column in `LowRankWeight._factors` (bitwise-equal in
+  bf16, 1-2 ulp in f32); with the pad, the failing cell compiles at 14.25 G.
+  probe_lr1.py is the regression check. All ten lr1 undersized records predated the
+  fix and are deleted (cost.py resumes by file existence, so a stale record would
+  block re-measurement); the resume session re-measures them under the fixed program,
+  which is why this directory holds 222 records until it runs.
 
 Regenerate/resume: push `kaggle/t2cost/` at a commit containing this directory
 (fill the username at push time), `--accelerator TpuV5E8`.
