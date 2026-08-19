@@ -257,15 +257,15 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 |---|---|---|---|---|---|
 | **E0** | Correctness, device-invariance, comm accounting | C2 | T0 | **mostly done** | $0 |
 | **E1** | Estimator quality: `N` × rank × scheme × shaping × σ | C5 | T2 | **done, 13.1** | $0 |
-| **E2** | Strong scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | ~12 | $0 |
-| **E3** | Weak scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | ~8 | $0 |
-| **E4** | Contraction crossover, TPU, `(N, d)` grid at `D=8` | **C1** | T1→T3 | ~20 | $0 |
+| **E2** | Strong scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | **done** (`results-tpu-v5e8`, one session) | $0 |
+| **E3** | Weak scaling, TPU, `D ∈ {1,2,4,8}` | C3 | T1 | **done** (`results-tpu-v5e8`) | $0 |
+| **E4** | Contraction crossover, TPU, `(N, d)` grid at `D=8` | **C1** | T1→T3 | **done at sweep resolution** (`figures-tpu-v5e8` M3; the denser grid below stays open for TRC) | $0 |
 | **E5** | Scaling past 8 devices: `D ∈ {16,32,64}` | C1, C3 | T3 | ~15 | ~$10 |
 | **E6** | Strong/weak scaling, GPU, `D ∈ {1,2,4,8}` | C1, C3 | T4 | **done** (docs/03 M1/M2, 8×A100) | spent |
 | **E7** | Contraction crossover, GPU | **C1** | T4 | **done** (docs/03 M3, 8×A100) | spent |
-| **E8** | Low-rank vs dense cost surface, TPU **and** GPU | **C4** | T1 + T4 | ~6 + ~2 | ~$0 + session |
+| **E8** | Low-rank vs dense cost surface, TPU **and** GPU | **C4** | T1 + T4 | **done both** (`results-cost`, `results-cost-tpu-v5e8`; F4 drawn) | ~$3.50 |
 | **E9** | Baselines: naive ES, EGGROLL ref impl, evosax | C2 | T4 + T1 | **done on GPU** (docs/03 M4); TPU side open | spent |
-| **E10** | Shaping-barrier cost (global rank sort) | C1 | T1 | ~4 | $0 |
+| **E10** | Shaping-barrier cost (global rank sort) | C1 | T1 | **done** (`results-barrier-tpu-v5e8`: gather 2.4-6 us, sort 12.1 ms at N=2^18, D-independent) | $0 |
 | **E11** | Ablations: `r`, σ, dtype, accumulation precision | all | T1 | ~15 | $0 |
 | **E12** | End-to-end task validation, ≥3 seeds | C2 | T3 | ~15 | ~$8 |
 | **E13** | Countdown, Qwen2.5-0.5B: rank sweep + GRPO reference | **C6** | T2→T5 | ~30 | ~$30-80 |
@@ -317,7 +317,7 @@ designed to be cheap to abort.
 | F1 | Strong + weak scaling, TPU and GPU panels, ideal line dashed | E2, E3, E6 | Opening figure |
 | F2 | **Contraction crossover phase diagram** in `(N, d)` at `D=8`, one panel per platform | E4, E7 | **The money figure** |
 | F3 | Scaling to 64 devices, TPU | E5 | Shows the design actually distributes |
-| F4 | Low-rank vs dense cost surface, TPU vs GPU | E8 | C4; the cross-platform inversion |
+| F4 | Low-rank vs dense cost surface, TPU vs GPU | E8 | C4. **Exists**: `experiments/phase2/figures/f4-cost-*.png`. Measured answer: no inversion, low-rank pays MORE on TPU |
 | F5 | Estimator quality vs `N/d_eff`, full-rank / rank-1 / rank-4 panels | E1 | C5. **Exists**: `experiments/phase0/figures/` |
 | F6 | End-to-end task curves, seed-variance bands | E12 | C2: both algorithms run end to end. *Was also C5 validation; dropped with C5.* |
 | F7 | E13 held-out curves: four ES ranks + frozen embedding + GRPO, seed bands, base-model floor | E13 | **Exists**: `experiments/countdown/figures/`. C6 in one panel |
