@@ -1,0 +1,26 @@
+# E11's one new measurement: what matmul_precision `highest` costs over `default`,
+# same cells, same driver, same chip. Committed before the run, cited by SHA.
+#
+# The scaling sweep times at `highest` (trajectory comparability across D) and the
+# cost surface at `default` (what a practitioner runs); every record stamps its
+# precision, but nobody has the RATIO on identical cells, and TB3 wants that row.
+# Compare each cell here against results-cost-tpu-v5e8 at the same
+# (d, N, strategy, bfloat16).
+#
+# bf16 only: `highest` changes how the MXU multiplies bf16 inputs, which is the
+# effect being priced. Populations stop at 1024 because precision cost is a
+# per-FLOP property and the large-N cells cost an hour each at `highest` to say
+# the same thing.
+
+d_model: [512, 2048]
+population: [64, 256, 1024]
+strategy: [iid_gaussian, seed_regenerated, mirrored_seed, mirrored_lr1, mirrored_lr4, mirrored_lr16]
+dtype: [bfloat16]
+
+batch: 8
+seq: 32
+warmup: 3
+repeats: 5
+matmul_precision: highest
+
+results_dir: results-cost-tpu-v5e8-highest
