@@ -1,0 +1,21 @@
+# E10, the shaping barrier on TPU v5e-8. Committed before the run, cited by SHA.
+#
+# N spans docs/05's E4 aspiration (2^6 to 2^18): the barrier is O(N) bytes and
+# O(N log N) sort work, so the interesting end is large N, far past where the
+# scaling sweep stops. "none" times the gather alone (tell replicates
+# unconditionally, so none pays it too, which is exactly why comms.py's
+# by-difference method broke); centered_ranks adds the sort; centered adds a
+# mean/std pass instead of a sort, which separates "any second pass" from
+# "a sort".
+#
+# D=1 is the no-communication floor. n % D == 0 cells only (expand() drops the
+# rest), which at these powers of two drops nothing.
+
+population: [64, 256, 1024, 4096, 16384, 65536, 262144]
+devices: [1, 2, 4, 8]
+shaping: [none, centered, centered_ranks]
+
+warmup: 3
+repeats: 5
+
+results_dir: results-barrier-tpu-v5e8
