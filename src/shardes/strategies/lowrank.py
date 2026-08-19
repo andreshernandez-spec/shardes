@@ -111,8 +111,22 @@ class LowRankWeight:
 
     __rmatmul__ = __matmul__
 
+    def _factors(self) -> tuple[Array, Array]:
+        # r=1 is padded to a rank-2 dot with a zero column. XLA strength-reduces a
+        # contracting-dim-1 dot into a multiply chain, and the TPU scheduler then keeps
+        # activation-sized f32 copies alive around it: rank 1 OOMed cells rank 4 ran
+        # (results-cost-tpu-v5e8/README.md; probe_lr1.py reproduces the compile with no
+        # TPU). The added product is identically zero: bitwise in bf16, 1-2 ulp in f32
+        # because a k=2 dot accumulates differently than a multiply.
+        a, b = self.a, self.b
+        if a.shape[-1] == 1:
+            a = jnp.concatenate([a, jnp.zeros_like(a)], axis=-1)
+            b = jnp.concatenate([b, jnp.zeros_like(b)], axis=-1)
+        return a, b
+
     def apply_to(self, x: Array) -> Array:
-        return x @ self.w.T + ((x @ self.b) @ self.a.T) * self.scale
+        a, b = self._factors()
+        return x @ self.w.T + ((x @ b) @ a.T) * self.scale
 
     def gather(self, ids: Array) -> Array:
         """`(W + scale * A B^T)[ids]`, without forming the sum. See `shardes.nn.embed`.
@@ -121,7 +135,8 @@ class LowRankWeight:
         same identity `apply_to` uses, read the other way round. `self.w[ids]` is unbatched
         under vmap, so members share the base gather.
         """
-        return self.w[ids] + (self.a[ids] @ self.b.T) * self.scale
+        a, b = self._factors()
+        return self.w[ids] + (a[ids] @ b.T) * self.scale
 
 
 #: Raised when a per-coordinate sigma meets a structured leaf. The message explains the

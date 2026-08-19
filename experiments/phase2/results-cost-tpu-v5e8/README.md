@@ -20,10 +20,22 @@ What the surface says against the GPU run (`results-cost/`), same grid, same dri
   It remains the only strategy that never goes undersized, at either memory size.
 - The feasibility ceiling moves exactly as 16 GB against 80 GB predicts: dense OOMs
   from N=1024 at d=1024, and even mirrored low-rank loses the largest cells.
-- **Anomaly, recorded not explained:** `mirrored_lr1` is undersized at two cells where
-  `mirrored_lr16` runs (d=512 N=16384, d=2048 N=4096). Rank 1 peaking above rank 16
-  reads as a compiler layout or padding artifact, not arithmetic; worth a look at the
-  HLO before it is cited anywhere.
+- **Anomaly, diagnosed:** `mirrored_lr1` is undersized at cells where `mirrored_lr4`
+  and `lr16` run (d=512 N=16384, d=2048 N=4096). `probe_lr1.py` reproduces it with no
+  TPU (libtpu compiles for a v5e topology from any linux box; the OOM is a
+  compile-time static allocation failure, so it reproduces exactly). The perturbation
+  is never materialized at any rank (invariant 3 holds); the excess is activations.
+  r=2 and r=4 share one graph structure while r=1 alone holds a third more
+  activation-sized f32 temporaries, consistent with XLA canonicalizing the r=1
+  correction's contracting-dim-1 dot `(x @ B) @ A.T` into a broadcast-multiply chain
+  that neither stays bf16 nor fuses on TPU. The GPU compiler keeps the same shapes
+  monotonic in r, which is why the A100 surface shows no anomaly. **Fixed** by padding
+  r=1 to a rank-2 dot with a zero column in `LowRankWeight._factors` (bitwise-equal in
+  bf16, 1-2 ulp in f32); with the pad, the failing cell compiles at 14.25 G.
+  probe_lr1.py is the regression check. All ten lr1 undersized records predated the
+  fix and are deleted (cost.py resumes by file existence, so a stale record would
+  block re-measurement); the resume session re-measures them under the fixed program,
+  which is why this directory holds 222 records until it runs.
 
 Regenerate/resume: push `kaggle/t2cost/` at a commit containing this directory
 (fill the username at push time), `--accelerator TpuV5E8`.
