@@ -1,0 +1,34 @@
+% CLAIM: two ways to assemble the update, an analytic cost model written
+% BEFORE the measurement, and a predicted crossover. Evidence: docs/03
+% (the model predates E4/E7 by commit history, which is the point).
+\section{The contraction question}
+\label{sec:contraction}
+
+After evaluation, every device holds fitnesses for its share of the
+population, and the update $\sum_i w_i \epsilon_i$ must be assembled (the
+contraction). There are two natural placements:
+
+\begin{itemize}
+  \item \textbf{Strategy A: contract locally, then combine.} Each device
+    regenerates all $N$ perturbations and contracts the full sum itself.
+    Communication: the fitness gather only, $4N$ bytes of scalars. This is
+    the arrangement behind the folk claim that ES only communicates scalars.
+  \item \textbf{Strategy B: contract partially, then all-reduce.} Each device
+    contracts only its own $N/D$ perturbations and the partial sums are added
+    across devices (an all-reduce of a model-sized buffer). Communication:
+    the full parameter count, megabytes; compute per device: $D\times$ less
+    contraction work than A.
+\end{itemize}
+
+The trade is compute against communication, so a crossover in
+(population $N$, model size $d$) space is predicted rather than assumed:
+%% TODO(andres): restate the analytic model from docs/03 here, two or three
+%% equations, in your own derivation order. It was written before the
+%% measurements ran; say so, and cite the commit, because a predicted
+%% crossover confirmed by measurement is the paper's methodological teeth.
+\todo{cost model equations, from docs/03}
+
+Section~\ref{sec:results} tests the prediction on both platforms
+(Figure~\ref{fig:f2}); Table~\ref{tab:tb2} checks the model's byte counts
+against the payload of every collective in the compiled update, where the
+factor-of-two the naive count misses is itself informative.

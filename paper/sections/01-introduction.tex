@@ -1,0 +1,58 @@
+% CLAIM: two 2025 papers made ES work at LLM scale with opposite structural
+% bets, no common library can express both, and the field's folk claim about
+% ES communication was never measured. Evidence: docs/00; the resolution
+% lands in section 6.
+\section{Introduction}
+
+Evolution strategies train a neural network without computing gradients: perturb
+the weights with random noise, evaluate each perturbed copy, and move the weights
+toward the copies that scored well (a zeroth-order, or gradient-free, method).
+For years this was considered too sample-hungry for large models. In 2025, two
+papers changed that assessment, and they did it with opposite structural bets.
+Qiu et al.\ perturb every weight independently and avoid storing the noise by
+regenerating it from random seeds (full-rank perturbations with seed
+regeneration). Sarkar et al.'s EGGROLL never builds the full noise matrix at
+all: it perturbs each weight matrix with the product of two thin matrices (a
+rank-$r$, or low-rank, factorization), which turns the expensive per-copy work
+into a small correction on top of one shared matrix multiply.
+
+%% TODO(andres): one sentence on why the bets are "opposite" in storage vs
+%% compute terms; the design section carries the details.
+
+No existing library can express both. The incumbent, evosax, flattens every
+candidate solution into one long vector before doing anything else
+(\texttt{ravel\_pytree}), which destroys exactly the per-matrix structure the
+low-rank bet depends on. Section~\ref{sec:results} shows this is not only an
+API limitation: on a 16\,GB accelerator the flattened representation runs out
+of memory at model sizes where the structured one runs
+(Table~\ref{tab:tb1}).
+
+There is also an unexamined piece of folklore. ES is said to be cheap to
+distribute because ``only scalars cross the wire'': each device reports one
+fitness number per candidate. Whether that is true depends on a choice nobody
+had measured, namely how the weight update is assembled from the evaluated
+candidates (we call the two options contraction strategies A and B,
+Section~\ref{sec:contraction}). One of them does move only scalars; the other
+all-reduces a buffer the size of the model, and it \emph{wins} over much of
+the measured grid anyway (Figure~\ref{fig:f2}).
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item \textbf{shardes}, an open-source JAX library whose core splits the
+    population of perturbed model copies across devices (shards it), with the
+    perturbation scheme as a pluggable strategy, so both 2025 bets and their
+    combinations run in one system (Section~\ref{sec:design}).
+  \item A cost model for the two contraction strategies, written before the
+    measurements, and the measured crossover: where each wins in
+    (population, model size) space, on an 8$\times$A100 node and a TPU v5e-8,
+    which disagree (Section~\ref{sec:contraction}, Figure~\ref{fig:f2}).
+  \item Measured cost surfaces against the reference implementations,
+    including the finding that the low-rank rewrite pays \emph{more} on TPU,
+    not less, contradicting the natural guess that fast dense matrix units
+    would rescue the dense baseline (Figure~\ref{fig:f4}).
+  \item An end-to-end validation on an LLM reasoning task with seed-level
+    determinism and device-count invariance, so the systems claims are made
+    about an algorithm that demonstrably trains (Section~\ref{sec:endtoend}).
+  \item Every number in this paper regenerates from a committed script and a
+    recorded environment in the repository.
+\end{itemize}

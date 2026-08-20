@@ -1,0 +1,71 @@
+% shardes paper -- skeleton, prepared to be extended into the full paper.
+%
+% HOW TO READ THIS SKELETON
+%   - Every section file in sections/ opens with a comment stating the one claim
+%     the section must carry and where its evidence lives in the repo.
+%   - Prose that exists is a clear-language draft: plain sentences first, the
+%     technical term in parentheses after, so a reader outside the area can
+%     follow and an expert can anchor. Rewrite freely; the structure, figures,
+%     tables and number-to-source wiring are the part meant to survive.
+%   - %% TODO(andres) marks where a judgement or your voice is required.
+%   - Tables in generated/ are emitted by experiments/phase2/tb{1,2,3}.py
+%     (--latex). Never edit them by hand; rerun the scripts (make tables).
+%
+% CLASS: neutral article for now. When the MLSys 2027 CFP lands, replace the
+% next line with their class file and delete the geometry package.
+\documentclass[10pt,twocolumn]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\graphicspath{{../experiments/phase2/figures/}{../experiments/phase0/figures/}{../experiments/countdown/figures/}}
+
+% Draft-only helper: visible TODO marks. Delete for submission.
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\title{shardes: a sharded evolution-strategies library,\\
+and where its communication actually goes}
+%% TODO(andres): title is a placeholder; two drafts to react against:
+%%   "One library for both bets: sharded evolution strategies on GPUs and TPUs"
+%%   "Measuring the folk claims of distributed evolution strategies"
+\author{Andres Hernandez}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+%% TODO(andres): write last, from the contributions list in section 1.
+%% Ingredients, one sentence each: the two papers and their opposite bets; the
+%% library that expresses both; the crossover result (F2); the cost surface and
+%% the non-inversion (F4); the end-to-end validation (F7); everything measured,
+%% every number reproducible from a committed script.
+\todo{abstract}
+\end{abstract}
+
+\input{sections/01-introduction}
+\input{sections/02-background}
+\input{sections/03-design}
+\input{sections/04-contraction}
+\input{sections/05-setup}
+\input{sections/06-results}
+\input{sections/07-end-to-end}
+\input{sections/08-limitations}
+\input{sections/09-related}
+
+\section*{Acknowledgements}
+%% TODO(andres): Kaggle TPU access; TRC if the grant is used; nothing else owed.
+\todo{acknowledgements}
+
+% \bibliographystyle{plainnat}
+% \bibliography{references}
+%% TODO(andres): references.bib exists as a stub; fill as sections cite.
+
+\appendix
+\input{sections/appendix}
+
+\end{document}

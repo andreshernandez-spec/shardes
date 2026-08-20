@@ -1,0 +1,99 @@
+% CLAIM: the section every other section aims at. Each subsection = one figure
+% or table, one finding, sources in the comment above it.
+\section{Results}
+\label{sec:results}
+
+% F1 -- experiments/phase2/figures/f1-scaling.png (plot_paper.py)
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{f1-scaling.png}
+  \caption{Scaling at the largest cell both platforms ran ($d{=}2048$).
+    Top: strong scaling (fixed total population, seconds per generation).
+    Bottom: weak scaling (fixed population per device, candidates evaluated
+    per second; dashed line is linear scaling). The dense baseline
+    (\texttt{iid\_gaussian}) is missing its one-device point on the TPU
+    strong panel because it does not fit one 16\,GB chip at this size, and
+    it flatlines in the TPU weak panel: it is memory-bound, and more chips
+    do not help it. The low-rank strategies exceed the linear reference
+    because larger total populations use each device better.}
+  \label{fig:f1}
+\end{figure*}
+
+\subsection{Scaling to eight devices}
+%% TODO(andres): two paragraphs walking F1: what near-ideal looks like here,
+%% why superlinear weak scaling is utilization rather than magic, and the
+%% dense flatline as the first appearance of the memory story.
+\todo{F1 walkthrough}
+
+% F2 -- experiments/phase2/figures/f2-crossover.png (plot_paper.py)
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{f2-crossover.png}
+  \caption{The contraction crossover, measured. Color is
+    $\log_{10}(t_B/t_A)$ at $D{=}8$: blue where the model-sized all-reduce
+    (B) wins, orange where scalar-only communication (A) wins. B wins
+    outright for the strategies that must regenerate or materialize every
+    perturbation on every device, and wins harder on the TPU; for the
+    low-rank family the two are within a few percent and the sign flips
+    inside the grid, with A ahead at $d{=}2048$. The crossover is real and
+    it moves with the platform.}
+  \label{fig:f2}
+\end{figure*}
+
+\subsection{The crossover, and the folk claim}
+%% TODO(andres): the section 4 prediction against F2, cell by cell where it
+%% matters. Then the folk-claim resolution in one paragraph: A does move only
+%% scalars (TB2: 2x the naive count, still bytes); B moves megabytes and wins
+%% anyway wherever per-member compute is heavy, because the all-reduce is
+%% under 1% of the interconnect either way. The claim was true and beside the
+%% point.
+\todo{F2 walkthrough + folk claim resolution}
+
+\input{generated/tb2}
+
+% F4 -- experiments/phase2/figures/f4-cost-bfloat16.png (plot_cost.py)
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{f4-cost-bfloat16.png}
+  \caption{Cost against the materializing dense baseline at matched shapes,
+    bfloat16, one device. Blue: the named strategy is faster; ``dense OOM'':
+    the baseline does not fit the device at that shape, which is the
+    strongest form of the structured strategies paying off. The TPU row
+    answers the inversion question: the low-rank rewrite pays \emph{more}
+    on the v5e (down to $0.05\times$ dense) than on the A100, and the
+    16\,GB ceiling moves the infeasible region exactly as capacity
+    predicts.}
+  \label{fig:f4}
+\end{figure*}
+
+\subsection{Where the low-rank rewrite pays}
+%% TODO(andres): C4's arc: EGGROLL's motivation is GPU-shaped; the natural
+%% guess is that the TPU's matrix unit rescues dense; measured answer: no,
+%% the platforms move the constants, not the ordering. seed regeneration's
+%% 5-6x cost at D=1 on TPU vs 1.3-3x on GPU belongs here too, as does the
+%% honest note that it is the only strategy that never runs out of memory.
+\todo{F4 walkthrough}
+
+\subsection{Baselines}
+\input{generated/tb1}
+%% TODO(andres): three sentences: within 0.68-0.85x of EGGROLL's own
+%% implementation single-device with a general API; 6x past their ceiling at
+%% D=8 because no reference shards; evosax OOMs at d=2048 on 16 GB at every
+%% device count, the flattening foreclosure as a measured row.
+\todo{TB1 walkthrough}
+
+\subsection{The shaping barrier, priced}
+%% TODO(andres): the E10 numbers from section 3, one short table or inline:
+%% gather flat at 2.4-6 us, sort 12.1 ms at 2^18 and D-independent, the
+%% redundant-local-compute reading, and the honest ceiling caveat (isolation
+%% measurement; a real generation may overlap some of it).
+\todo{barrier numbers}
+
+\subsection{Ablations}
+\input{generated/tb3}
+%% TODO(andres): one paragraph. The two rows worth prose: bf16-vs-f32 is
+%% ~1.0x on both platforms at default precision (dtype is a memory decision,
+%% not a speed one), and highest-precision costs 1.6-1.9x only for the
+%% low-rank family, whose correction GEMMs are exactly the multiplies being
+%% upgraded.
+\todo{TB3 walkthrough}
