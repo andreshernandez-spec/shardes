@@ -8,11 +8,17 @@ starting a new one.
 ## The claim being tested
 
 **C7: at matched task, model and evaluation budget, ES tolerates order-of-magnitude
-perturbation of its published hyperparameters with graceful degradation, while GRPO's
-viable region is narrow and its failures are catastrophic (collapse below the base
-model), even with its stabilization machinery active; removing its KL anchor alone
-collapses it at its own published settings, and ES has no analogous component to
-remove.**
+perturbation of its published hyperparameters with graceful degradation, while
+critic-free GRPO-style RLVR's viable region is narrow and its failures are
+catastrophic (collapse below the base model), even with its stabilization machinery
+active; removing its KL anchor alone breaks it at its own published settings, and ES
+has no analogous component to remove.**
+
+Scoped to critic-free GRPO-style RLVR deliberately (2026-08-20, from the research
+spike, docs/09): vanilla PPO WITH a learned critic trains stably at 32B with no KL
+penalty at all (Open-Reasoner-Zero, arXiv:2503.24290), so "RL is fragile" is not a
+defensible claim; "the critic-free RLVR recipe our baseline uses is fragile" is,
+and it is the recipe the 2025 reasoning wave actually runs.
 
 The mechanism is stated, not hidden: rank-based fitness shaping makes the ES update
 invariant to reward scale, and the step size is sigma-relative by construction. That
@@ -49,6 +55,9 @@ Per run, from eval.jsonl (evals at 0, 50, 100, 150):
 - **frozen**: (final - floor) < 0.25 x (median x1-arm final - floor): less than a
   quarter of the reference progress.
 - **drawdown**: max over t of (max_{s<=t} R_s - R_t).
+- **entropy** (GRPO arms): mean policy entropy per logged step (TRL exposes it),
+  so collapses connect to the covariance mechanism of arXiv:2505.22617 rather
+  than floating free.
 
 Per arm: the robustness curve (F8): x = multiplier (log scale), y = final, one
 panel per algorithm, seed markers, floor dashed, collapsed runs marked. The
