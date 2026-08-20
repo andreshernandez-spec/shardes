@@ -264,7 +264,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 | **E6** | Strong/weak scaling, GPU, `D ∈ {1,2,4,8}` | C1, C3 | T4 | **done** (docs/03 M1/M2, 8×A100) | spent |
 | **E7** | Contraction crossover, GPU | **C1** | T4 | **done** (docs/03 M3, 8×A100) | spent |
 | **E8** | Low-rank vs dense cost surface, TPU **and** GPU | **C4** | T1 + T4 | **done both** (`results-cost`, `results-cost-tpu-v5e8`; F4 drawn) | ~$3.50 |
-| **E9** | Baselines: naive ES, EGGROLL ref impl, evosax | C2 | T4 + T1 | **done on GPU** (docs/03 M4); TPU side open | spent |
+| **E9** | Baselines: naive ES, EGGROLL ref impl, evosax | C2 | T4 + T1 | **done both** (docs/03 M4; `results-m4-tpu-v5e8`) | spent |
 | **E10** | Shaping-barrier cost (global rank sort) | C1 | T1 | **done** (`results-barrier-tpu-v5e8`: gather 2.4-6 us, sort 12.1 ms at N=2^18, D-independent) | $0 |
 | **E11** | Ablations: `r`, σ, dtype, accumulation precision | all | T1 | **mostly assembled** (`tb3.py` from E1/E8/E13 + tests); one session open (T4: precision ratio + lr1 re-measure) | $0 |
 | **E12** | End-to-end task validation, ≥3 seeds | C2 | T3 | ~15 | ~$8 |
