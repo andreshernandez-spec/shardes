@@ -96,16 +96,21 @@ def latex() -> str:
             "sharding path and idle seven devices; these rows are context, "
             "not a like-for-like ratio.", "tb1b"),
     ):
-        out += [f"\\begin{{table}}", "\\centering", "\\small",
+        # Short arm names as headers (the caption carries the full protocol);
+        # the full identifiers at \small were 78pt wider than the page.
+        short = [a.split("/")[1] if a.startswith("shardes/") else a.split("/")[0]
+                 for a in ARMS]
+        out += [f"\\begin{{table*}}", "\\centering", "\\small",
+                "\\setlength{\\tabcolsep}{5pt}",
                 f"\\caption{{{caption}}}", f"\\label{{tab:{label}}}",
                 "\\begin{tabular}{ll" + "r" * len(ARMS) + "}", "\\toprule",
-                "shape & platform & " + " & ".join(esc(a) for a in ARMS) + " \\\\",
+                "shape & platform & " + " & ".join(esc(a) for a in short) + " \\\\",
                 "\\midrule"]
         for (d, n), cell in build(devices):
             for name, vals in cell.items():
                 out.append(f"$d{{=}}{d}$, $N{{=}}{n}$ & {name} & "
                            + " & ".join(fmt(vals[a]) for a in ARMS) + " \\\\")
-        out += ["\\bottomrule", "\\end{tabular}", "\\end{table}", ""]
+        out += ["\\bottomrule", "\\end{tabular}", "\\end{table*}", ""]
     return "\n".join(out)
 
 
