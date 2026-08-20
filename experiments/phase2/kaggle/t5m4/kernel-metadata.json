@@ -1,0 +1,14 @@
+{
+  "id": "USERNAME/shardes-t5-m4",
+  "title": "shardes t5 m4",
+  "code_file": "t5m4.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
