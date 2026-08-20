@@ -323,8 +323,8 @@ designed to be cheap to abort.
 
 | # | Figure | From | Role |
 |---|---|---|---|
-| F1 | Strong + weak scaling, TPU and GPU panels, ideal line dashed | E2, E3, E6 | Opening figure |
-| F2 | **Contraction crossover phase diagram** in `(N, d)` at `D=8`, one panel per platform | E4, E7 | **The money figure** |
+| F1 | Strong + weak scaling, TPU and GPU panels, ideal line dashed | E2, E3, E6 | Opening figure. **Exists**: `experiments/phase2/figures/f1-scaling.png` (`plot_paper.py`) |
+| F2 | **Contraction crossover phase diagram** in `(N, d)` at `D=8`, one panel per platform | E4, E7 | **The money figure**. **Exists**: `experiments/phase2/figures/f2-crossover.png`. The sign flips inside the low-rank panels and moves with the platform |
 | F3 | Scaling to 64 devices, TPU | E5 | Shows the design actually distributes |
 | F4 | Low-rank vs dense cost surface, TPU vs GPU | E8 | C4. **Exists**: `experiments/phase2/figures/f4-cost-*.png`. Measured answer: no inversion, low-rank pays MORE on TPU |
 | F5 | Estimator quality vs `N/d_eff`, full-rank / rank-1 / rank-4 panels | E1 | C5. **Exists**: `experiments/phase0/figures/` |
