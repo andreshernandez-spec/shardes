@@ -104,6 +104,10 @@ def main(argv=None) -> int:
         learning_rate=cfg["lr"],
         lr_scheduler_type=cfg["lr_schedule"],
         beta=cfg["kl_beta"],
+        # E14: the ratio clip, explicit so the ablation arm can widen it. TRL's
+        # default is 0.2; epsilon_high None means symmetric.
+        epsilon=cfg.get("clip_epsilon", 0.2),
+        epsilon_high=cfg.get("clip_epsilon_high"),
         temperature=cfg["temperature"],
         top_p=cfg["top_p"],
         top_k=cfg["top_k"],
@@ -117,7 +121,30 @@ def main(argv=None) -> int:
     trainer = GRPOTrainer(
         model=cfg["model"], args=targs, train_dataset=ds, reward_funcs=reward_fn,
     )
+
+    # E14: theta_0 snapshot for the drift metric, f32 on CPU (~2 GB for 0.5B).
+    # Taken from the trainer's own model so it is exactly what training mutates.
+    import torch  # noqa: PLC0415  - the venv has it; the module header explains the split
+    init_sd = {k: v.detach().to("cpu", torch.float32).clone()
+               for k, v in trainer.model.state_dict().items()}
+
     trainer.train()
+
+    # The full log history, whatever keys this TRL version emits (entropy,
+    # completions/mean_length, kl, ...): recorded now, extracted at analysis,
+    # so the metric list is not hostage to TRL's naming.
+    with (out / "train-log.jsonl").open("w") as f:
+        for row in trainer.state.log_history:
+            f.write(json.dumps(row) + "\n")
+
+    sq = 0.0
+    final_sd = trainer.model.state_dict()
+    for k, v0 in init_sd.items():
+        d = final_sd[k].detach().to("cpu", torch.float32) - v0
+        sq += float((d * d).sum())
+    summary = {"param_l2_from_init": sq ** 0.5, "config": dict(cfg)}
+    (out / "summary.json").write_text(json.dumps(summary, indent=1))
+    print(f"param_l2_from_init {summary['param_l2_from_init']:.3f}", flush=True)
     return 0
 
 

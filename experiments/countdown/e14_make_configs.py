@@ -33,7 +33,14 @@ CELLS = [
     ("grpo.yaml", "lr", 1 / 8, "grpo-lr-eighth"),
     ("grpo.yaml", "lr", 8, "grpo-lr-8x"),
     ("grpo.yaml", "kl_beta", 0.0, "grpo-beta-0"),
+    # Second single-stabilizer ablation (added 2026-08-20 after the research
+    # spike): the ratio clip widened to where it never binds. The entropy
+    # literature ties collapse dynamics to the clip; Engstrom et al. found
+    # PPO-NoClip can match PPO, so this arm is informative whichever way it
+    # lands, and that is why it is worth its three runs.
+    ("grpo.yaml", "clip_epsilon", 10.0, "grpo-clip-off"),
 ]
+ABSOLUTE = {"kl_beta", "clip_epsilon"}  # set, not multiplied
 HORIZON = 150  # three eval points past E13's failure onset (~step 50)
 
 
@@ -41,9 +48,14 @@ def main() -> int:
     OUT.mkdir(exist_ok=True)
     for base, dial, value, slug in CELLS:
         cfg = yaml.safe_load((HERE / base).read_text())
-        if dial == "kl_beta":
+        if base == "grpo.yaml":
+            # TRL's default, made explicit so every generated config carries the
+            # clip it ran with; the clip-off cell overwrites it below.
+            cfg.setdefault("clip_epsilon", 0.2)
+        if dial in ABSOLUTE:
             cfg[dial] = float(value)
-            note = f"{dial}: {value} (anchor removed; published 1e-3)"
+            note = f"{dial}: {value} (stabilizer ablation; published "
+            note += "1e-3)" if dial == "kl_beta" else "0.2)"
         else:
             cfg[dial] = float(cfg[dial]) * value
             note = f"{dial}: x{value} of published"
