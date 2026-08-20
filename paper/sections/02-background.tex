@@ -1,0 +1,31 @@
+% CLAIM: none of ours. The estimator, the two algorithms, and why flattening
+% forecloses the structured one. Citations plus docs/00's framing.
+\section{Background}
+\label{sec:background}
+
+\paragraph{The estimator.} ES estimates a direction of improvement by weighting
+random perturbations by how well they scored: with weights $\theta$, noise
+$\epsilon_i$, scale $\sigma$ and fitness $f$, the update is proportional to
+$\frac{1}{N\sigma}\sum_i w_i\,\epsilon_i$ where the $w_i$ are a function of the
+fitnesses $f(\theta + \sigma\epsilon_i)$ (in this paper, centered ranks: sort
+the fitnesses and replace each by its normalized position, which makes the
+update indifferent to the scale of the loss). No gradients flow through the
+model; the model only ever runs forward.
+%% TODO(andres): decide how much estimator variance theory to state; the paper
+%% uses none of it downstream, so a paragraph may be enough.
+
+\paragraph{The two 2025 algorithms.}
+%% TODO(andres): one honest paragraph per paper, from docs/00. Keep the
+%% storage-vs-compute framing: Qiu pays compute (regenerate noise from seeds
+%% twice) to pay no storage; EGGROLL pays a rank-r approximation to make both
+%% storage and compute per member small.
+\todo{Qiu et al.\ and EGGROLL paragraphs}
+
+\paragraph{Why flattening forecloses structure.} A library that first
+concatenates all weights into one vector can only ever perturb that vector
+elementwise. A rank-$r$ perturbation is a statement about one weight
+\emph{matrix} (its noise is a product of an $m\times r$ and an $r\times n$
+factor); once the matrix has been flattened into a segment of a long vector,
+there is no object left to attach that statement to. This is a design
+commitment, not a bug, and it is why expressing both 2025 algorithms required
+a new core rather than a patch.
