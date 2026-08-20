@@ -88,7 +88,10 @@ docs/00 has the list. Nothing to source.
 
 ## Open decisions for Andres
 
-1. Venue/length target — decides how much of M1-M3 goes to an appendix.
+1. ~~Venue/length target~~ **Decided 2026-08-20: MLSys-style full paper.** That
+   resolves the mechanical follow-ons: M1-M3 and the per-platform figure sets go to
+   the appendix, TB1-TB3 stay in the main body, section 7 is a full section, and TB1
+   waits for E9-TPU (the timeline allows one more quota week). Likely deadline is
+   late October 2026 by the 2026 cadence; confirm when the CFP lands.
 2. F1's two flagged judgement calls (cell choice; time+throughput vs efficiency).
-3. Whether TB1 ships GPU-only or waits for E9-TPU (one session, next quota week).
-4. Whether §7 leads with F7 or with the determinism story.
+3. Whether section 7 leads with F7 or with the determinism story.
