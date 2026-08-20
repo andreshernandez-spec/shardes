@@ -9,9 +9,9 @@
 %% orders are drafted below; delete one.
 
 % F7 -- experiments/countdown/figures/f7-e13-heldout.png (plot_e13.py)
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \includegraphics[width=\linewidth]{f7-e13-heldout.png}
+  \includegraphics[width=0.72\textwidth]{f7-e13-heldout.png}
   \caption{Countdown (arithmetic puzzle solving) with Qwen2.5-0.5B: held-out
     reward against sample evaluations, three seeds per arm, min--max band.
     The four ES perturbation ranks lie on top of each other; freezing the
@@ -21,7 +21,7 @@
     decoders by a bfloat16 padding artifact, which bounds how small a
     cross-family gap can honestly be read from this figure.}
   \label{fig:f7}
-\end{figure}
+\end{figure*}
 
 \paragraph{Task quality across ranks.} At population $N{=}30$, held-out
 performance is flat across full-rank and rank-\{1,4,16\} perturbations
