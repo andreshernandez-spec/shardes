@@ -21,3 +21,4 @@ eval_seed: 1007
 eval_puzzles: 2000
 eval_batch: 250
 results_dir: results-e14-grpo-lr-eighth
+clip_epsilon: 0.2
