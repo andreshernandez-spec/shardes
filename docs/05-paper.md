@@ -395,13 +395,15 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 
 ## Venue and timing
 
-Realistic targets, in order of preference: an **MLSys**-style systems venue (the C1
-crossover is the right shape), a **NeurIPS/ICML workshop** on efficient training or
-systems, or **arXiv preprint plus workshop**. The artifact — a working library with a
+**Decided 2026-08-20: MLSys-style full paper** ("it can always be compressed later").
+The fallbacks stay what they were: a NeurIPS/ICML workshop on efficient training or
+systems, or arXiv preprint plus workshop. The artifact — a working library with a
 two-minute test suite — is a strong component for artifact-evaluation tracks.
 
-**Check current deadlines before committing to any of these.** Do not build a schedule
-around a date recalled rather than looked up.
+Deadline (looked up 2026-08-20, not recalled): MLSys 2027's is not yet announced; the
+2026 cycle opened Sep 15 2025 and closed **Oct 30 2025**, so the same cadence puts 2027
+at roughly **late October 2026**. Check mlsys.org when the CFP lands; do not build the
+schedule on the extrapolation alone.
 
 Rough arc, from Phase 0 start:
 
