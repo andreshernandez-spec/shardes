@@ -1,0 +1,321 @@
+% Seeded from the 2026-08-20 stability research spike (docs/09). Keys match the
+% memo. Entries marked LISTING-ONLY were verified as arXiv listings but not read;
+% re-verify before citing in the submitted PDF.
+
+% ---- the two 2025 ES-at-LLM-scale papers ----
+@article{qiu2025,
+  title={Evolution Strategies at Scale: LLM Fine-Tuning Beyond Reinforcement Learning},
+  author={Qiu, Xin and Gan, Yulu and Hayes, Conor F. and Liang, Qiyao and Xu, Elliot and Dailey, Elliot Meyerson and Hodjat, Babak and Miikkulainen, Risto},
+  journal={arXiv preprint arXiv:2509.24372},
+  year={2025}
+}
+@article{eggroll2025,
+  title={Evolution Strategies at the Hyperscale},
+  author={Sarkar, Bidipta and Fellows, Mattie and Duque, Juan Agustin and Letcher, Alistair and others},
+  journal={arXiv preprint arXiv:2511.16652},
+  year={2025}
+}
+
+% ---- RL instability: theory ----
+@incollection{baird1995,
+  title={Residual Algorithms: Reinforcement Learning with Function Approximation},
+  author={Baird, Leemon},
+  booktitle={Proceedings of the 12th International Conference on Machine Learning},
+  year={1995}
+}
+@article{tsitsiklis1997,
+  title={An Analysis of Temporal-Difference Learning with Function Approximation},
+  author={Tsitsiklis, John N. and Van Roy, Benjamin},
+  journal={IEEE Transactions on Automatic Control},
+  volume={42}, number={5}, pages={674--690},
+  year={1997}
+}
+@book{sutton2018,
+  title={Reinforcement Learning: An Introduction},
+  author={Sutton, Richard S. and Barto, Andrew G.},
+  edition={2}, publisher={MIT Press}, year={2018}
+}
+@article{vanhasselt2018,
+  title={Deep Reinforcement Learning and the Deadly Triad},
+  author={van Hasselt, Hado and Doron, Yotam and Strub, Florian and Hessel, Matteo and Sonnerat, Nicolas and Modayil, Joseph},
+  journal={arXiv preprint arXiv:1812.02648},
+  year={2018}
+}
+@article{mnih2015,
+  title={Human-level control through deep reinforcement learning},
+  author={Mnih, Volodymyr and others},
+  journal={Nature}, volume={518}, pages={529--533}, year={2015}
+}
+@article{lillicrap2015,
+  title={Continuous control with deep reinforcement learning},
+  author={Lillicrap, Timothy P. and others},
+  journal={arXiv preprint arXiv:1509.02971},
+  year={2015}
+}
+@inproceedings{zhang2021target,
+  title={Breaking the Deadly Triad with a Target Network},
+  author={Zhang, Shangtong and Yao, Hengshuai and Whiteson, Shimon},
+  booktitle={ICML}, year={2021},
+  note={arXiv:2101.08862}
+}
+@inproceedings{kakade2002,
+  title={Approximately Optimal Approximate Reinforcement Learning},
+  author={Kakade, Sham and Langford, John},
+  booktitle={ICML}, year={2002}
+}
+@inproceedings{schulman2015trpo,
+  title={Trust Region Policy Optimization},
+  author={Schulman, John and Levine, Sergey and Abbeel, Pieter and Jordan, Michael and Moritz, Philipp},
+  booktitle={ICML}, year={2015},
+  note={arXiv:1502.05477}
+}
+@article{schulman2017ppo,
+  title={Proximal Policy Optimization Algorithms},
+  author={Schulman, John and Wolski, Filip and Dhariwal, Prafulla and Radford, Alec and Klimov, Oleg},
+  journal={arXiv preprint arXiv:1707.06347},
+  year={2017}
+}
+@article{williams1992,
+  title={Simple statistical gradient-following algorithms for connectionist reinforcement learning},
+  author={Williams, Ronald J.},
+  journal={Machine Learning}, volume={8}, pages={229--256}, year={1992}
+}
+@article{greensmith2004,
+  title={Variance Reduction Techniques for Gradient Estimates in Reinforcement Learning},
+  author={Greensmith, Evan and Bartlett, Peter L. and Baxter, Jonathan},
+  journal={JMLR}, volume={5}, pages={1471--1530}, year={2004}
+}
+@inproceedings{korbak2022,
+  title={RL with KL penalties is better viewed as Bayesian inference},
+  author={Korbak, Tomasz and Perez, Ethan and Buckley, Christopher L.},
+  booktitle={Findings of EMNLP}, year={2022},
+  note={arXiv:2205.11275}
+}
+@inproceedings{skalse2022,
+  title={Defining and Characterizing Reward Hacking},
+  author={Skalse, Joar and Howe, Nikolaus H. R. and Krasheninnikov, Dmitrii and Krueger, David},
+  booktitle={NeurIPS}, year={2022},
+  note={arXiv:2209.13085}
+}
+@inproceedings{gao2023overoptimization,
+  title={Scaling Laws for Reward Model Overoptimization},
+  author={Gao, Leo and Schulman, John and Hilton, Jacob},
+  booktitle={ICML}, year={2023},
+  note={arXiv:2210.10760}
+}
+@article{cui2025entropy,
+  title={The Entropy Mechanism of Reinforcement Learning for Reasoning Language Models},
+  author={Cui, Ganqu and others},
+  journal={arXiv preprint arXiv:2505.22617},
+  year={2025}
+}
+@article{clipentropy2025,
+  title={Clip-Low Increases Entropy and Clip-High Decreases Entropy in Reinforcement Learning of Large Language Models},
+  author={{authors not independently verified}},
+  journal={arXiv preprint arXiv:2509.26114},
+  year={2025},
+  note={LISTING-ONLY: verify authors before citing}
+}
+@article{narvekar2020,
+  title={Curriculum Learning for Reinforcement Learning Domains: A Framework and Survey},
+  author={Narvekar, Sanmit and Peng, Bei and Leonetti, Matteo and Sinapov, Jivko and Taylor, Matthew E. and Stone, Peter},
+  journal={JMLR}, volume={21}, year={2020},
+  note={arXiv:2003.04960}
+}
+@inproceedings{portelas2020,
+  title={Automatic Curriculum Learning For Deep RL: A Short Survey},
+  author={Portelas, R{\'e}my and Colas, C{\'e}dric and Weng, Lilian and Hofmann, Katja and Oudeyer, Pierre-Yves},
+  booktitle={IJCAI}, year={2020},
+  note={arXiv:2003.04664}
+}
+
+% ---- ES stability: theory ----
+@article{nesterov2017,
+  title={Random Gradient-Free Minimization of Convex Functions},
+  author={Nesterov, Yurii and Spokoiny, Vladimir},
+  journal={Foundations of Computational Mathematics}, volume={17}, pages={527--566}, year={2017}
+}
+@article{duchi2015,
+  title={Optimal Rates for Zero-Order Convex Optimization: The Power of Two Function Evaluations},
+  author={Duchi, John C. and Jordan, Michael I. and Wainwright, Martin J. and Wibisono, Andre},
+  journal={IEEE Transactions on Information Theory}, volume={61}, number={5}, year={2015},
+  note={arXiv:1312.2139}
+}
+@article{berahas2022,
+  title={A Theoretical and Empirical Comparison of Gradient Approximations in Derivative-Free Optimization},
+  author={Berahas, Albert S. and Cao, Liyuan and Choromanski, Krzysztof and Scheinberg, Katya},
+  journal={Foundations of Computational Mathematics}, volume={22}, pages={507--560}, year={2022},
+  note={arXiv:1905.01332}
+}
+@article{wierstra2014,
+  title={Natural Evolution Strategies},
+  author={Wierstra, Daan and Schaul, Tom and Glasmachers, Tobias and Sun, Yi and Peters, Jan and Schmidhuber, J{\"u}rgen},
+  journal={JMLR}, volume={15}, pages={949--980}, year={2014}
+}
+@article{hansen2016,
+  title={The CMA Evolution Strategy: A Tutorial},
+  author={Hansen, Nikolaus},
+  journal={arXiv preprint arXiv:1604.00772},
+  year={2016}
+}
+@article{hansen2001,
+  title={Completely Derandomized Self-Adaptation in Evolution Strategies},
+  author={Hansen, Nikolaus and Ostermeier, Andreas},
+  journal={Evolutionary Computation}, volume={9}, number={2}, pages={159--195}, year={2001}
+}
+@article{ollivier2017,
+  title={Information-Geometric Optimization Algorithms: A Unifying Picture via Invariance Principles},
+  author={Ollivier, Yann and Arnold, Ludovic and Auger, Anne and Hansen, Nikolaus},
+  journal={JMLR}, volume={18}, year={2017}
+}
+@article{salimans2017,
+  title={Evolution Strategies as a Scalable Alternative to Reinforcement Learning},
+  author={Salimans, Tim and Ho, Jonathan and Chen, Xi and Sidor, Szymon and Sutskever, Ilya},
+  journal={arXiv preprint arXiv:1703.03864},
+  year={2017}
+}
+@article{metz2021,
+  title={Gradients are Not All You Need},
+  author={Metz, Luke and Freeman, C. Daniel and Schoenholz, Samuel S. and Kachman, Tal},
+  journal={arXiv preprint arXiv:2111.05803},
+  year={2021}
+}
+@inproceedings{parmas2018,
+  title={{PIPPS}: Flexible Model-Based Policy Search Robust to the Curse of Chaos},
+  author={Parmas, Paavo and Rasmussen, Carl Edward and Peters, Jan and Doya, Kenji},
+  booktitle={ICML}, year={2018}
+}
+@inproceedings{metz2019,
+  title={Understanding and correcting pathologies in the training of learned optimizers},
+  author={Metz, Luke and Maheswaranathan, Niru and Nixon, Jeremy and Freeman, C. Daniel and Sohl-Dickstein, Jascha},
+  booktitle={ICML}, year={2019},
+  note={arXiv:1810.10180}
+}
+@inproceedings{suh2022,
+  title={Do Differentiable Simulators Give Better Policy Gradients?},
+  author={Suh, Hyung Ju and Simchowitz, Max and Zhang, Kaiqing and Tedrake, Russ},
+  booktitle={ICML}, year={2022},
+  note={arXiv:2202.00817}
+}
+@article{rudolph2001,
+  title={Self-Adaptive Mutations May Lead to Premature Convergence},
+  author={Rudolph, G{\"u}nter},
+  journal={IEEE Transactions on Evolutionary Computation}, volume={5}, number={4}, pages={410--414}, year={2001}
+}
+
+% ---- experimental record ----
+@inproceedings{henderson2018,
+  title={Deep Reinforcement Learning that Matters},
+  author={Henderson, Peter and Islam, Riashat and Bachman, Philip and Pineau, Joelle and Precup, Doina and Meger, David},
+  booktitle={AAAI}, year={2018},
+  note={arXiv:1709.06560}
+}
+@inproceedings{engstrom2020,
+  title={Implementation Matters in Deep {RL}: A Case Study on {PPO} and {TRPO}},
+  author={Engstrom, Logan and Ilyas, Andrew and Santurkar, Shibani and Tsipras, Dimitris and Janoos, Firdaus and Rudolph, Larry and Madry, Aleksander},
+  booktitle={ICLR}, year={2020},
+  note={arXiv:2005.12729}
+}
+@article{andrychowicz2020,
+  title={What Matters in On-Policy Reinforcement Learning? A Large-Scale Empirical Study},
+  author={Andrychowicz, Marcin and others},
+  journal={arXiv preprint arXiv:2006.05990},
+  year={2020}
+}
+@article{ouyang2022,
+  title={Training language models to follow instructions with human feedback},
+  author={Ouyang, Long and others},
+  journal={arXiv preprint arXiv:2203.02155},
+  year={2022}
+}
+@article{llama3,
+  title={The Llama 3 Herd of Models},
+  author={Grattafiori, Aaron and others},
+  journal={arXiv preprint arXiv:2407.21783},
+  year={2024}
+}
+@article{deepseekr1,
+  title={DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning},
+  author={Guo, Daya and others},
+  journal={arXiv preprint arXiv:2501.12948},
+  year={2025}
+}
+@article{dapo2025,
+  title={{DAPO}: An Open-Source {LLM} Reinforcement Learning System at Scale},
+  author={Yu, Qiying and others},
+  journal={arXiv preprint arXiv:2503.14476},
+  year={2025}
+}
+@article{drgrpo2025,
+  title={Understanding R1-Zero-Like Training: A Critical Perspective},
+  author={Liu, Zichen and others},
+  journal={arXiv preprint arXiv:2503.20783},
+  year={2025}
+}
+@article{sober2025,
+  title={A Sober Look at Progress in Language Model Reasoning},
+  author={Hochlehnert, Andreas and others},
+  journal={arXiv preprint arXiv:2504.07086},
+  year={2025}
+}
+@article{openai5,
+  title={Dota 2 with Large Scale Deep Reinforcement Learning},
+  author={Berner, Christopher and others},
+  journal={arXiv preprint arXiv:1912.06680},
+  year={2019}
+}
+@article{alphastar,
+  title={Grandmaster level in {StarCraft II} using multi-agent reinforcement learning},
+  author={Vinyals, Oriol and others},
+  journal={Nature}, volume={575}, pages={350--354}, year={2019}
+}
+@article{akkaya2019,
+  title={Solving Rubik's Cube with a Robot Hand},
+  author={Akkaya, Ilge and others},
+  journal={arXiv preprint arXiv:1910.07113},
+  year={2019}
+}
+@article{mania2018,
+  title={Simple random search provides a competitive approach to reinforcement learning},
+  author={Mania, Horia and Guy, Aurelia and Recht, Benjamin},
+  journal={arXiv preprint arXiv:1803.07055},
+  year={2018}
+}
+@article{such2017,
+  title={Deep Neuroevolution: Genetic Algorithms are a Competitive Alternative for Training Deep Neural Networks for Reinforcement Learning},
+  author={Such, Felipe Petroski and Madhavan, Vashisht and Conti, Edoardo and Lehman, Joel and Stanley, Kenneth O. and Clune, Jeff},
+  journal={arXiv preprint arXiv:1712.06567},
+  year={2017}
+}
+@article{conti2017,
+  title={Improving Exploration in Evolution Strategies for Deep Reinforcement Learning via a Population of Novelty-Seeking Agents},
+  author={Conti, Edoardo and Madhavan, Vashisht and Such, Felipe Petroski and Lehman, Joel and Stanley, Kenneth O. and Clune, Jeff},
+  journal={arXiv preprint arXiv:1712.06560},
+  year={2017}
+}
+@article{chrabaszcz2018,
+  title={Back to Basics: Benchmarking Canonical Evolution Strategies for Playing Atari},
+  author={Chrabaszcz, Patryk and Loshchilov, Ilya and Hutter, Frank},
+  journal={arXiv preprint arXiv:1802.08842},
+  year={2018}
+}
+@article{orz2025,
+  title={Open-Reasoner-Zero: An Open Source Approach to Scaling Up Reinforcement Learning on the Base Model},
+  author={Hu, Jingcheng and others},
+  journal={arXiv preprint arXiv:2503.24290},
+  year={2025}
+}
+@article{hoy2026geometry,
+  title={Matching Accuracy, Different Geometry: Evolution Strategies vs {GRPO} in {LLM} Post-Training},
+  author={Hoy, {and others; not independently verified}},
+  journal={arXiv preprint arXiv:2604.01499},
+  year={2026},
+  note={LISTING-ONLY: verify before citing}
+}
+@article{abdi2026forgetting,
+  title={Evolutionary Strategies lead to Catastrophic Forgetting in {LLMs}},
+  author={Abdi, {and others; not independently verified}},
+  journal={arXiv preprint arXiv:2601.20861},
+  year={2026},
+  note={LISTING-ONLY: verify before citing}
+}

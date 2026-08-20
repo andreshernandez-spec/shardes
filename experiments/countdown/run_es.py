@@ -128,6 +128,19 @@ def main(argv=None) -> int:
     state_file, log_file = out / "state.npz", out / "log.jsonl"
     eval_file = out / "eval.jsonl"
 
+    # E14: drift from the pretrained weights, logged with every eval. The reference
+    # is theta_0 (the loaded checkpoint), never the resume point, so a resumed run
+    # reports the same quantity an unbroken one would. Shares buffers with params
+    # (JAX never mutates them), so the copy costs HBM only once updates diverge.
+    init_ref = params
+
+    @jax.jit
+    def l2_from_init(p):
+        sq = jax.tree.map(
+            lambda a, b: jnp.sum((a.astype(jnp.float32) - b.astype(jnp.float32)) ** 2),
+            p, init_ref)
+        return jnp.sqrt(jax.tree.reduce(lambda x, y: x + y, sq))
+
     state = es.init(jax.random.key(cfg["seed"]), params)
     if state_file.exists():
         saved = np.load(state_file, allow_pickle=False)
@@ -202,7 +215,8 @@ def main(argv=None) -> int:
         rec = {"generation": g, "eval_reward": float(rewards.mean()),
                "eval_solved": float((rewards == 1.0).mean()),
                "eval_format": float((rewards >= 0.1).mean()),
-               "eval_seconds": time.perf_counter() - t0}
+               "eval_seconds": time.perf_counter() - t0,
+               "param_l2_from_init": float(l2_from_init(state.params))}
         with eval_file.open("a") as f:
             f.write(json.dumps(rec) + "\n")
         print(f"[{g}] EVAL reward {rec['eval_reward']:.3f} solved {rec['eval_solved']:.3f} "
