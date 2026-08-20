@@ -1,0 +1,17 @@
+% Full per-platform figure sets and anything the page budget pushes out.
+\section{Full scaling grids}
+% M1/M2/M3 per platform -- the appendix carries what F1/F2 summarize.
+\begin{figure*}[p]
+  \centering
+  \includegraphics[width=.9\textwidth]{m1-strong-scaling.png}
+  \caption{Strong scaling, all cells, 8$\times$A100.}
+\end{figure*}
+%% TODO(andres): add the TPU set (figures-tpu-v5e8/) and M2/M3 as the text
+%% references them; \graphicspath needs the extra directory when you do.
+
+\section{Reproduction}
+%% TODO(andres): the one-page recipe: clone, conda env, pytest --fast, which
+%% script regenerates which figure/table (plot_paper.py, plot_cost.py,
+%% tb1/tb2/tb3 --latex, plot_e13.py), and the results-directory READMEs as
+%% the per-experiment provenance.
+\todo{reproduction appendix}
