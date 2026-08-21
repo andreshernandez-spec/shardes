@@ -27,11 +27,13 @@
 % Draft-only helper: visible TODO marks. Delete for submission.
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
-\title{shardes: a sharded evolution-strategies library,\\
-and where its communication actually goes}
-%% TODO(andres): title is a placeholder; two drafts to react against:
-%%   "One library for both bets: sharded evolution strategies on GPUs and TPUs"
-%%   "Measuring the folk claims of distributed evolution strategies"
+\title{Measuring the folk claims of\\
+distributed evolution strategies}
+%% FRAMING (decided 2026-08-21): the paper is the investigation; the library is
+%% the instrument, cited and released but not the subject.
+%% TODO(andres): title candidates in the same frame, pick or rewrite:
+%%   "Where the communication goes: evolution strategies at scale, measured"
+%%   "The contraction crossover: what distributed evolution strategies cost"
 \author{Andres Hernandez}
 \date{}
 
@@ -41,9 +43,10 @@ and where its communication actually goes}
 \begin{abstract}
 %% TODO(andres): write last, from the contributions list in section 1.
 %% Ingredients, one sentence each: the two papers and their opposite bets; the
-%% library that expresses both; the crossover result (F2); the cost surface and
-%% the non-inversion (F4); the end-to-end validation (F7); everything measured,
-%% every number reproducible from a committed script.
+%% unmeasured claims between them; the crossover result (F2); the non-inversion
+%% (F4); the barrier and stability results (E10, E14); the instrument in one
+%% clause (open-source, expresses both bets, cited); every number reproducible
+%% from a committed script.
 \todo{abstract}
 \end{abstract}
 

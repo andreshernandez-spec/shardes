@@ -397,6 +397,8 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 
 ## Venue and timing
 
+**Framing decided 2026-08-21: the paper is the ES-scaling investigation; the library is the instrument**, cited and released, one contribution bullet. The project's deliverable is still the library (CLAUDE.md); the paper's contribution is what it measured, which is both the stronger review posture and the better story.
+
 **Decided 2026-08-20: MLSys-style full paper** ("it can always be compressed later").
 The fallbacks stay what they were: a NeurIPS/ICML workshop on efficient training or
 systems, or arXiv preprint plus workshop. The artifact — a working library with a
