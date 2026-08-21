@@ -20,6 +20,10 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{natbib}
+% Floats stay inside their section: single-column floats are barriered at
+% every \section boundary. Double-column floats (figure*/table*) cannot be
+% barriered by placeins; their drift is bounded by [t] placement.
+\usepackage[section]{placeins}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
 

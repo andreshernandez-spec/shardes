@@ -12,9 +12,9 @@
     Bottom: weak-scaling parallel efficiency (fixed population per
     device), each series normalized to its own smallest measured device
     count, so the dashed ideal is 1.0 for every series. The dense
-    baseline (\texttt{iid\_gaussian}) is missing its one-device point on
-    the TPU strong panel because it does not fit one 16\,GB chip at this
-    size. No series is superlinear. What separates the weak panel is the
+    baseline (\texttt{iid\_gaussian}) is missing the B placement's
+    one-device point on the TPU strong panel, which does not fit one
+    16\,GB chip at this size (the A placement fits). No series is superlinear. What separates the weak panel is the
     contraction placement, not the perturbation strategy: the A placement
     of the dense and seed-regenerated arms pays its replicated
     contraction ever more dearly as devices are added, while the same
@@ -34,9 +34,8 @@ perturbation strategy: under contraction A the dense and seed-regenerated
 arms fall to $0.39$ and $0.50$ on the A100 ($0.18$ and $0.54$ on the
 v5e), because A replicates the full contraction on every device and those
 two strategies have the most contraction work to replicate; the same
-strategies under B hold $0.79$--$1.00$. The dense baseline's missing
-one-device point on the TPU strong panel is a memory ceiling
-(Figure~\ref{fig:f4} maps it).
+strategies under B hold $0.79$--$1.00$. The dense baseline's B placement misses its one-device point on the
+TPU strong panel, a memory ceiling (Figure~\ref{fig:f4} maps it).
 %% TODO(andres): a closing sentence with one concrete pair of numbers read
 %% off the figure (e.g. seconds/generation at D=1 vs D=8 for mirrored_lr1),
 %% so the reader is taught how to read the panel.
@@ -74,11 +73,13 @@ count (Table~\ref{tab:tb2}: the sharded evaluation makes two $4N$-byte
 gathers real); strategy B moves a model-sized buffer every update and wins
 much of the grid anyway: as a payload-rate sanity check, its most
 demanding measured cell's collective payload over generation time is
-7.9\,GB/s against the A100's 600\,GB/s peak NVLink figure. (Payload over
-time is not network utilization; the collective's topology moves more
-bytes than its payload and peak figures are not achieved bandwidth. The
-two orders of magnitude of headroom survive any such correction.) The
-claim guarded against a cost that does not bind at this scale.
+7.9\,GB/s against the A100's 600\,GB/s peak NVLink figure, roughly
+$75\times$ of payload-to-peak headroom. (Payload over time is not network
+utilization: the collective's topology moves more bytes than its payload
+and peak figures are not achieved bandwidth, so this ratio bounds nothing
+by itself; the timing columns, not this ratio, are the evidence that
+communication does not bind at the measured cells.) The claim guarded
+against a cost that did not bind anywhere we measured.
 %% TODO(andres): your phrasing of true-and-beside-the-point; it is the
 %% paper's best line and should sound like you.
 
@@ -110,15 +111,16 @@ most of the grid, drawn as wins because feasibility is the strongest form
 of paying off). The platforms move the constants, never the ordering. The
 same figure prices Qiu's bet \citep{qiu2025} honestly: seed regeneration costs
 $5$--$6\times$ the materializing baseline per device on the TPU against
-$1.3$--$3\times$ on the GPU, and it is the only strategy that never runs
-out of memory on either platform, which is precisely the
-storage-for-compute trade it advertises.
+$1.3$--$3\times$ on the GPU, and its family (mirrored or not) is the
+only one that never runs out of memory on either platform, which is
+precisely the storage-for-compute trade it advertises.
 %% TODO(andres): one sentence reminding the reader of the matched-shapes
 %% rule from section 5, which is what makes the two rows comparable.
 
 \subsection{Baselines}
 \input{generated/tb1}
-Matched shapes, matched populations, tokens per second; nothing here claims
+Matched shapes, matched populations, token-position evaluations per
+second; nothing here claims
 step-equivalence between implementations. The arms differ in antithetic
 pairing, shaping and normalization details by design, and the honest unit of
 comparison is throughput at the same shapes, which is how both papers report \citep{qiu2025,eggroll2025}.
@@ -161,7 +163,8 @@ rather than argued from source code.
 \subsection{The shaping barrier, priced}
 Section~\ref{sec:design} declared one deliberate synchronization point;
 here is its bill, measured in isolation across 84 cells on the TPU. The
-communication half is not the story at any scale: the gather runs at
+communication half is not the story anywhere in the measured range: the
+gather runs at
 2.4--6\,$\mu$s, flat in $N$ (the payload at $N{=}2^{18}$ is 1\,MB) and
 about 3\,$\mu$s dearer at $D{=}8$ than at $D{=}1$. The cost that grows is
 the sort, and it is local compute paid redundantly rather than
@@ -182,8 +185,8 @@ caveat in context: identical full generations with shaping on and off,
 at the largest cells the sweep measured on this platform, differ by
 41\,$\mu$s ($d{=}512$, $N{=}1024$) and 149\,$\mu$s ($d{=}2048$,
 $N{=}256$) in the median, both inside their own repeat spreads. At
-measured scales the barrier is statistically invisible inside a
-generation; the 12\,ms sort stands as the ceiling for a population
+measured cells the barrier is indistinguishable from repeat noise
+inside a generation (seven repeats per point); the 12\,ms sort stands as the ceiling for a population
 regime where a full generation does not fit this hardware anyway.
 %% TODO(andres): your voice; keep the redundant-local-compute reading and
 %% the in-context closure as the two beats.

@@ -63,23 +63,29 @@ def main() -> None:
     FIGURES.mkdir(exist_ok=True)
     fig, ax = plt.subplots(figsize=(7.0, 4.4))
 
-    base = [json.loads((RESULTS / "es-mirrored-seed-s0-eval.jsonl")
-                       .open().readline())["eval_reward"]]
-    ax.axhline(base[0], color="#888888", lw=1.0, ls="--", zorder=1)
-    ax.annotate("base model", (0.99, base[0]), xycoords=("axes fraction", "data"),
-                ha="right", va="bottom", fontsize=8, color="#666666")
+    # Both decoders' base-model floors, labeled: the JAX evaluator (ES arms)
+    # and the HF evaluator (GRPO) score the same weights differently by a
+    # bf16 padding artifact, and an unlabeled single floor invites misreading
+    # the gap between them as a training effect.
+    for stem, label in (("es-mirrored-seed", "base model (JAX decoder)"),
+                        ("grpo", "base model (HF decoder)")):
+        floor = json.loads((RESULTS / f"{stem}-s0-eval.jsonl")
+                           .open().readline())["eval_reward"]
+        ax.axhline(floor, color="#888888", lw=1.0, ls="--", zorder=1)
+        ax.annotate(label, (0.35, floor), xycoords=("axes fraction", "data"),
+                    ha="left", va="bottom", fontsize=8, color="#666666")
 
     for stem, (color, label) in ARM_STYLE.items():
         xkey = "step" if stem == "grpo" else "generation"
         pts = curves(stem, xkey)
         xs = [x for x, _ in pts]
-        med = [statistics.median(v) for _, v in pts]
+        med = [statistics.mean(v) for _, v in pts]  # mean, matching the README and tb3
         lo = [min(v) for _, v in pts]
         hi = [max(v) for _, v in pts]
         ax.plot(xs, med, color=color, lw=1.6, label=label, zorder=3)
         ax.fill_between(xs, lo, hi, color=color, alpha=0.18, lw=0, zorder=2)
 
-    ax.set_xlabel("sample evaluations")
+    ax.set_xlabel("training sample evaluations")
     ax.set_ylabel("held-out reward (2000 puzzles, greedy)")
     ax.set_xlim(0, 500 * EVALS_PER_UNIT)
     ax.legend(frameon=False, fontsize=8, loc="lower right")

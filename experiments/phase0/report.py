@@ -50,7 +50,8 @@ at `1e-1`. The estimator targets the *smoothed* gradient `E[f(theta + sigma eps)
 two orders of magnitude down. That is a property of the objective, not a bug, and it is the
 same shape of finding as `shaping = none` being dead here (`docs/01` C0.5).
 
-It matters for reading F5: the figure defaults to `--sigma 0.01`, which is the middle arm.
+It matters for reading F5: the figure defaults to `--sigma 0.001` with centered-rank
+shaping, the paper's slice (the one the task prediction and the E15 bridge use).
 The `1e-3` slice is uniformly better and is the one to check if a scheme comparison looks
 flat, because a scheme can only separate where the estimator has signal to begin with.
 """
@@ -176,7 +177,7 @@ def main(argv=None) -> int:
     lines += ["", PROSE.strip(), "",
               "## Reproduce", "",
               "```sh", "cd experiments/phase0", "python run.py       # resumable",
-              "python plot.py      # figures/f5-estimator-quality.png",
+              "python plot.py      # figures/f5-estimator-quality.png (defaults = the paper slice)",
               "python report.py    # this file", "```", ""]
 
     text = "\n".join(lines)
