@@ -24,6 +24,17 @@ Per (strategy, N): `replicates` independent ES seeds against one fixed
 gradient; median and range of cosines reported, one JSON per cell. The
 analysis compares these against the phase-0 fitted predictions at the same
 N/d_eff (analysis_c6b's machinery), which is the bridge being tested.
+
+Fitness is evaluated in even chunks of `member_chunk` members, because the
+low-rank arms vmap every member through the forward at once and the logits
+alone for 240 members are ~70 GiB on this model (both OOMs of 2026-08-21 were
+this cell). Chunking is the library's own regeneration contract, not a
+reimplementation: perturbations re-derive from (base_key, member_ids), so each
+chunk is `strategy.sample` on a slice of ids plus `strategy.apply`, exactly
+what core.py's contractions already do. Per-member fitness is independent of
+how members are batched, so the cosines are unchanged. Chunks must be whole
+antithetic pairs (mirrored.py raises otherwise). Cells with an existing JSON
+are skipped, so a rerun resumes rather than repeats.
 """
 
 from __future__ import annotations
@@ -79,6 +90,7 @@ def main(argv=None) -> int:
 
     if args.smoke:
         cfg.update(populations=[4, 8], replicates=2, n_prompts=2, pad_to=32,
+                   member_chunk=2,  # 2 and 4 chunks: exercises the concat path
                    results_dir=cfg["results_dir"] + "-smoke")
 
     mcfg = qwen2.Config.qwen25_05b()
@@ -121,24 +133,45 @@ def main(argv=None) -> int:
 
     for strategy in cfg["strategies"]:
         for n in cfg["populations"]:
+            outfile = out / f"s={strategy}__N={n}.json"
+            if outfile.exists():
+                print(f"skip {outfile.name}: already measured", flush=True)
+                continue
+            chunk = min(cfg.get("member_chunk", n), n)
             cosines = []
             for rep in range(cfg["replicates"]):
                 es = ShardedES(STRATEGIES[strategy](cfg), n=n,
                                sigma=cfg["sigma"], lr=1.0, mesh=mesh,
                                compute_dtype=jnp.bfloat16)
+                pairing = getattr(es.strategy, "pairing", 1)
+                if n % chunk or chunk % pairing:
+                    raise ValueError(
+                        f"member_chunk={chunk} must divide N={n} and be a "
+                        f"multiple of the strategy's pairing of {pairing}")
                 state = es.init(jax.random.key(1000 + rep), params)
+                pert, asked = es.ask(state)
 
                 @jax.jit
-                def step(state):
-                    pert, state = es.ask(state)
+                def fitness_chunk(st, base_key, ids_c):
+                    # The chunk's members regenerated from their global ids,
+                    # the same re-derivation tell's contraction does.
+                    view = es._view(st.params)
+                    sub = es.strategy.sample(base_key, view, ids_c)
+                    return es.strategy.apply(loss32, view, sub, st.sigma)(batch)
+
+                @jax.jit
+                def update(st, pert, fitness):
                     # tell MINIMIZES fitness (core.py's convention; run_es
                     # negates its reward for the same reason), so the NLL
                     # goes in as-is.
-                    fitness = es.apply(loss32, state, pert)(batch)
-                    return es.tell(state, pert, fitness)
+                    return es.tell(st, pert, fitness)
 
                 t0 = time.perf_counter()
-                new = step(state)
+                ids = jnp.arange(n, dtype=jnp.int32)
+                fitness = jnp.concatenate(
+                    [fitness_chunk(asked, pert.base_key, ids[i:i + chunk])
+                     for i in range(0, n, chunk)])
+                new = update(asked, pert, fitness)
                 est = jax.tree.map(lambda a, b: a.astype(jnp.float32)
                                    - b.astype(jnp.float32),
                                    new.params, state.params)
@@ -149,13 +182,13 @@ def main(argv=None) -> int:
             rec = {"config": {"strategy": strategy, "population": n,
                               "sigma": cfg["sigma"],
                               "n_prompts": cfg["n_prompts"],
+                              "member_chunk": chunk,
                               "objective": "teacher-forced NLL",
                               "smoke": bool(args.smoke)},
                    "cosines": cosines,
                    "cosine_median": statistics.median(cosines),
                    "env": env}
-            (out / f"s={strategy}__N={n}.json").write_text(
-                json.dumps(rec, indent=1))
+            outfile.write_text(json.dumps(rec, indent=1))
     return 0
 
 
