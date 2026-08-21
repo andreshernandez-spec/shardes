@@ -22,8 +22,19 @@
 %% references them; \graphicspath needs the extra directory when you do.
 
 \section{Reproduction}
-%% TODO(andres): the one-page recipe: clone, conda env, pytest --fast, which
-%% script regenerates which figure/table (plot_paper.py, plot_cost.py,
-%% tb1/tb2/tb3 --latex, plot_e13.py), and the results-directory READMEs as
-%% the per-experiment provenance.
-\todo{reproduction appendix}
+Every number in the paper regenerates from a committed script against a
+committed results directory, and every results directory's README records
+the exact session that produced it (platform, commit, environment, cost,
+and any incident). The figure and table map: F1, F2 and F2b from
+\texttt{plot\_paper.py}; F4 from \texttt{plot\_cost.py}; F5 from the
+phase-0 plots; F7 from \texttt{plot\_e13.py}; F8 from
+\texttt{plot\_e14.py}; Tables~1--3 from \texttt{tb1.py},
+\texttt{tb2.py} and \texttt{tb3.py} with \texttt{--latex}, which write
+the exact files this document inputs. The test suite runs on CPU with no
+network; the multi-device logic is exercised on eight simulated devices, so
+correctness properties (including the device-count invariance test) are
+checkable without any accelerator, and the two TPU compile probes
+(\texttt{probe\_lr1.py}, \texttt{probe\_eggroll\_tpu.py}) reproduce
+the compiler-level claims from any Linux machine.
+%% TODO(andres): repo URL, commit or tag of the submitted version, and the
+%% one-line clone-and-build once the artifact is frozen.

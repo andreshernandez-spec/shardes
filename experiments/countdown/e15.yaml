@@ -1,0 +1,17 @@
+# E15: estimator accuracy on the real model. Committed before the run, cited
+# by SHA. Strategies: the four E13 arms plus the unpaired low-rank point that
+# EGGROLL's sampler cannot express (the why-shardes claim gets its real-model
+# accuracy number here too). N=30 is Qiu's setting; N=240 is the E13-matched
+# per-step evaluation budget of the GRPO arm, one octave up the F5 curves.
+model: Qwen/Qwen2.5-0.5B-Instruct
+puzzle_seed: 7
+n_prompts: 32
+pad_to: 128
+sigma: 0.001
+eval_chunk: 1
+
+strategies: [mirrored_seed, mirrored_lr1, mirrored_lr4, mirrored_lr16, lowrank_r1]
+populations: [30, 240]
+replicates: 5
+
+results_dir: results-e15

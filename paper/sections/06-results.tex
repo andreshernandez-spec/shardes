@@ -20,10 +20,19 @@
 \end{figure*}
 
 \subsection{Scaling to eight devices}
-%% TODO(andres): two paragraphs walking F1: what near-ideal looks like here,
-%% why superlinear weak scaling is utilization rather than magic, and the
-%% dense flatline as the first appearance of the memory story.
-\todo{F1 walkthrough}
+Figure~\ref{fig:f1} shows both scaling modes at the largest cell both
+platforms ran. Strong scaling (a fixed total population split across more
+devices) tracks the ideal slope for every strategy that has per-candidate
+work to split; weak scaling (a fixed population per device) exceeds the
+linear reference for the low-rank strategies because a larger total
+population fills each device's compute better, which is utilization, not a
+violation of anything. Two cells introduce stories that later figures
+finish: the dense baseline's missing one-device point on the TPU is a
+memory ceiling (Figure~\ref{fig:f4} maps it), and its flat line in the TPU
+weak panel says more chips do not help a memory-bound strategy.
+%% TODO(andres): a closing sentence with one concrete pair of numbers read
+%% off the figure (e.g. seconds/generation at D=1 vs D=8 for mirrored_lr1),
+%% so the reader is taught how to read the panel.
 
 % F2 -- experiments/phase2/figures/f2-crossover.png (plot_paper.py)
 \begin{figure*}[t]
@@ -44,13 +53,23 @@
 \end{figure*}
 
 \subsection{The crossover, and the folk claim}
-%% TODO(andres): the section 4 prediction against F2, cell by cell where it
-%% matters. Then the folk-claim resolution in one paragraph: A does move only
-%% scalars (TB2: 2x the naive count, still bytes); B moves megabytes and wins
-%% anyway wherever per-member compute is heavy, because the all-reduce is
-%% under 1% of the interconnect either way. The claim was true and beside the
-%% point.
-\todo{F2 walkthrough + folk claim resolution}
+Figure~\ref{fig:f2} is the directional prediction of
+Section~\ref{sec:contraction}, tested. B wins outright wherever every
+candidate carries real contraction work (the dense and seed-regenerated
+strategies), and wins harder on the TPU; for the low-rank family the two
+placements sit within a few percent of each other and the sign flips inside
+the grid, with A ahead at $d{=}2048$. Both halves match the prediction: B's
+advantage grows with per-candidate work, and A returns where that work
+vanishes; its trajectory in device count is monotone
+(Figure~\ref{fig:f2b}). The folk claim resolves as true and beside the
+point. Strategy A really does move only scalars, at exactly twice the naive
+count (Table~\ref{tab:tb2}: the sharded evaluation makes two $4N$-byte
+gathers real); strategy B moves a model-sized buffer every update and wins
+much of the grid anyway, because even its most demanding measured cell asks
+7.9\,GB/s of a 600\,GB/s interconnect. The claim guarded against a cost
+that does not bind at this scale.
+%% TODO(andres): your phrasing of true-and-beside-the-point; it is the
+%% paper's best line and should sound like you.
 
 \input{generated/tb2}
 
@@ -70,12 +89,21 @@
 \end{figure*}
 
 \subsection{Where the low-rank rewrite pays}
-%% TODO(andres): C4's arc: EGGROLL's motivation is GPU-shaped; the natural
-%% guess is that the TPU's matrix unit rescues dense; measured answer: no,
-%% the platforms move the constants, not the ordering. seed regeneration's
-%% 5-6x cost at D=1 on TPU vs 1.3-3x on GPU belongs here too, as does the
-%% honest note that it is the only strategy that never runs out of memory.
-\todo{F4 walkthrough}
+EGGROLL's motivation is explicitly GPU-shaped, so the natural guess was that
+a TPU, whose matrix unit makes dense multiplies comparatively cheap, would
+narrow the gap or invert it. Figure~\ref{fig:f4} answers: the rewrite pays
+\emph{more} on the v5e, not less, both in time (rank-1 at
+$0.05$--$0.18\times$ dense against $0.13$--$0.42\times$ on the A100) and
+in feasibility (the 16\,GB chip renders the dense baseline infeasible over
+most of the grid, drawn as wins because feasibility is the strongest form
+of paying off). The platforms move the constants, never the ordering. The
+same figure prices Qiu's bet honestly: seed regeneration costs
+$5$--$6\times$ the materializing baseline per device on the TPU against
+$1.3$--$3\times$ on the GPU, and it is the only strategy that never runs
+out of memory on either platform, which is precisely the
+storage-for-compute trade it advertises.
+%% TODO(andres): one sentence reminding the reader of the matched-shapes
+%% rule from section 5, which is what makes the two rows comparable.
 
 \subsection{Baselines}
 \input{generated/tb1}
@@ -106,11 +134,16 @@ outright, a seam this instrument carries.
 %% TODO(andres): your voice; the four claims and their caveats are the
 %% content, the order is deliberate (systems, choices, feasibility, seams).
 
-%% TODO(andres): three sentences: within 0.68-0.85x of EGGROLL's own
-%% implementation single-device with a general API; 6x past their ceiling at
-%% D=8 because no reference shards; evosax OOMs at d=2048 on 16 GB at every
-%% device count, the flattening foreclosure as a measured row.
-\todo{TB1 walkthrough}
+Three rows carry the table's weight. Single-device, the instrument runs at
+$0.68$--$0.85\times$ EGGROLL's own implementation across the shapes, which
+is the honest cost of a general API against a specialized one. At eight
+devices it reaches $6\times$ their single-chip ceiling, because no
+reference shards and the rows say so rather than hiding it. And evosax, the
+incumbent, runs out of memory at $d{=}2048$ on a 16\,GB chip at every
+device count: the flattening design decision, measured as a failure row
+rather than argued from source code.
+%% TODO(andres): your voice; keep the three-row structure and the
+%% cost-of-generality framing of the first row.
 
 \subsection{The shaping barrier, priced}
 %% TODO(andres): the E10 numbers from section 3, one short table or inline:
@@ -124,9 +157,16 @@ outright, a seam this instrument carries.
 
 \subsection{Ablations}
 \input{generated/tb3}
-%% TODO(andres): one paragraph. The two rows worth prose: bf16-vs-f32 is
-%% ~1.0x on both platforms at default precision (dtype is a memory decision,
-%% not a speed one), and highest-precision costs 1.6-1.9x only for the
-%% low-rank family, whose correction GEMMs are exactly the multiplies being
-%% upgraded.
-\todo{TB3 walkthrough}
+Two rows earn prose. Compute dtype costs nothing: bfloat16 against float32
+is within a few percent on both platforms at default matmul precision,
+because the tensor core and the matrix unit already downgrade the
+multiplies, so the dtype choice is about memory, never speed. Matmul
+precision, by contrast, is strategy-shaped: forcing full-precision
+multiplies is nearly free for the strategies whose time is the shared
+base-model multiply, and costs $1.6$--$1.9\times$ exactly for the low-rank
+family, whose per-candidate correction multiplies are the operations being
+upgraded. A practitioner running defaults gets Figure~\ref{fig:f4}'s
+speedups; our scaling sweeps, which pin full precision for cross-device
+comparability, were conservative against the low-rank arms specifically.
+%% TODO(andres): keep the last sentence; it preempts the question of why
+%% the two experiment families pin different precisions.
