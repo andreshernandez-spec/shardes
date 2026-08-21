@@ -31,7 +31,8 @@
     against the A100's 80; population ceilings therefore differ by design,
     and no absolute throughput here matches EGGROLL's H100 figures
     \citep{eggroll2025}. The
-    scaling behaviour transfers; the constants do not.
+    mechanisms are argued to transfer; the scaling behaviour itself has
+    been shown only at the scales measured here.
   \item \textbf{One compiler workaround ships in the library.} Rank-1
     factors are padded with a zero column so the TPU compiler keeps them in
     a fused matrix multiply; the pad is measured bitwise-invisible in

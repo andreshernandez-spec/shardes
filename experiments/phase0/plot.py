@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 """Regenerate figure F5 from results/. No manual steps, no hand-edited numbers.
 
-    python plot.py                      # figures/f5-estimator-quality.png
-    python plot.py --sigma 0.01         # pick the sigma slice
-    python plot.py --shaping centered_ranks   # the shaped comparison
+    python plot.py                      # the paper's F5: sigma 1e-3, centered ranks
+    python plot.py --sigma 0.01 --shaping baseline   # any other slice
 
-F5: log-log, x = N/d_eff, y = 1 - cos(g_hat, grad). Two panels, full rank and rank 1.
-One curve per scheme with an IQR band, and a vertical line at N/d_eff = 1.
+The DEFAULTS are the paper's slice (sigma = 0.001, centered-rank shaping), the
+slice the task prediction and the E15 bridge use; running the bare command
+reproduces the committed figure. Changing either flag plots a different slice
+and must not be committed over f5-estimator-quality.png.
 
-The claim the figure supports or kills: curves separate in the rank-1 panel to the right
-of the line, and do not separate in the full-rank panel to the left of it.
+F5: log-log, x = N/d_eff, y = cos(g_hat, grad). Three panels (full rank,
+rank 1, rank 4), one curve per scheme with an IQR band, and a vertical line
+at N/d_eff = 1.
 """
 
 from __future__ import annotations
@@ -90,8 +92,9 @@ def load(sigma: float | None, shaping: str | None) -> list[dict]:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--sigma", type=float, default=0.01)
-    ap.add_argument("--shaping", default="baseline",
+    # Defaults are the paper's F5 slice; see the docstring.
+    ap.add_argument("--sigma", type=float, default=0.001)
+    ap.add_argument("--shaping", default="centered_ranks",
                     help="a literal mode, or 'baseline' for each scheme's unbiased arm "
                          "(centered on the iid side, none under mirroring). See BASELINE.")
     # docs/01 C0.5 specifies y = 1 - cos, which is the right transform when cosine

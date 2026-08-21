@@ -47,8 +47,9 @@ scale. We therefore built the
 instrument first: \textbf{shardes}, an open-source JAX \citep{jax2018} library whose core
 splits the population of perturbed model copies across devices, with the
 perturbation scheme as a pluggable strategy, so both bets and their
-combinations run in one system and a measured difference is a difference
-between algorithms, not implementations. The library is released and citable;
+combinations run in one system, which shrinks rather than eliminates the
+implementation confound: each strategy keeps its own code path, but all of
+them share the mesh, the evaluation loop, and the update machinery. The library is released and citable;
 this paper is about what it measured.
 
 \paragraph{Contributions, in order of strength.} The primary
@@ -77,17 +78,17 @@ a three-seed quality check and a scoped robustness comparison.
     $0.05$--$0.18\times$ the dense baseline on the v5e against
     $0.13$--$0.42\times$ on the A100, and the dense baseline is infeasible
     over most of the 16\,GB grid besides (Figure~\ref{fig:f4}).
-  \item \textbf{The one synchronization in the measured update path
-    is a sort, and it is local compute, not communication.} It belongs to
-    centered-rank fitness shaping rather than to ES itself: the fitness
-    gather costs 2.4--6\,$\mu$s at every measured population and device
-    count, and the sort costs 12\,ms at $N{=}2^{18}$, identical on 1 and 8
-    devices.
+  \item \textbf{The only synchronization point is the fitness
+    gather, and the expensive part of the barrier above it is not
+    communication.} The gather costs 2.4--6\,$\mu$s at every measured
+    population and device count; the sort behind centered-rank shaping (a
+    property of the shaping, not of ES) costs 12\,ms at $N{=}2^{18}$ and
+    is identical on 1 and 8 devices: replicated local compute.
   \item \textbf{Stability, measured with criteria pre-specified in a
     committed protocol}: the RL
     baseline collapses to zero on every seed at $8\times$ its published
-    learning rate while ES crosses the same $64\times$ range without a
-    collapse; and our own falsification criteria caught the part of the claim
+    learning rate while ES shows no collapse at either endpoint of the
+    same 64-fold interval; and our own falsification criteria caught the part of the claim
     that was wrong, since removing the baseline's individual stabilizers
     changed little (Section~\ref{sec:endtoend}, Figure~\ref{fig:f8}).
   \item Every number in this paper regenerates from a committed script and a

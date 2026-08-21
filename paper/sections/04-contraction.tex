@@ -9,15 +9,18 @@ population, and the update $\sum_i w_i \epsilon_i$ must be assembled (the
 contraction). There are two natural placements:
 
 \begin{itemize}
-  \item \textbf{Strategy A: contract locally, then combine.} Each device
-    regenerates all $N$ perturbations and contracts the full sum itself.
-    Communication: the fitness gather only, $4N$ bytes of scalars. This is
-    the arrangement behind the folk claim that ES only communicates scalars \citep{salimans2017}.
+  \item \textbf{Strategy A: gather scalars, replicate the contraction.}
+    Each device gathers every member's fitness, then regenerates all $N$
+    perturbations and computes the whole contraction itself; nothing is
+    combined afterwards, because every device already holds the full sum.
+    Communication: scalar gathers only ($8N$ bytes as measured,
+    Table~\ref{tab:tb2}; the model below explains the count). This is the
+    arrangement behind the folk claim that ES only communicates scalars \citep{salimans2017}.
   \item \textbf{Strategy B: contract partially, then all-reduce.} Each device
     contracts only its own $N/D$ perturbations and the partial sums are added
     across devices (an all-reduce of a model-sized buffer). Communication:
-    the full parameter count, megabytes; compute per device: $D\times$ less
-    contraction work than A.
+    the full parameter count plus the same scalar gather ($4P{+}4N$ bytes as
+    measured); compute per device: $D\times$ less contraction work than A.
 \end{itemize}
 
 The trade is compute against communication, so a crossover in
