@@ -399,6 +399,8 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 
 **Framing decided 2026-08-21: the paper is the ES-scaling investigation; the library is the instrument**, cited and released, one contribution bullet. The project's deliverable is still the library (CLAUDE.md); the paper's contribution is what it measured, which is both the stronger review posture and the better story.
 
+**Title decided 2026-08-21: "Sharded evolution strategies on GPUs and TPUs".** Plain and descriptive, no library name in it, consistent with the framing above. Rejected: the folk-claims phrasing (too informal for the first impression), a communication-only title (undersells the accuracy and stability results), and any title leading with shardes.
+
 **Decided 2026-08-20: MLSys-style full paper** ("it can always be compressed later").
 The fallbacks stay what they were: a NeurIPS/ICML workshop on efficient training or
 systems, or arXiv preprint plus workshop. The artifact — a working library with a
