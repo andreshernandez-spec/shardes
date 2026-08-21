@@ -26,9 +26,11 @@ we document the boundary rather than promise across it.
     TinyZero, \citealp{tinyzero2025}) with Qwen2.5-0.5B \citep{qwen25}: held-out
     reward against sample evaluations, three seeds per arm, min--max band.
     The four ES perturbation ranks lie on top of each other; freezing the
-    embedding (27\% of parameters) costs nothing; the GRPO reference with
-    its published settings is unstable across seeds (one collapse, two
-    freezes). The two base-model floors differ between the JAX and HuggingFace
+    embedding (27\% of parameters) shows no detectable difference in this
+    three-seed experiment; the GRPO reference with its published settings
+    is seed-unstable: two seeds plateau at 4.9\% of held-out puzzles
+    solved and one never solves any, though none falls below the
+    base-model floor. The two base-model floors differ between the JAX and HuggingFace
     decoders by a bfloat16 padding artifact, which bounds how small a
     cross-family gap can honestly be read from this figure.}
   \label{fig:f7}
@@ -55,36 +57,54 @@ we document the boundary rather than promise across it.
 
 \paragraph{But is the fast strategy accurate?} The speed results of
 Section~\ref{sec:results} would mean little if the low-rank rewrite bought
-its speed with estimation quality, so the accuracy chain is stated in full.
-Per sample, on the phase-0 objectives, mirrored low-rank matches mirrored
+its speed with estimation quality, so the accuracy chain is stated in
+full, with its methods. The phase-0 estimator study measured, on the
+synthetic block of Section~\ref{sec:setup}, the cosine between the ES
+update direction and the exact gradient from automatic differentiation,
+30 replicates per cell over 456 cells, and fitted
+$\log\cos = a + b\log(N/d_{\mathrm{eff}})$ per strategy; every fitted
+slope is one half (Figure~\ref{fig:f5}).
+Per sample, on those objectives, mirrored low-rank matches mirrored
 full-rank almost exactly at matched population: each low-rank sample loses
 about $2.2\times$ to projecting the gradient through thin factors, and
 low-rank's smaller effective dimension wins almost exactly that factor back
-(the cancellation behind Figure~\ref{fig:f5}). Those fitted curves then
-\emph{predicted} the task-level tie at $N{=}30$ before the campaign ran
-(predicted cosines $1.7\times10^{-4}$ full against $2.7$--$2.8\times10^{-4}$
-for ranks 1 and 4, all within noise of each other at this
-population-to-dimension ratio), and the campaign confirmed it
-(Figure~\ref{fig:f7}). The reason this is not luck: at LLM scale the
-population is always minuscule against the parameter count, and in that
-regime the rank of the perturbation is not what limits estimation quality.
-That is, arguably, \emph{why} the low-rank bet works at all.
+(the cancellation behind Figure~\ref{fig:f5}). Those fitted curves,
+evaluated at the task's operating point before the campaign ran, put all
+ranks within noise of each other (predicted cosines $1.7\times10^{-4}$
+full against $2.7$--$2.8\times10^{-4}$ for ranks 1 and 4), and the
+campaign's outcome is consistent with that extrapolation
+(Figure~\ref{fig:f7}). The extrapolation is far and is stated as one:
+one to three decades below the smallest measured $N/d_{\mathrm{eff}}$,
+from a synthetic block to a real model, with rank 16 riding on the
+rank-1/rank-4 trend because phase 0 never measured it. A task-level
+non-difference is consistent with the estimator mechanism, not proof of
+it. The mechanism's reading: at LLM scale the population is always
+minuscule against the parameter count, and in that regime the rank of
+the perturbation is not what limits estimation quality. That, arguably,
+is \emph{why} the low-rank bet can work at all.
 %% TODO(andres): E15 (in flight) closes the synthetic-to-real link by
 %% measuring the same cosines against the true gradient of the NLL on
 %% Qwen-0.5B itself; wire its numbers into this paragraph when the results
 %% directory lands, replacing this comment.
 
 \paragraph{Task quality across ranks.} At population $N{=}30$, held-out
-performance is flat across full-rank and rank-\{1,4,16\} perturbations
-(Figure~\ref{fig:f7}), and this tie is \emph{predicted}: the phase-0
-estimator study's fitted curves put all ranks within noise of each other at
-this population-to-effective-dimension ratio.
+performance shows no detectable difference across full-rank and
+rank-\{1,4,16\} perturbations in this three-seed experiment
+(Figure~\ref{fig:f7}); no inferential test is claimed at $n{=}3$. The
+outcome is the one the phase-0 fitted curves predicted, which put all
+ranks within noise of each other at this
+population-to-effective-dimension ratio.
 
-\paragraph{The reference baseline, honestly.} GRPO \citep{deepseekmath2024} with the published
-hyperparameters of \citet{qiu2025}, untuned in either direction: one of three seeds collapses,
-two freeze early. We report it as seed variance in the reference, not as a
-victory for ES; the figure's role is that both algorithm families run end to
-end in comparable budgets, not a leaderboard.
+\paragraph{The reference baseline, honestly.} GRPO
+\citep{deepseekmath2024} with the published hyperparameters of
+\citet{qiu2025}, untuned in either direction: two of three seeds plateau
+early at 4.9\% of held-out puzzles solved, and one never solves a
+held-out puzzle, flat at format-only reward from step 50. None falls
+below its decoder's base-model floor, so none meets the collapse
+definition the stability section uses; the word collapse is reserved for
+runs that do. We report this as seed variance in the reference, not as a
+victory for ES; the figure's role is that both algorithm families run end
+to end in comparable budgets, not a leaderboard.
 
 % F8 -- experiments/countdown/figures/f8-robustness.png (plot_e14.py);
 % verdicts: analyze_e14.py; design and pre-registered criteria: docs/08.

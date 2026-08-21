@@ -109,8 +109,10 @@ def task_quality() -> list[str]:
         for s in (0, 1, 2):
             lines = (COUNTDOWN / f"{stem}-s{s}-eval.jsonl").read_text().splitlines()
             finals.append(json.loads(lines[-1])["eval_reward"])
+        # Mean, matching F7 and the campaign README; the statistic is named
+        # in the caption because an unnamed summary is unreadable.
         rows.append(f"| held-out reward, {label} | Countdown, 3 seeds | "
-                    f"{statistics.median(finals):.3f} "
+                    f"{statistics.mean(finals):.3f} "
                     f"[{min(finals):.3f}, {max(finals):.3f}] |")
     return rows
 
@@ -157,7 +159,8 @@ def main() -> int:
             "\\begin{table*}", "\\centering", "\\small",
             "\\caption{Ablations, assembled from committed results; ratios are "
             "geometric means over the grid cells where both sides were "
-            "measured (n = cell count).}",
+            "measured (n = cell count); held-out rewards are means over seeds "
+            "with [min, max].}",
             "\\label{tab:tb3}",
             "\\begin{tabular}{p{0.30\\linewidth}p{0.22\\linewidth}p{0.40\\linewidth}}",
             "\\toprule", "ablation & where & result \\\\", "\\midrule",
