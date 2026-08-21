@@ -2,7 +2,7 @@
 \section{Related work}
 \label{sec:related}
 
-Four threads locate the gap this paper fills. \emph{ES at scale}: \citet{salimans2017} made distributed ES
+Five threads locate the gap this paper fills. \emph{ES at scale}: \citet{salimans2017} made distributed ES
 credible with scalar-only communication and fixed hyperparameters across
 tasks; the 2025 pair \citep{qiu2025,eggroll2025} brought it to LLMs with the
 opposite structural bets this paper measures; ARS \citep{mania2018} and deep neuroevolution
@@ -14,13 +14,23 @@ memory reasons rather than parallelism ones, a sibling motivation with
 different systems consequences. \emph{Estimator theory}: Nesterov and
 Spokoiny's smoothed-objective analysis \citep{nesterov2017} and its
 dimension-dependence lower bounds \citep{duchi2015,berahas2022} are the
-frame our accuracy measurements live in; the coupling and
-quasi-Monte-Carlo literature promised variance reductions that our phase-0
-study measured as absent in the relevant regime, a negative result recorded
-rather than repeated. \emph{Systems}: JAX's shard\_map lineage is the
+frame the accuracy measurements of Section~\ref{sec:endtoend} live in;
+the coupling and quasi-Monte-Carlo literature promised variance
+reductions that our estimator study measured as absent in the relevant
+regime (Figure~\ref{fig:f5}), a negative result recorded rather than
+repeated. \emph{RL stability}: the stabilization machinery ES omits
+exists for stated reasons, from the divergence results behind target
+networks \citep{baird1995,tsitsiklis1997,vanhasselt2018} to the step-size
+limits behind trust regions and reference-model penalties
+\citep{kakade2002,schulman2015trpo,ouyang2022}; large-scale empirical
+studies question which parts bind in practice
+\citep{engstrom2020,andrychowicz2020,orz2025}, and ES-side reports of
+drift-induced forgetting \citep{abdi2026forgetting} are the cost side of
+the same ledger. Section~\ref{sec:endtoend} measures both sides on one
+task under one protocol. \emph{Systems}: JAX's shard\_map lineage is the
 substrate \citep{jax2018,gspmd2021}; evosax \citep{lange2022evosax} is the incumbent library whose
 flattening design this paper measures the consequences of, in Table~\ref{tab:tb1}'s failure row
 rather than in prose.
 %% TODO(andres): expand each thread by one or two sentences with the
-%% citations from references.bib (keys in docs/09); the four-thread order is
-%% deliberate, ending on systems so section 3 feels near.
+%% citations from references.bib (keys in docs/09); the five-thread order
+%% is deliberate, ending on systems so the instrument section lands next.
