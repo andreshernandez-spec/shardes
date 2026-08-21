@@ -8,12 +8,12 @@
 
 | | |
 |---|---|
-| commit | `1fb67433592a` |
+| commit | `84e432cd1c7f` |
 | dirty worktree | False |
 | device | NVIDIA GeForce RTX 3080 Laptop GPU |
 | device count | 1 |
 | jax / jaxlib | 0.11.0 / 0.11.0 |
-| numpy / scipy | 2.5.1 / 1.18.0 |
+| numpy / scipy | 2.4.6 / 1.18.0 |
 | python | 3.13.14 |
 | platform | Linux-6.17.0-41-generic-x86_64-with-glibc2.42 |
 | XLA_FLAGS | `--xla_gpu_enable_triton_gemm=false` |
@@ -107,7 +107,8 @@ at `1e-1`. The estimator targets the *smoothed* gradient `E[f(theta + sigma eps)
 two orders of magnitude down. That is a property of the objective, not a bug, and it is the
 same shape of finding as `shaping = none` being dead here (`docs/01` C0.5).
 
-It matters for reading F5: the figure defaults to `--sigma 0.01`, which is the middle arm.
+It matters for reading F5: the figure defaults to `--sigma 0.001` with centered-rank
+shaping, the paper's slice (the one the task prediction and the E15 bridge use).
 The `1e-3` slice is uniformly better and is the one to check if a scheme comparison looks
 flat, because a scheme can only separate where the estimator has signal to begin with.
 
