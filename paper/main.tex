@@ -19,6 +19,7 @@
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{natbib}
 \usepackage[hidelinks]{hyperref}
 \usepackage{xcolor}
 
@@ -63,9 +64,11 @@ resources were used.
 %% TODO(andres): if the TRC grant is used before submission, credit the
 %% TPU Research Cloud program here as its terms ask.
 
-% \bibliographystyle{plainnat}
-% \bibliography{references}
-%% TODO(andres): references.bib exists as a stub; fill as sections cite.
+\bibliographystyle{plainnat}
+\bibliography{references}
+%% Author-year via natbib/plainnat for the draft; swap for the venue's
+%% style with the class file. Two entries remain LISTING-ONLY in
+%% references.bib and are deliberately uncited until read.
 
 \appendix
 \input{sections/appendix}
