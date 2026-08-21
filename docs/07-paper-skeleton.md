@@ -12,10 +12,12 @@ the one open measurement.
 
 ## 1. Introduction
 
-Carries: two 2025 papers made ES work at LLM scale with opposite structural bets
-(Qiu: full-rank + seed regeneration; EGGROLL: rank-r factored), no common library can
-express both, and the folk claim "ES only communicates scalars" was never measured.
-Closes with the contributions list, each pointing at its section.
+**Reframed 2026-08-21 (Andres's call): the paper is the investigation, not the
+library.** Carries: two 2025 papers with opposite structural bets, and between
+them three unmeasured beliefs (the scalar folk claim; EGGROLL's GPU-shaped
+motivation; the stability folklore). The library enters as the instrument that
+made fair measurement possible (one paragraph, released and citable), and the
+contributions list is findings-first with the instrument as one bullet.
 
 - The evosax foreclosure (ravel_pytree) is a checkable code fact: docs/00.
 - The folk-claim tension resolves in §6: true for strategy A in order of magnitude
@@ -27,7 +29,7 @@ Closes with the contributions list, each pointing at its section.
 ES estimator, the two algorithms, why one library forecloses both. Mostly citations
 plus docs/00's framing. No numbers of ours; nothing to source.
 
-## 3. Design
+## 3. The instrument (was: Design)
 
 sample / apply / contract, the seed contract, replicated distribution state, the
 shaping barrier as one deliberate line. Sources are code and docs/02. The three
