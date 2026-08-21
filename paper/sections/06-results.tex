@@ -9,27 +9,34 @@
   \includegraphics[width=\textwidth]{f1-scaling.png}
   \caption{Scaling at the largest cell both platforms ran ($d{=}2048$).
     Top: strong scaling (fixed total population, seconds per generation).
-    Bottom: weak scaling (fixed population per device, candidates evaluated
-    per second; dashed line is linear scaling). The dense baseline
-    (\texttt{iid\_gaussian}) is missing its one-device point on the TPU
-    strong panel because it does not fit one 16\,GB chip at this size, and
-    it flatlines in the TPU weak panel: it is memory-bound, and more chips
-    do not help it. The low-rank strategies exceed the linear reference
-    because larger total populations use each device better.}
+    Bottom: weak-scaling parallel efficiency (fixed population per
+    device), each series normalized to its own smallest measured device
+    count, so the dashed ideal is 1.0 for every series. The dense
+    baseline (\texttt{iid\_gaussian}) is missing its one-device point on
+    the TPU strong panel because it does not fit one 16\,GB chip at this
+    size. No series is superlinear. What separates the weak panel is the
+    contraction placement, not the perturbation strategy: the A placement
+    of the dense and seed-regenerated arms pays its replicated
+    contraction ever more dearly as devices are added, while the same
+    strategies under B, and the low-rank family under either placement,
+    hold high efficiency.}
   \label{fig:f1}
 \end{figure*}
 
 \subsection{Scaling to eight devices}
 Figure~\ref{fig:f1} shows both scaling modes at the largest cell both
-platforms ran. Strong scaling (a fixed total population split across more
-devices) tracks the ideal slope for every strategy that has per-candidate
-work to split; weak scaling (a fixed population per device) exceeds the
-linear reference for the low-rank strategies because a larger total
-population fills each device's compute better, which is utilization, not a
-violation of anything. Two cells introduce stories that later figures
-finish: the dense baseline's missing one-device point on the TPU is a
-memory ceiling (Figure~\ref{fig:f4} maps it), and its flat line in the TPU
-weak panel says more chips do not help a memory-bound strategy.
+platforms ran, with the weak panel as parallel efficiency per (strategy,
+contraction) pair, each series against its own smallest measured device
+count. No pair scales superlinearly. The low-rank arms hold
+$0.86$--$0.93$ efficiency at eight devices on the A100 and
+$0.71$--$0.91$ on the v5e. What degrades is a placement, not a
+perturbation strategy: under contraction A the dense and seed-regenerated
+arms fall to $0.39$ and $0.50$ on the A100 ($0.18$ and $0.54$ on the
+v5e), because A replicates the full contraction on every device and those
+two strategies have the most contraction work to replicate; the same
+strategies under B hold $0.79$--$1.00$. The dense baseline's missing
+one-device point on the TPU strong panel is a memory ceiling
+(Figure~\ref{fig:f4} maps it).
 %% TODO(andres): a closing sentence with one concrete pair of numbers read
 %% off the figure (e.g. seconds/generation at D=1 vs D=8 for mirrored_lr1),
 %% so the reader is taught how to read the panel.
@@ -65,9 +72,13 @@ vanishes; its trajectory in device count is monotone
 point. Strategy A really does move only scalars, at exactly twice the naive
 count (Table~\ref{tab:tb2}: the sharded evaluation makes two $4N$-byte
 gathers real); strategy B moves a model-sized buffer every update and wins
-much of the grid anyway, because even its most demanding measured cell asks
-7.9\,GB/s of a 600\,GB/s interconnect. The claim guarded against a cost
-that does not bind at this scale.
+much of the grid anyway: as a payload-rate sanity check, its most
+demanding measured cell's collective payload over generation time is
+7.9\,GB/s against the A100's 600\,GB/s peak NVLink figure. (Payload over
+time is not network utilization; the collective's topology moves more
+bytes than its payload and peak figures are not achieved bandwidth. The
+two orders of magnitude of headroom survive any such correction.) The
+claim guarded against a cost that does not bind at this scale.
 %% TODO(andres): your phrasing of true-and-beside-the-point; it is the
 %% paper's best line and should sound like you.
 
@@ -134,9 +145,11 @@ outright, a seam this instrument carries.
 %% TODO(andres): your voice; the four claims and their caveats are the
 %% content, the order is deliberate (systems, choices, feasibility, seams).
 
-Three rows carry the table's weight. Single-device, the instrument runs at
-$0.68$--$0.85\times$ EGGROLL's own implementation across the shapes, which
-is the honest cost of a general API against a specialized one. At eight
+Three rows carry the table's weight. Single-device, the instrument runs
+within 3\% of EGGROLL's own implementation on the A100
+($0.97$--$1.02\times$ across the shapes) and at $0.68$--$0.85\times$ on
+the v5e; the gap is the honest cost of a general API against a
+specialized one, and it is platform-shaped rather than uniform. At eight
 devices it reaches $6\times$ their single-chip ceiling, because no
 reference shards and the rows say so rather than hiding it. And evosax, the
 incumbent, runs out of memory at $d{=}2048$ on a 16\,GB chip at every
@@ -177,10 +190,12 @@ regime where a full generation does not fit this hardware anyway.
 
 \subsection{Ablations}
 \input{generated/tb3}
-Two rows earn prose. Compute dtype costs nothing: bfloat16 against float32
-is within a few percent on both platforms at default matmul precision,
-because the tensor core and the matrix unit already downgrade the
-multiplies, so the dtype choice is about memory, never speed. Matmul
+Two rows earn prose. Compute dtype is a memory choice more than a speed
+one in these cells: bfloat16 against float32 is within a few percent on
+the TPU, and within 12\% on the A100 (bfloat16 ahead by 8--12\% for the
+dense and seed-regenerated arms, parity for low-rank), because at default
+matmul precision the tensor core and the matrix unit already downgrade
+the multiplies. Matmul
 precision, by contrast, is strategy-shaped: forcing full-precision
 multiplies is nearly free for the strategies whose time is the shared
 base-model multiply, and costs $1.6$--$1.9\times$ exactly for the low-rank

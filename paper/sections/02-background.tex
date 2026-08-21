@@ -30,11 +30,14 @@ and why measuring them in one system is informative at all.
 %% full-parameter fine-tuning at billions of parameters with N=30; EGGROLL:
 %% ~100x throughput, populations in the tens of thousands) with citations.
 
-\paragraph{Why flattening forecloses structure.} A library that first
-concatenates all weights into one vector can only ever perturb that vector
-elementwise. A rank-$r$ perturbation is a statement about one weight
-\emph{matrix} (its noise is a product of an $m\times r$ and an $r\times n$
-factor); once the matrix has been flattened into a segment of a long vector,
-there is no object left to attach that statement to. This is a design
-commitment, not a bug, and it is why expressing both 2025 algorithms required
-a new core rather than a patch.
+\paragraph{Why flattening forecloses structure.} A rank-$r$
+perturbation is a statement about one weight \emph{matrix} (its noise is a
+product of an $m\times r$ and an $r\times n$ factor). A library whose core
+object is the flattened population, a dense (population, parameter-count)
+matrix of materialized noise, has nowhere efficient to attach that
+statement: the flattening is invertible (\texttt{ravel\_pytree} returns an
+unflattening function), but a lazy, never-materialized per-matrix
+perturbation is incompatible with an API whose contract is that the dense
+noise matrix exists. This is a design commitment, not a bug, and it is why
+expressing both 2025 algorithms efficiently required a new core rather
+than a patch.

@@ -9,6 +9,21 @@
     it is the natural follow-up.
     %% TODO(andres): if the TRC grant lands before submission, this bullet
     %% becomes F3 and moves to results.
+  \item \textbf{The systems workload is a simplified block.} The
+    scaling and cost grids benchmark one synthetic transformer block
+    (square matrices, $d_{\mathrm{ff}}{=}d$, single head, no learned
+    norms, MSE loss, batch 8, sequence 32; Section~\ref{sec:setup}), not
+    a production transformer. The simplifications change arithmetic
+    intensity and memory in ways that favor clean attribution over
+    realism; absolute ratios, the low-rank advantage included, should be
+    read as properties of this workload. The one real-model anchor is
+    Section~\ref{sec:endtoend}.
+  \item \textbf{Models must adopt the library's seams.} Perturbation as
+    substitution requires routing parameterized matmuls and embedding
+    lookups through \texttt{shardes.nn}; an existing model does not run
+    unmodified, and layer types without a seam (convolutions, for one)
+    are unsupported until one is written. This is the API cost of never
+    materializing the low-rank noise (Section~\ref{sec:design}).
   \item \textbf{Crossover at sweep resolution.} The (N, d) grid behind
     Figure~\ref{fig:f2} is $3\times2$ per platform with holes at the memory
     ceiling; the contour's position is bracketed, not traced.
