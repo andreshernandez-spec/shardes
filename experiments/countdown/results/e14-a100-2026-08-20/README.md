@@ -36,12 +36,14 @@ freeze at the base model, not a loss of it.**
 
 ## The drift row, because the counter-literature earned it
 
-param_l2_from_init at the final checkpoint: ES at lr x8 moves ~50 from the
-pretrained weights (vs ~1 at lr/8); healthy GRPO runs move 0.3-2; GRPO's
-collapsed runs move ~10. ES's perturbation tolerance is bought with parameter
-movement, exactly as arXiv:2604.01499 and arXiv:2601.20861 predict; anyone
-citing E14's stability must also cite this row. E13's x1 runs predate the
-metric, so their drift is not available.
+param_l2_from_init at the final checkpoint: ES at its own published settings
+moves ~6.8 (es-x1, three runs, 2026-08-21, whose finals 0.150-0.156 also
+independently reproduce E13's x1 arm); lr x8 moves ~50 and lr/8 ~1; healthy
+GRPO runs move 0.3-2 and GRPO's collapsed runs ~10. Two honest sentences
+follow: ES is a larger-movement method at baseline (~3-20x healthy GRPO), and
+its lr x8 tolerance multiplies that by ~7. This is exactly what
+arXiv:2604.01499 and arXiv:2601.20861 predict; anyone citing E14's stability
+must also cite this row.
 
 ## Entropy
 

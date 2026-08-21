@@ -93,9 +93,12 @@ comparison is throughput at the same shapes, which is how both papers report.
 \subsection{The shaping barrier, priced}
 %% TODO(andres): the E10 numbers from section 3, one short table or inline:
 %% gather flat at 2.4-6 us, sort 12.1 ms at 2^18 and D-independent, the
-%% redundant-local-compute reading, and the honest ceiling caveat (isolation
-%% measurement; a real generation may overlap some of it).
-\todo{barrier numbers}
+%% redundant-local-compute reading. The isolation caveat is CLOSED by the
+%% in-context check (results-barrier-context): shaping on-vs-off inside full
+%% generations at the sweep's largest cells differs by 41-149 us medians,
+%% inside the repeat spreads and within the isolation ceiling. One sentence:
+%% invisible in context at measured scales; 12 ms at 2^18 is the ceiling.
+\todo{barrier numbers + in-context closure}
 
 \subsection{Ablations}
 \input{generated/tb3}

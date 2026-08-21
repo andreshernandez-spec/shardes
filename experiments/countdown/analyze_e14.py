@@ -83,6 +83,15 @@ def main() -> int:
         c, f = counts[family]
         print(f"{family}: {c} collapsed, {f} frozen of 12 perturbed runs "
               f"(x1 reference progress {ref[family]:.3f})")
+    # x1 drift baseline (es-x1, run 2026-08-21 at the E14 horizon with the
+    # metric): E13's x1 runs predate param_l2_from_init, so the drift column's
+    # baseline comes from these three replication runs. Their finals double as
+    # an independent reproduction of E13's x1 arm.
+    print("\nx1 drift baseline (es-x1):")
+    for s in (0, 1, 2):
+        pts = curve(E14 / f"es-x1-s{s}" / "eval.jsonl")
+        print(f"  s{s}: final {pts[-1][1]:.3f}, drift {pts[-1][2]:.2f}")
+
     # E13 published-settings runs at the same horizon, for the combined count
     print("\nE13 x1 columns at the same horizon:")
     for family, stem in (("es", "es-mirrored-lr1"), ("grpo", "grpo")):
