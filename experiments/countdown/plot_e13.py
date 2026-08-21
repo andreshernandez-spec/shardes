@@ -85,7 +85,7 @@ def main() -> None:
         ax.plot(xs, med, color=color, lw=1.6, label=label, zorder=3)
         ax.fill_between(xs, lo, hi, color=color, alpha=0.18, lw=0, zorder=2)
 
-    ax.set_xlabel("sample evaluations")
+    ax.set_xlabel("training sample evaluations")
     ax.set_ylabel("held-out reward (2000 puzzles, greedy)")
     ax.set_xlim(0, 500 * EVALS_PER_UNIT)
     ax.legend(frameon=False, fontsize=8, loc="lower right")
