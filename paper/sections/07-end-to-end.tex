@@ -141,6 +141,36 @@ put all ranks within noise of each other at this
 population-to-effective-dimension ratio; a non-difference is consistent
 with the estimator mechanism, not proof of it.
 
+% F7b -- experiments/countdown/figures/f7b-e13-wallclock.png (plot_e13.py)
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.72\textwidth]{f7b-e13-wallclock.png}
+  \caption{The curves of Figure~\ref{fig:f7}, ES arms only, against
+    cumulative accelerator time in steady state: generation 0 is excluded
+    because it contains one-time compilation (335--581\,s against
+    steady-state 2.4--4.3\,s per generation), and held-out evaluation
+    decode is excluded on both axes as measurement overhead. Each point's
+    x is the mean cumulative time over three seeds; bands are min--max of
+    reward. GRPO is deliberately absent: it runs in a different framework
+    with a different decoder, so its wall clock is not commensurate with
+    these curves.}
+  \label{fig:f7b}
+\end{figure*}
+
+\paragraph{Equal samples, unequal seconds.} Figure~\ref{fig:f7}
+establishes equal sample efficiency across ranks; Figure~\ref{fig:f7b}
+prices it. A steady-state full-rank generation costs 4.3\,s against
+2.4\,s for rank 1 (the regeneration compute the cost surfaces of
+Section~\ref{sec:results} price at microbenchmark scale, here on the
+real model), so the same 500 generations take 2785\,s against 1594\,s,
+and the time to first reach the shared plateau (held-out reward 0.15)
+is 1041--1745\,s for full rank against 623--897\,s for rank 1 across
+seeds: disjoint ranges, about $1.7\times$ less accelerator time for the
+same quality. This is where the systems and quality halves meet: the
+cheap perturbation reaches matched quality in $1.7\times$ less training
+time precisely because Figure~\ref{fig:f7} shows it needed no more
+samples.
+
 \paragraph{The reference baseline, honestly.} GRPO
 \citep{deepseekmath2024} with the published hyperparameters of
 \citet{qiu2025}, untuned in either direction: two of three seeds plateau
