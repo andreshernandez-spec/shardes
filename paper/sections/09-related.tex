@@ -2,9 +2,22 @@
 \section{Related work}
 \label{sec:related}
 
-%% TODO(andres): from docs/00: ES at scale (Salimans et al., the 2025 pair);
-%% zeroth-order optimization for LLMs (MeZO lineage, P-GAP, LOREN, GRZO);
-%% coupling/QMC for ES (the phase-0 negative result earns one sentence);
-%% sharding and parallelism in JAX (shard_map, pjit lineage); evosax as the
-%% incumbent design point.
-\todo{related work}
+Four threads. \emph{ES at scale}: Salimans et al.\ made distributed ES
+credible with scalar-only communication and fixed hyperparameters across
+tasks; the 2025 pair (Qiu et al., EGGROLL) brought it to LLMs with the
+opposite structural bets this paper measures; ARS and deep neuroevolution
+are the simplicity-first ancestors. \emph{Zeroth-order optimization for
+LLMs}: the MeZO lineage and its successors optimize with perturbations for
+memory reasons rather than parallelism ones, a sibling motivation with
+different systems consequences. \emph{Estimator theory}: Nesterov and
+Spokoiny's smoothed-objective analysis and its dimension-dependence lower
+bounds are the frame our accuracy measurements live in; the coupling and
+quasi-Monte-Carlo literature promised variance reductions that our phase-0
+study measured as absent in the relevant regime, a negative result recorded
+rather than repeated. \emph{Systems}: JAX's shard\_map lineage is the
+substrate; evosax is the incumbent library whose flattening design this
+paper measures the consequences of, in Table~\ref{tab:tb1}'s failure row
+rather than in prose.
+%% TODO(andres): expand each thread by one or two sentences with the
+%% citations from references.bib (keys in docs/09); the four-thread order is
+%% deliberate, ending on systems so section 3 feels near.
