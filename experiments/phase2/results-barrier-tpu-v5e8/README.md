@@ -29,6 +29,11 @@ The E10 answer, in one table (microseconds per generation):
   shaping or a sharded sort would remove it, at the cost of shapings declaring their
   communication, the trade `tell` documents declining.
 
-Caveat the numbers carry themselves: this is the barrier in isolation, its worst case;
-inside a real generation the compiler may overlap some of it (`barrier.py` docstring).
-Read next to M5's in-context times, not instead of them.
+The isolation caveat is now closed in context (`results-barrier-context`,
+T6 session, 2026-08-21): full generations with shaping on vs off at the sweep's
+largest cells show median deltas of 41 us (d=512, N=1024) and 149 us (d=2048,
+N=256), both inside their repeat spreads of roughly +/-100-250 us and within or
+below what the isolation numbers allow. At measured scales the barrier is
+statistically invisible inside a generation; the 12 ms at N=2^18 stands as the
+isolation ceiling for scales where a full generation does not fit this hardware
+anyway.
