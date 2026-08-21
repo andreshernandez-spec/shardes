@@ -4,10 +4,10 @@
 \section{End-to-end validation}
 \label{sec:endtoend}
 
-% ORDER (decided 2026-08-21): determinism first, then quality (F7), then
-% stability (E14/F8). Each claim rests on the previous: the curves are worth
-% reading because the runs are reproducible; the stability numbers because
-% the curves are.
+% ORDER (revised 2026-08-21, second review): determinism, then the synthetic
+% estimator result, then the task prediction and its outcome, then the GRPO
+% baseline, then stability. The argument is prediction-before-campaign, so the
+% prediction's evidence now comes before the campaign's.
 \paragraph{Determinism and invariance on real hardware.} For a fixed seed and
 compiled program, the full training step is bitwise reproducible across
 processes on an 8-GPU node, and the update computed on 1 and 8 devices agrees
@@ -18,40 +18,25 @@ we document the boundary rather than promise across it.
 %% TODO(andres): compress or expand from the C6d README; the three claims are
 %% deliberately separate because they fail differently.
 
-% F7 -- experiments/countdown/figures/f7-e13-heldout.png (plot_e13.py)
-\begin{figure*}[t]
-  \centering
-  \includegraphics[width=0.72\textwidth]{f7-e13-heldout.png}
-  \caption{Countdown (arithmetic puzzle solving; the task shape of
-    TinyZero, \citealp{tinyzero2025}) with Qwen2.5-0.5B \citep{qwen25}: held-out
-    reward against sample evaluations, three seeds per arm, min--max band.
-    The four ES perturbation ranks lie on top of each other; freezing the
-    embedding (27\% of parameters) shows no detectable difference in this
-    three-seed experiment; the GRPO reference with its published settings
-    is seed-unstable: two seeds plateau at 4.9\% of held-out puzzles
-    solved and one never solves any, though none falls below the
-    base-model floor. The two base-model floors differ between the JAX and HuggingFace
-    decoders by a bfloat16 padding artifact, which bounds how small a
-    cross-family gap can honestly be read from this figure.}
-  \label{fig:f7}
-\end{figure*}
-
-% F5 -- experiments/phase0/figures/f5-estimator-quality.png (phase-0 plots)
+% F5 -- experiments/phase0/figures/f5-estimator-quality.png
+% (experiments/phase0/plot.py --sigma 0.001 --shaping centered_ranks)
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{f5-estimator-quality.png}
-  \caption{Estimator quality on the synthetic block: cosine between the
-    ES update direction and the true gradient, against the
-    population-to-effective-dimension ratio $N/d_{\mathrm{eff}}$, one panel
-    per perturbation rank. Every fitted curve has slope one half. The
-    design-based sampling schemes (orthogonal Hadamard, scrambled Sobol) are
-    indistinguishable from plain mirrored sampling, the negative result
-    Section~\ref{sec:related} records; and the low-rank panels pay a
-    per-sample projection loss (a lower intercept) that their smaller
-    effective dimension wins back at matched population, the cancellation
-    the accuracy chain below relies on. These fitted curves, evaluated at
-    the task's operating point, predicted the tie of Figure~\ref{fig:f7}
-    before the campaign ran.}
+  \caption{Estimator quality on the synthetic block, at the slice the task
+    prediction uses ($\sigma{=}10^{-3}$, centered-rank shaping, the shaping
+    the update applies): cosine between the ES update direction and the
+    true gradient, against the population-to-effective-dimension ratio
+    $N/d_{\mathrm{eff}}$, one panel per perturbation rank. Every fitted
+    curve has slope one half. The design-based sampling schemes (orthogonal
+    Hadamard, scrambled Sobol) are indistinguishable from plain mirrored
+    sampling, the negative result Section~\ref{sec:related} records. The
+    unpaired i.i.d.\ scheme sits a factor $1.34$--$1.38$ above the mirrored
+    family at every matched population in the low-rank panels, the ordering
+    Section~\ref{sec:results}'s baseline comparison cites. The low-rank
+    panels pay a per-sample projection loss (a lower intercept) that their
+    smaller effective dimension wins back at matched population, the
+    cancellation the accuracy chain relies on.}
   \label{fig:f5}
 \end{figure*}
 
@@ -71,29 +56,84 @@ low-rank's smaller effective dimension wins almost exactly that factor back
 (the cancellation behind Figure~\ref{fig:f5}). Those fitted curves,
 evaluated at the task's operating point before the campaign ran, put all
 ranks within noise of each other (predicted cosines $1.7\times10^{-4}$
-full against $2.7$--$2.8\times10^{-4}$ for ranks 1 and 4), and the
-campaign's outcome is consistent with that extrapolation
-(Figure~\ref{fig:f7}). The extrapolation is far and is stated as one:
-one to three decades below the smallest measured $N/d_{\mathrm{eff}}$,
-from a synthetic block to a real model, with rank 16 riding on the
-rank-1/rank-4 trend because the estimator study never measured it. A task-level
-non-difference is consistent with the estimator mechanism, not proof of
-it. The mechanism's reading: at LLM scale the population is always
-minuscule against the parameter count, and in that regime the rank of
-the perturbation is not what limits estimation quality. That, arguably,
-is \emph{why} the low-rank bet can work at all.
+full against $2.7$--$2.8\times10^{-4}$ for ranks 1 and 4). The
+extrapolation is far and is stated as one: one to three decades below the
+smallest measured $N/d_{\mathrm{eff}}$, from a synthetic block to a real
+model, with rank 16 riding on the rank-1/rank-4 trend because the
+estimator study never measured it. The mechanism's reading: in the LLM-ES
+regimes studied here and in the source papers, the population is
+minuscule against the parameter count, and in that regime the rank of the
+perturbation is not what limits estimation quality. That, arguably, is
+\emph{why} the low-rank bet can work at all.
 %% TODO(andres): E15 (in flight) closes the synthetic-to-real link by
 %% measuring the same cosines against the true gradient of the NLL on
 %% Qwen-0.5B itself; wire its numbers into this paragraph when the results
 %% directory lands, replacing this comment.
 
+\paragraph{The task, and what was fixed in advance.} The campaign that
+tests the prediction is specified in Table~\ref{tab:e2e}: both algorithm
+families train on the same puzzle pool with the published hyperparameters
+of \citet{qiu2025}, are scored on the same 2000 disjoint held-out puzzles
+by greedy decode, and stop at the same total budget of scored
+completions, which is the unit the x-axis of Figure~\ref{fig:f7} counts.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{End-to-end setup. A sample evaluation is one scored completion;
+  both families consume 240 per update (ES: 30 members $\times$ 8
+  puzzles; GRPO: 30 completions $\times$ 8 prompts), so the 120{,}000
+  budget is 500 updates for each.}
+\label{tab:e2e}
+\begin{tabular}{lp{0.78\linewidth}}
+\toprule
+task, reward & Countdown; 1.0 solved, 0.1 well-formed but wrong, 0.0
+  otherwise; ``solved'' means reward 1.0 \\
+data & training pool 256 puzzles, 8 per update; held-out 2000 disjoint
+  puzzles \\
+prompts, decode & chat template, prompts padded to 128 tokens, 96 new
+  tokens; ES rollouts and all held-out evals decode greedily \\
+ES arms & $N{=}30$, $\sigma{=}10^{-3}$, $\alpha{=}5\times10^{-4}$ (the
+  published values), centered-rank shaping; full rank and ranks 1, 4, 16,
+  plus rank 1 with the embedding (27\% of parameters) frozen \\
+GRPO arm & TRL implementation; group size 30, 8 prompts per step,
+  learning rate $10^{-5}$ constant, KL $\beta{=}10^{-3}$, clip
+  $\epsilon{=}0.2$, rollout temperature 1.0 with no top-$p$/top-$k$ \\
+budget, seeds & 120{,}000 sample evaluations per run; seeds 0--2 per arm \\
+evaluation & 2000 held-out puzzles every 50 updates, plus before the
+  first and after the last \\
+hardware & one A100-SXM4-80GB; the campaign is $\sim$13\,h \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+% F7 -- experiments/countdown/figures/f7-e13-heldout.png (plot_e13.py)
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.72\textwidth]{f7-e13-heldout.png}
+  \caption{Countdown (arithmetic puzzle solving; the task shape of
+    TinyZero, \citealp{tinyzero2025}) with Qwen2.5-0.5B \citep{qwen25}:
+    held-out reward against sample evaluations, mean over three seeds,
+    min--max band. The four ES perturbation ranks lie on top of each
+    other; freezing the embedding shows no detectable difference in this
+    three-seed experiment; the GRPO reference with its published settings
+    is seed-unstable: two seeds plateau at 4.9\% of held-out puzzles
+    solved and one never solves any, though none falls below the
+    base-model floor. The two labeled base-model floors are the same
+    weights under the JAX and HuggingFace decoders, apart by a bfloat16
+    padding artifact, which bounds how small a cross-family gap can
+    honestly be read from this figure.}
+  \label{fig:f7}
+\end{figure*}
+
 \paragraph{Task quality across ranks.} At population $N{=}30$, held-out
 performance shows no detectable difference across full-rank and
 rank-\{1,4,16\} perturbations in this three-seed experiment
 (Figure~\ref{fig:f7}); no inferential test is claimed at $n{=}3$. The
-outcome is the one the estimator study's fitted curves predicted, which put all
-ranks within noise of each other at this
-population-to-effective-dimension ratio.
+outcome is the one the estimator study's fitted curves predicted, which
+put all ranks within noise of each other at this
+population-to-effective-dimension ratio; a non-difference is consistent
+with the estimator mechanism, not proof of it.
 
 \paragraph{The reference baseline, honestly.} GRPO
 \citep{deepseekmath2024} with the published hyperparameters of
@@ -107,7 +147,7 @@ victory for ES; the figure's role is that both algorithm families run end
 to end in comparable budgets, not a leaderboard.
 
 % F8 -- experiments/countdown/figures/f8-robustness.png (plot_e14.py);
-% verdicts: analyze_e14.py; design and pre-registered criteria: docs/08.
+% verdicts: analyze_e14.py; design and pre-specified criteria: docs/08.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=0.8\textwidth]{f8-robustness.png}
@@ -116,10 +156,11 @@ to end in comparable budgets, not a leaderboard.
     y is held-out reward at a 150-step horizon, three seeds per point, red
     crosses mark collapse below the base model. GRPO at $8\times$ its
     published learning rate collapses to zero reward on every seed; ES
-    crosses the same $64\times$ range without a collapse, and its one
-    failure mode (noise scale $4\times$) is a freeze at the base model,
-    not a loss of it. The purple markers are single-stabilizer ablations
-    that trained fine, reported with the same prominence as the collapses.}
+    shows no collapse at either tested endpoint of the same 64-fold
+    learning-rate interval, and its one failure mode (noise scale
+    $4\times$) is a freeze at the base model, not a loss of it. The
+    purple markers are single-stabilizer ablations that trained fine,
+    reported with the same prominence as the collapses.}
   \label{fig:f8}
 \end{figure*}
 
@@ -133,12 +174,17 @@ whether its absence is load-bearing, with metrics and falsification criteria
 fixed before the data. The answer has two halves
 (Figure~\ref{fig:f8}).
 
-First, the half we expected: multiplying the learning rate by 8 destroys
-GRPO on every seed (reward 0.000, below even format compliance, policy
-entropy zero) while the same multiplier leaves every ES seed at or above its
-published-settings reference. Across all twelve perturbed runs per
-algorithm: zero ES collapses against three GRPO collapses, and the one ES
-failure (noise scale $4\times$) is a freeze at the base-model floor.
+First, the half we expected, and the one matched comparison in the
+experiment: multiplying the learning rate by 8 destroys GRPO on every
+seed (reward 0.000, below even format compliance, policy entropy zero)
+while the same multiplier leaves every ES seed at or above its
+published-settings reference; neither algorithm collapses at $1/8\times$,
+so the finding is about the aggressive endpoint of the tested 64-fold
+interval, whose interior was not explored. Descriptively, and not as a
+matched rate (the twelve perturbed runs per algorithm perturb different
+knobs per family): zero ES collapses against three GRPO collapses, and
+the one ES failure (noise scale $4\times$) is a freeze at the base-model
+floor.
 
 Second, the half our own falsification criteria caught: removing GRPO's KL
 anchor entirely, or widening its clip until it never binds, changed little
