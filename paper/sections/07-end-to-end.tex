@@ -40,7 +40,7 @@ we document the boundary rather than promise across it.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{f5-estimator-quality.png}
-  \caption{Estimator quality on the phase-0 objectives: cosine between the
+  \caption{Estimator quality on the synthetic block: cosine between the
     ES update direction and the true gradient, against the
     population-to-effective-dimension ratio $N/d_{\mathrm{eff}}$, one panel
     per perturbation rank. Every fitted curve has slope one half. The
@@ -58,7 +58,7 @@ we document the boundary rather than promise across it.
 \paragraph{But is the fast strategy accurate?} The speed results of
 Section~\ref{sec:results} would mean little if the low-rank rewrite bought
 its speed with estimation quality, so the accuracy chain is stated in
-full, with its methods. The phase-0 estimator study measured, on the
+full, with its methods. The estimator study measured, on the
 synthetic block of Section~\ref{sec:setup}, the cosine between the ES
 update direction and the exact gradient from automatic differentiation,
 30 replicates per cell over 456 cells, and fitted
@@ -76,7 +76,7 @@ campaign's outcome is consistent with that extrapolation
 (Figure~\ref{fig:f7}). The extrapolation is far and is stated as one:
 one to three decades below the smallest measured $N/d_{\mathrm{eff}}$,
 from a synthetic block to a real model, with rank 16 riding on the
-rank-1/rank-4 trend because phase 0 never measured it. A task-level
+rank-1/rank-4 trend because the estimator study never measured it. A task-level
 non-difference is consistent with the estimator mechanism, not proof of
 it. The mechanism's reading: at LLM scale the population is always
 minuscule against the parameter count, and in that regime the rank of
@@ -91,7 +91,7 @@ is \emph{why} the low-rank bet can work at all.
 performance shows no detectable difference across full-rank and
 rank-\{1,4,16\} perturbations in this three-seed experiment
 (Figure~\ref{fig:f7}); no inferential test is claimed at $n{=}3$. The
-outcome is the one the phase-0 fitted curves predicted, which put all
+outcome is the one the estimator study's fitted curves predicted, which put all
 ranks within noise of each other at this
 population-to-effective-dimension ratio.
 
@@ -111,7 +111,7 @@ to end in comparable budgets, not a leaderboard.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=0.8\textwidth]{f8-robustness.png}
-  \caption{Stability under hyperparameter perturbation (E14). Each
+  \caption{Stability under hyperparameter perturbation. Each
     algorithm's own published settings are multiplied by the x-axis factor;
     y is held-out reward at a 150-step horizon, three seeds per point, red
     crosses mark collapse below the base model. GRPO at $8\times$ its
