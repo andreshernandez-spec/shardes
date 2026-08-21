@@ -8,6 +8,17 @@
 % estimator result, then the task prediction and its outcome, then the GRPO
 % baseline, then stability. The argument is prediction-before-campaign, so the
 % prediction's evidence now comes before the campaign's.
+This section is the validity chain the introduction promised, on a real
+model (Qwen2.5-0.5B on the Countdown task) with the same instrument, in
+an order where each claim rests on the one before it. First,
+reproducibility: the systems prices of Section~\ref{sec:results} are
+worth acting on only if what was measured is the algorithm, so the
+determinism boundary is stated exactly. Second, quality: the estimator
+study's prediction, then the campaign that tests it, closing the
+unmeasured half of the low-rank belief. Third, stability: the one folk
+claim that cannot exist on a microbenchmark, measured last because its
+verdicts lean on both of the claims before it.
+
 \paragraph{Determinism and invariance on real hardware.} For a fixed seed and
 compiled program, the full training step is bitwise reproducible across
 processes on an 8-GPU node, and the update computed on 1 and 8 devices agrees
