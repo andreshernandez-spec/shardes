@@ -1,0 +1,14 @@
+{
+  "id": "USERNAME/shardes-t6-ctx",
+  "title": "shardes t6 ctx",
+  "code_file": "t6ctx.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

@@ -26,6 +26,10 @@ OUT = HERE / "e14"
 
 CELLS = [
     # (base config, dial, multiplier or absolute, slug)
+    # x1 drift baseline (added 2026-08-21): the E14 table compares perturbed
+    # drift against GRPO but E13's x1 runs predate the metric; three published-
+    # settings runs at the E14 horizon fill the column.
+    ("pilot-lr1.yaml", "lr", 1, "es-x1"),
     ("pilot-lr1.yaml", "lr", 1 / 8, "es-lr-eighth"),
     ("pilot-lr1.yaml", "lr", 8, "es-lr-8x"),
     ("pilot-lr1.yaml", "sigma", 1 / 4, "es-sigma-quarter"),

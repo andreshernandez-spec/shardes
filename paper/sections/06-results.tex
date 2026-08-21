@@ -35,8 +35,11 @@
     outright for the strategies that must regenerate or materialize every
     perturbation on every device, and wins harder on the TPU; for the
     low-rank family the two are within a few percent and the sign flips
-    inside the grid, with A ahead at $d{=}2048$. The crossover is real and
-    it moves with the platform.}
+    inside the grid, with A ahead at $d{=}2048$. Parenthesized cells have a
+    B/A ratio within the timing interquartile ranges: their sign is not a
+    finding, and the sign flips the text relies on all sit outside noise.
+    The crossover is real and it moves with the platform; its trajectory in
+    device count is in the appendix (Figure~\ref{fig:f2b}).}
   \label{fig:f2}
 \end{figure*}
 
@@ -76,6 +79,11 @@
 
 \subsection{Baselines}
 \input{generated/tb1}
+Matched shapes, matched populations, tokens per second; nothing here claims
+step-equivalence between implementations. The arms differ in antithetic
+pairing, shaping and normalization details by design, and the honest unit of
+comparison is throughput at the same shapes, which is how both papers report.
+
 %% TODO(andres): three sentences: within 0.68-0.85x of EGGROLL's own
 %% implementation single-device with a general API; 6x past their ceiling at
 %% D=8 because no reference shards; evosax OOMs at d=2048 on 16 GB at every
