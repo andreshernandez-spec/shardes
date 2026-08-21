@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Regenerate figure F7 from results/e13-a100-2026-08-17. No hand-edited numbers.
+"""Regenerate F7 and F7b from results/e13-a100-2026-08-17. No hand-edited numbers.
 
-    python plot_e13.py        # figures/f7-e13-heldout.png
+    python plot_e13.py        # figures/f7-e13-heldout.png, f7b-e13-wallclock.png
 
 F7: held-out eval reward vs sample evaluations, one curve per arm, min-max band
 over seeds 0-2. Four ES arms, the GRPO reference, the frozen-embedding ablation,
@@ -96,5 +96,57 @@ def main() -> None:
     print(out)
 
 
+def wallclock() -> None:
+    """F7b: the same held-out curves against cumulative steady-state accelerator time.
+
+    ES arms only: GRPO runs in a different framework with a different decoder, so
+    its wall clock is not commensurate and is deliberately absent. Generation 0 is
+    excluded from the cumulative time because it contains compilation (335--581 s
+    against steady-state 2.4--4.3 s per generation); held-out evaluation decode is
+    excluded on both axes as measurement overhead. x per eval point is the mean
+    cumulative time over the three seeds; the band is min--max of reward.
+    """
+    fig, ax = plt.subplots(figsize=(7.0, 4.4))
+    for stem, (color, label) in ARM_STYLE.items():
+        if stem == "grpo":
+            continue
+        xs_by_gen: dict = {}
+        rew_by_gen: dict = {}
+        for s in (0, 1, 2):
+            logs = [json.loads(l) for l in
+                    (RESULTS / f"{stem}-s{s}-log.jsonl").open()]
+            cum, c = {}, 0.0
+            for r in logs:
+                if r["generation"] == 0:
+                    continue  # compilation lives here; see docstring
+                c += r["seconds"]
+                cum[r["generation"]] = c
+            for e in map(json.loads, (RESULTS / f"{stem}-s{s}-eval.jsonl").open()):
+                g = e["generation"]
+                if g == 0:
+                    continue
+                # the final eval runs after the last update, at a generation
+                # one past the last logged one; it lands at the total time
+                xs_by_gen.setdefault(g, []).append(cum.get(g, c))
+                rew_by_gen.setdefault(g, []).append(e["eval_reward"])
+        gens = sorted(xs_by_gen)
+        xs = [statistics.mean(xs_by_gen[g]) for g in gens]
+        ax.plot(xs, [statistics.mean(rew_by_gen[g]) for g in gens],
+                color=color, lw=1.6, label=label, zorder=3)
+        ax.fill_between(xs, [min(rew_by_gen[g]) for g in gens],
+                        [max(rew_by_gen[g]) for g in gens],
+                        color=color, alpha=0.18, lw=0, zorder=2)
+    ax.set_xlabel("cumulative accelerator seconds (steady state)")
+    ax.set_ylabel("held-out reward (2000 puzzles, greedy)")
+    ax.legend(frameon=False, fontsize=8, loc="lower right")
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(FIGURES / "f7b-e13-wallclock.png", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(FIGURES / "f7b-e13-wallclock.png")
+
+
 if __name__ == "__main__":
     main()
+    wallclock()
