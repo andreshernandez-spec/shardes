@@ -46,3 +46,53 @@ hyperparameters, untuned in either direction: one of three seeds collapses,
 two freeze early. We report it as seed variance in the reference, not as a
 victory for ES; the figure's role is that both algorithm families run end to
 end in comparable budgets, not a leaderboard.
+
+% F8 -- experiments/countdown/figures/f8-robustness.png (plot_e14.py);
+% verdicts: analyze_e14.py; design and pre-registered criteria: docs/08.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.8\textwidth]{f8-robustness.png}
+  \caption{Stability under hyperparameter perturbation (E14). Each
+    algorithm's own published settings are multiplied by the x-axis factor;
+    y is held-out reward at a 150-step horizon, three seeds per point, red
+    crosses mark collapse below the base model. GRPO at $8\times$ its
+    published learning rate collapses to zero reward on every seed; ES
+    crosses the same $64\times$ range without a collapse, and its one
+    failure mode (noise scale $4\times$) is a freeze at the base model,
+    not a loss of it. The purple markers are single-stabilizer ablations
+    that trained fine, reported with the same prominence as the collapses.}
+  \label{fig:f8}
+\end{figure*}
+
+\subsection{Stability under perturbation}
+The stabilization machinery of deep RL exists for stated reasons: target
+networks and weight averaging answer divergence theorems, trust regions and
+reference-model penalties answer provable step-size limits
+(Section~\ref{sec:related}). ES carries none of that machinery, so we asked
+whether its absence is load-bearing, with metrics and falsification criteria
+fixed before the data. The answer has two halves
+(Figure~\ref{fig:f8}).
+
+First, the half we expected: multiplying the learning rate by 8 destroys
+GRPO on every seed (reward 0.000, below even format compliance, policy
+entropy zero) while the same multiplier leaves every ES seed at or above its
+published-settings reference. Across all twelve perturbed runs per
+algorithm: zero ES collapses against three GRPO collapses, and the one ES
+failure (noise scale $4\times$) is a freeze at the base-model floor.
+
+Second, the half our own falsification criteria caught: removing GRPO's KL
+anchor entirely, or widening its clip until it never binds, changed little
+at this horizon on this rule-based verifier. The single stabilizers are not
+individually load-bearing here; the fragility is concentrated in the
+learning rate. That is consistent with prior reports that clipping is not
+what makes PPO work and that critic-based PPO trains without a KL penalty,
+and it narrows our claim to what the data supports.
+
+Stability is also not free. The drift row of the same experiment shows the
+$8\times$-learning-rate ES runs ending roughly $50$ units of parameter
+$\ell_2$ from the pretrained weights, against $0.3$--$2$ for healthy GRPO
+runs: ES tolerates aggressive steps by moving far, which is exactly the
+regime where ES-induced forgetting has been reported. Anyone citing this
+section's stability numbers should read them next to that row.
+%% TODO(andres): tighten to taste; the three paragraphs are the three claims
+%% (collapse asymmetry, honored falsification, drift cost) in that order.
