@@ -34,6 +34,25 @@ we document the boundary rather than promise across it.
   \label{fig:f7}
 \end{figure*}
 
+% F5 -- experiments/phase0/figures/f5-estimator-quality.png (phase-0 plots)
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{f5-estimator-quality.png}
+  \caption{Estimator quality on the phase-0 objectives: cosine between the
+    ES update direction and the true gradient, against the
+    population-to-effective-dimension ratio $N/d_{\mathrm{eff}}$, one panel
+    per perturbation rank. Every fitted curve has slope one half. The
+    design-based sampling schemes (orthogonal Hadamard, scrambled Sobol) are
+    indistinguishable from plain mirrored sampling, the negative result
+    Section~\ref{sec:related} records; and the low-rank panels pay a
+    per-sample projection loss (a lower intercept) that their smaller
+    effective dimension wins back at matched population, the cancellation
+    the accuracy chain below relies on. These fitted curves, evaluated at
+    the task's operating point, predicted the tie of Figure~\ref{fig:f7}
+    before the campaign ran.}
+  \label{fig:f5}
+\end{figure*}
+
 \paragraph{But is the fast strategy accurate?} The speed results of
 Section~\ref{sec:results} would mean little if the low-rank rewrite bought
 its speed with estimation quality, so the accuracy chain is stated in full.
