@@ -283,6 +283,40 @@ deserves the most hours and the most care.
 different-caliber figure, and it's free. Requires TRC quota for a `v5e-32` or `v5e-64`
 slice — see the application-timing warning in the runbook.
 
+**E5 deepened (designed 2026-08-21, deferred: needs multi-host TPU, the paper does not
+wait for it).** Not just longer scaling curves: take the contraction crossover across
+the host boundary, because it tests C1 directly, closes the paper's first limitation,
+and completes the conclusion's closing sentence. Design, fixed before any run:
+
+- `D ∈ {8, 16, 32, 64}` on one v5e slice, strategies A and B interleaved, existing
+  warm-up/repeat protocol, strong and weak scaling.
+- Two perturbations bracketing the phenomenon: seed-regenerated full rank (A's
+  replicated contraction is constant in D while B's shrinks 1/D, so B should keep
+  winning) and rank 1 (contraction nearly free, so B's model-sized all-reduce buys
+  almost nothing and the sign should flip to A).
+- Three `(N, d)` cells pre-selected from M3's D=8 phase diagram: one A-favored
+  (low-rank at d=2048), one near-crossover (low-rank d=512), one B-favored
+  (seed-regenerated).
+- One instrument, two outputs: isolated timings of the fitness gather, the
+  contraction, and the model all-reduce (barrier.py's method extended), which are
+  also the calibration data for an alpha-beta latency/bandwidth model. Calibrate at
+  the smaller D, commit predictions for the D=32/64 cells before running them, then
+  reveal. That turns the phase diagram into a decision model.
+- Hypothesis committed in ICI-aware form: a v5e-16/64 slice is one 2D-torus fabric,
+  so hosts are an orchestration boundary, not a bandwidth cliff; what grows with D
+  is torus diameter and per-chip bisection. The pre-registered question is whether
+  B's advantage survives collectives spanning hosts on one fabric, with a gentle
+  trend an expected outcome, not a failed prediction. The sharp cliff is the slice
+  (DCN) or GPU node boundary, out of scope for this grant.
+- Either outcome publishes: a separation gives the practical rule (partial
+  contraction for expensive perturbations, scalar gathering for cheap structured
+  ones once collectives span hosts); B-winning-everywhere sharpens the folk-claim
+  result.
+
+Free rehearsal before any granted hour: the whole driver multi-process on CPU
+(`jax.distributed.initialize`, several local processes, forced host devices), gated
+on the device-count invariance test.
+
 **E8 needs matched shapes across platforms**, not matched memory. v5e has 16 GB/chip
 against A100's 80 GB, so per-device population must be matched deliberately rather than
 "whatever fits." State the matching rule in the paper.
