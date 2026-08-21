@@ -269,7 +269,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 | **E11** | Ablations: `r`, σ, dtype, accumulation precision | all | T1 | **mostly assembled** (`tb3.py` from E1/E8/E13 + tests); one session open (T4: precision ratio + lr1 re-measure) | $0 |
 | **E12** | End-to-end task validation, ≥3 seeds | C2 | T3 | ~15 | ~$8 |
 | **E13** | Countdown, Qwen2.5-0.5B: rank sweep + GRPO reference | **C6** | T2→T5 | ~30 | ~$30-80 |
-| **E14** | Stability under hyperparameter perturbation: lr x{1/8,8}, sigma x{1/4,4}, kl_beta ablation, 3 seeds | **C7** | T5 | ~$30-50 | designed, docs/08 |
+| **E14** | Stability under hyperparameter perturbation: lr x{1/8,8}, sigma x{1/4,4}, kl_beta + clip ablations, 3 seeds | **C7** | T5 | **done** (`countdown/results/e14-a100-2026-08-20`; ES 0 collapses, GRPO 3; both ablations trained fine, reported) | ~$32 |
 
 Roughly **150 free accelerator-hours** and **one paid 6-hour GPU session**.
 
@@ -331,7 +331,7 @@ designed to be cheap to abort.
 | F5 | Estimator quality vs `N/d_eff`, full-rank / rank-1 / rank-4 panels | E1 | C5. **Exists**: `experiments/phase0/figures/` |
 | F6 | End-to-end task curves, seed-variance bands | E12 | C2: both algorithms run end to end. *Was also C5 validation; dropped with C5.* |
 | F7 | E13 held-out curves: four ES ranks + frozen embedding + GRPO, seed bands, base-model floor | E13 | **Exists**: `experiments/countdown/figures/`. C6 in one panel |
-| F8 | Robustness curves: final held-out reward vs hyperparameter multiplier, per algorithm, collapse markers | E14 | C7; the stability claim as a picture |
+| F8 | Robustness curves: final held-out reward vs hyperparameter multiplier, per algorithm, collapse markers | E14 | C7. **Exists**: `experiments/countdown/figures/f8-robustness.png` (`plot_e14.py`) |
 | TB1 | Baseline throughput table, matched shapes | E9 | C2 |
 | TB2 | Communication accounting: analytic vs measured | E0, E4 | Rigor; catches bugs |
 | TB3 | Ablation table | E11 | Reviewer defence |
