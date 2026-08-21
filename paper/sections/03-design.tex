@@ -1,31 +1,36 @@
-% CLAIM: the library's three load-bearing design decisions, each with its
-% measured consequence. Evidence: src/, docs/02; E10 for the barrier price.
-\section{Design}
+% CLAIM (reframed 2026-08-21): what the instrument must guarantee for the
+% measurements to mean anything. Same four design paragraphs; their job is now
+% validity, not product description. Evidence: src/, docs/02; E10.
+\section{The instrument}
 \label{sec:design}
 
 %% TODO(andres): this section is yours more than any other (ground rule 1).
 %% The skeleton fixes only the order of ideas and the measured anchors.
 
-shardes exposes the classic ask/evaluate/tell loop: \emph{ask} for $N$
-perturbed copies of the model (the population), \emph{evaluate} each copy's
-fitness, \emph{tell} the results back to produce an update. Three decisions
-shape everything else.
+Every measurement in this paper is a comparison, and a comparison is only as
+good as the guarantee that both sides compute the same thing. This section
+describes the instrument (shardes) in those terms: not what the library
+offers a user, but what it must guarantee for Sections~\ref{sec:results}
+and~\ref{sec:endtoend} to mean anything. It exposes the classic
+ask/evaluate/tell loop: \emph{ask} for $N$ perturbed copies of the model (the
+population), \emph{evaluate} each copy's fitness, \emph{tell} the results
+back to produce an update. Four properties do the work.
 
-\paragraph{The population is split across devices; the model is not.} Each of
+\paragraph{One mesh for every strategy.} Each of
 $D$ devices holds the full weights and $N/D$ of the perturbed copies (the
 population is sharded, the distribution state replicated). For isotropic ES
 the alternative of splitting the distribution state saves nothing worth its
 synchronization.
 %% TODO(andres): one sentence from docs/02 C1.4 on why.
 
-\paragraph{Noise is named by the candidate, never by the device.} The seed for
+\paragraph{Device count cannot change the experiment.} The seed for
 copy $i$ derives from $i$ alone (member-indexed seeds), so the same experiment
 on 1 device and on 8 produces the same update to floating-point tolerance
 (device-count invariance). This is a testable property, it is the most
 important test in the repository, and Section~\ref{sec:endtoend} verifies it
 on real multi-device hardware, bitwise for a fixed compiled program.
 
-\paragraph{Structured noise is never materialized.} A rank-$r$ perturbation is
+\paragraph{The cost comparison is fair to both bets.} A rank-$r$ perturbation is
 carried as its two thin factors all the way through evaluation: the model's
 dense layers apply $x(W + \tfrac{\sigma}{\sqrt r}AB^\top)^\top$ as
 $xW^\top + ((xB)A^\top)\tfrac{\sigma}{\sqrt r}$, so the full $m\times n$ noise

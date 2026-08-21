@@ -1,7 +1,6 @@
-% CLAIM: two 2025 papers made ES work at LLM scale with opposite structural
-% bets, no common library can express both, and the field's folk claim about
-% ES communication was never measured. Evidence: docs/00; the resolution
-% lands in section 6.
+% CLAIM (reframed 2026-08-21): the field's load-bearing beliefs about
+% distributed ES were never measured; this paper measures them. The library is
+% the instrument, one contribution bullet, not the subject.
 \section{Introduction}
 
 Evolution strategies train a neural network without computing gradients: perturb
@@ -16,57 +15,66 @@ all: it perturbs each weight matrix with the product of two thin matrices (a
 rank-$r$, or low-rank, factorization), which turns the expensive per-copy work
 into a small correction on top of one shared matrix multiply.
 
-%% TODO(andres): one sentence on why the bets are "opposite" in storage vs
-%% compute terms; the design section carries the details.
+Between and beneath those two papers sits a set of beliefs that, as far as we
+can find, nobody has measured:
 
-No existing library can express both. The incumbent, evosax, flattens every
-candidate solution into one long vector before doing anything else
-(\texttt{ravel\_pytree}), which destroys exactly the per-matrix structure the
-low-rank bet depends on. Section~\ref{sec:results} shows this is not only an
-API limitation: on a 16\,GB accelerator the flattened representation runs out
-of memory at model sizes where the structured one runs
-(Table~\ref{tab:tb1}).
-
-There is also an unexamined piece of folklore. ES is said to be cheap to
-distribute because ``only scalars cross the wire'': each device reports one
-fitness number per candidate. Whether that is true depends on a choice nobody
-had measured, namely how the weight update is assembled from the evaluated
-candidates (we call the two options contraction strategies A and B,
-Section~\ref{sec:contraction}). One of them does move only scalars; the other
-all-reduces a buffer the size of the model, and it \emph{wins} over much of
-the measured grid anyway (Figure~\ref{fig:f2}).
-
-There is a stability angle as well. Much of deep RL's machinery exists to
-keep updates slow and gradual for provable reasons: target networks hold a
-lagging copy of the weights (an exponential moving average) because
-bootstrapped value learning can otherwise diverge; trust regions and
-clipped ratios exist because a policy-gradient step is only trustworthy
-near the policy that collected the data; language-model RL adds a penalty
-against drifting from a frozen reference model. ES has none of these parts.
-Section~\ref{sec:endtoend} measures whether their absence is load-bearing,
-with a pre-registered experiment whose falsification criteria fired on one
-sub-claim and sharpened the result: the fragility of the RL baseline
-concentrates in its learning rate, not its stabilizers, and ES crosses a
-$64\times$ learning-rate range without a collapse
-(Figure~\ref{fig:f8}).
-
-\paragraph{Contributions.}
 \begin{itemize}
-  \item \textbf{shardes}, an open-source JAX library whose core splits the
-    population of perturbed model copies across devices (shards it), with the
-    perturbation scheme as a pluggable strategy, so both 2025 bets and their
-    combinations run in one system (Section~\ref{sec:design}).
-  \item A cost model for the two contraction strategies, written before the
-    measurements, and the measured crossover: where each wins in
-    (population, model size) space, on an 8$\times$A100 node and a TPU v5e-8,
-    which disagree (Section~\ref{sec:contraction}, Figure~\ref{fig:f2}).
-  \item Measured cost surfaces against the reference implementations,
-    including the finding that the low-rank rewrite pays \emph{more} on TPU,
-    not less, contradicting the natural guess that fast dense matrix units
-    would rescue the dense baseline (Figure~\ref{fig:f4}).
-  \item An end-to-end validation on an LLM reasoning task with seed-level
-    determinism and device-count invariance, so the systems claims are made
-    about an algorithm that demonstrably trains (Section~\ref{sec:endtoend}).
+  \item \emph{``ES is cheap to distribute because only scalars cross the
+    wire.''} Whether that is true depends on how the weight update is assembled
+    from the evaluated candidates, a choice with two natural placements (we
+    call them contraction strategies A and B, Section~\ref{sec:contraction}).
+    One of them does move only scalars; the other all-reduces a buffer the
+    size of the model.
+  \item \emph{``The low-rank rewrite pays because GPUs are bad at the dense
+    case.''} EGGROLL's motivation is explicitly GPU-shaped; on a TPU, whose
+    matrix unit makes dense multiplies comparatively cheap, the balance could
+    plausibly invert.
+  \item \emph{``ES is the stable one.''} ES carries none of the machinery
+    reinforcement learning uses to keep its updates slow and gradual (lagging
+    weight copies, trust regions, penalties against drifting from a reference
+    model), and the folklore says it does not need it. Folklore is not a
+    measurement.
+\end{itemize}
+
+Measuring any of these fairly has a prerequisite that explains why it had not
+happened: the two bets lived in incompatible codebases, so any comparison
+confounded the algorithm with its implementation, and the incumbent library
+(evosax) can express neither bet at LLM scale because it flattens every
+candidate into one long vector (\texttt{ravel\_pytree}), destroying the
+per-matrix structure the low-rank bet is made of. We therefore built the
+instrument first: \textbf{shardes}, an open-source JAX library whose core
+splits the population of perturbed model copies across devices, with the
+perturbation scheme as a pluggable strategy, so both bets and their
+combinations run in one system and a measured difference is a difference
+between algorithms, not implementations. The library is released and citable;
+this paper is about what it measured.
+
+\paragraph{Findings.}
+\begin{itemize}
+  \item \textbf{The scalar folk claim is true and beside the point.} Strategy
+    A does move only scalars (measured: twice the naive byte count,
+    Table~\ref{tab:tb2}); strategy B moves a model-sized buffer every update
+    and \emph{wins} over much of the measured grid anyway, because the
+    all-reduce stays under 1\% of the interconnect. Where each wins forms a
+    crossover in (population, model size) space that moves between an
+    8$\times$A100 node and a TPU v5e-8 (Section~\ref{sec:results},
+    Figure~\ref{fig:f2}), matching a cost model written before the
+    measurements (Section~\ref{sec:contraction}).
+  \item \textbf{The low-rank motivation does not invert on TPU; it
+    strengthens.} At matched shapes, rank-1 perturbations cost
+    $0.05$--$0.18\times$ the dense baseline on the v5e against
+    $0.13$--$0.42\times$ on the A100, and the dense baseline is infeasible
+    over most of the 16\,GB grid besides (Figure~\ref{fig:f4}).
+  \item \textbf{The synchronization ES cannot avoid is a sort, not
+    communication.} The fitness gather costs 2.4--6\,$\mu$s at every measured
+    population and device count; the rank sort behind fitness shaping costs
+    12\,ms at $N{=}2^{18}$ and is identical on 1 and 8 devices.
+  \item \textbf{Stability, measured with pre-registered criteria}: the RL
+    baseline collapses to zero on every seed at $8\times$ its published
+    learning rate while ES crosses the same $64\times$ range without a
+    collapse; and our own falsification criteria caught the part of the claim
+    that was wrong, since removing the baseline's individual stabilizers
+    changed little (Section~\ref{sec:endtoend}, Figure~\ref{fig:f8}).
   \item Every number in this paper regenerates from a committed script and a
-    recorded environment in the repository.
+    recorded environment in the released repository.
 \end{itemize}
