@@ -5,7 +5,13 @@
 # per-step evaluation budget of the GRPO arm, one octave up the F5 curves.
 model: Qwen/Qwen2.5-0.5B-Instruct
 puzzle_seed: 7
-n_prompts: 32
+# 8, not 32: the low-rank arms vmap all N members through the forward at
+# once (only seed regeneration evaluates in chunks), and 240 x 32 prompts
+# asked the A100 for 138 GiB. 8 prompts keeps the peak near 35 GiB and the
+# objective is the same fixed NLL, just over a smaller batch. Changed
+# 2026-08-21 after the first session OOMed at the lr1 N=240 cell; every
+# cell reruns at this SHA so all cosines share one objective.
+n_prompts: 8
 pad_to: 128
 sigma: 0.001
 eval_chunk: 1
