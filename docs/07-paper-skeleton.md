@@ -95,7 +95,12 @@ docs/00 has the list. Nothing to source.
    the appendix, TB1-TB3 stay in the main body, section 7 is a full section, and TB1
    waits for E9-TPU (the timeline allows one more quota week). Likely deadline is
    late October 2026 by the 2026 cadence; confirm when the CFP lands.
-2. F1's two flagged judgement calls (cell choice; time+throughput vs efficiency).
+2. ~~F1's two flagged judgement calls~~ **Decided 2026-08-20: as drafted.** The
+   largest common cell (d=2048), absolute time + throughput. The opener's job is
+   "runs fast on real hardware at real sizes"; efficiency-vs-ideal lives in M1 in
+   the appendix, and the TPU's missing D=1 point (the dense OOM) stays visible
+   with one caption sentence rather than a normalization convention. (Re-recorded
+   after the original PR #65 went stale against later skeleton edits.)
 3. ~~Section 7's lead~~ **Decided 2026-08-21: determinism first.** The section
    escalates: it computes the right thing (determinism, invariance), it learns
    (F7, with C6b's prediction), it keeps learning when abused (E14/F8). Each
