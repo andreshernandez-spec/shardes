@@ -94,4 +94,8 @@ docs/00 has the list. Nothing to source.
    waits for E9-TPU (the timeline allows one more quota week). Likely deadline is
    late October 2026 by the 2026 cadence; confirm when the CFP lands.
 2. F1's two flagged judgement calls (cell choice; time+throughput vs efficiency).
-3. Whether section 7 leads with F7 or with the determinism story.
+3. ~~Section 7's lead~~ **Decided 2026-08-21: determinism first.** The section
+   escalates: it computes the right thing (determinism, invariance), it learns
+   (F7, with C6b's prediction), it keeps learning when abused (E14/F8). Each
+   claim rests on the one before it, and the systems reviewer's first question
+   is answered first.

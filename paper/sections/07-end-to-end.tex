@@ -4,9 +4,19 @@
 \section{End-to-end validation}
 \label{sec:endtoend}
 
-%% TODO(andres): OPEN DECISION (skeleton item 3): lead with F7 (the training
-%% curves) or with determinism (the systems reader's first question). Both
-%% orders are drafted below; delete one.
+% ORDER (decided 2026-08-21): determinism first, then quality (F7), then
+% stability (E14/F8). Each claim rests on the previous: the curves are worth
+% reading because the runs are reproducible; the stability numbers because
+% the curves are.
+\paragraph{Determinism and invariance on real hardware.} For a fixed seed and
+compiled program, the full training step is bitwise reproducible across
+processes on an 8-GPU node, and the update computed on 1 and 8 devices agrees
+to $6\times10^{-6}$ relative error under a fixed set of fitnesses. Trajectory
+equality across \emph{different} compiled programs is explicitly not claimed:
+greedy decoding flips near-ties under different compiler fusion choices, and
+we document the boundary rather than promise across it.
+%% TODO(andres): compress or expand from the C6d README; the three claims are
+%% deliberately separate because they fail differently.
 
 % F7 -- experiments/countdown/figures/f7-e13-heldout.png (plot_e13.py)
 \begin{figure*}[t]
@@ -30,16 +40,6 @@ estimator study's fitted curves put all ranks within noise of each other at
 this population-to-effective-dimension ratio.
 %% TODO(andres): one sentence with the predicted cosine numbers (C6b) from
 %% experiments/countdown/analysis_c6b.py.
-
-\paragraph{Determinism and invariance on real hardware.} For a fixed seed and
-compiled program, the full training step is bitwise reproducible across
-processes on an 8-GPU node, and the update computed on 1 and 8 devices agrees
-to $6\times10^{-6}$ relative error under a fixed set of fitnesses. Trajectory
-equality across \emph{different} compiled programs is explicitly not claimed:
-greedy decoding flips near-ties under different compiler fusion choices, and
-we document the boundary rather than promise across it.
-%% TODO(andres): compress or expand from the C6d README; the three claims are
-%% deliberately separate because they fail differently.
 
 \paragraph{The reference baseline, honestly.} GRPO with Qiu et al.'s published
 hyperparameters, untuned in either direction: one of three seeds collapses,
