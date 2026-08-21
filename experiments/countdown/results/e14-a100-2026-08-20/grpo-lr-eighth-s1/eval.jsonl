@@ -1,0 +1,4 @@
+{"step": 0, "eval_reward": 0.037300001829862595, "eval_solved": 0.008, "eval_format": 0.301}
+{"step": 50, "eval_reward": 0.15399999916553497, "eval_solved": 0.06, "eval_format": 1.0}
+{"step": 100, "eval_reward": 0.15085001289844513, "eval_solved": 0.0565, "eval_format": 1.0}
+{"step": 150, "eval_reward": 0.14185000956058502, "eval_solved": 0.0465, "eval_format": 1.0}
