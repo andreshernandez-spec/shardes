@@ -15,6 +15,13 @@ n_prompts: 8
 pad_to: 128
 sigma: 0.001
 eval_chunk: 1
+# Members per forward-pass chunk. 8 prompts was not enough at N=240: the
+# logits for 240 vmapped members are still ~70 GiB, and both 2026-08-21
+# sessions OOMed at exactly the mirrored_lr1 N=240 cell. 30 members is the
+# footprint the N=30 cells already proved fits. Chunking regenerates each
+# chunk from (base_key, member_ids), so per-member fitness and every cosine
+# are unchanged; completed cells stay valid and are skipped on rerun.
+member_chunk: 30
 
 strategies: [mirrored_seed, mirrored_lr1, mirrored_lr4, mirrored_lr16, lowrank_r1]
 populations: [30, 240]
