@@ -1,0 +1,27 @@
+{
+ "param_l2_from_init": 2.034540505714802,
+ "config": {
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "seed": 0,
+  "puzzle_seed": 7,
+  "n_puzzles": 256,
+  "pad_to": 128,
+  "max_new": 96,
+  "group_size": 30,
+  "prompts_per_step": 8,
+  "steps": 150,
+  "checkpoint_every": 50,
+  "lr": 1e-05,
+  "lr_schedule": "constant",
+  "kl_beta": 0.001,
+  "temperature": 1.0,
+  "top_p": 1.0,
+  "top_k": 0,
+  "bf16": true,
+  "eval_seed": 1007,
+  "eval_puzzles": 2000,
+  "eval_batch": 250,
+  "results_dir": "results-e14-grpo-clip-off-s0",
+  "clip_epsilon": 10.0
+ }
+}
