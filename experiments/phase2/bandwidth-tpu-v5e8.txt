@@ -1,0 +1,17 @@
+results-tpu-v5e8: TPU v5 lite
+96 multi-device configurations matched; 0 in the comms table had no timing
+
+     d     N  strategy          how  D   bytes/gen   ms/gen     GB/s
+  2048   128  lowrank_r1          B  8 100,663,808     8.26   12.184
+  2048   128  mirrored_lr1        B  8 100,663,808     8.37   12.025
+  2048   128  lowrank_r1          B  4 100,663,808    11.15    9.028
+  2048   128  mirrored_lr1        B  4 100,663,808    11.31    8.901
+  2048   256  mirrored_lr1        B  8 100,664,320    11.76    8.556
+  2048   256  lowrank_r1          B  8 100,664,320    11.97    8.413
+  2048   256  mirrored_lr1        B  4 100,664,320    18.96    5.310
+  2048   256  lowrank_r1          B  4 100,664,320    19.13    5.261
+  2048   128  mirrored_lr1        B  2 100,663,808    19.81    5.083
+  2048   128  lowrank_r1          B  2 100,663,808    19.83    5.077
+
+most demanding: d=2048 N=128 lowrank_r1/B at D=8
+  12.184 GB/s demanded; divide by the platform's published link bandwidth, cited, for the percentage

@@ -22,11 +22,17 @@ contraction). There are two natural placements:
 
 The trade is compute against communication, so a crossover in
 (population $N$, model size $d$) space is predicted rather than assumed:
-%% TODO(andres): restate the analytic model from docs/03 here, two or three
-%% equations, in your own derivation order. It was written before the
-%% measurements ran; say so, and cite the commit, because a predicted
-%% crossover confirmed by measurement is the paper's methodological teeth.
-\todo{cost model equations, from docs/03}
+%% HONESTY NOTE (2026-08-21 review): what was actually committed BEFORE the
+%% measurements is (a) the BYTE model, comms.py's predicted(), confronted
+%% exactly by TB2, and (b) the DIRECTIONAL prediction in prose above. There is
+%% no pre-registered quantitative TIME model, and the measurements have been
+%% seen, so any t_B/t_A formula written now is post-hoc and must be labeled
+%% explanatory, never predictive. Do not let the pre-registration claim creep
+%% wider than (a) and (b); a reviewer who checks commit dates would be right.
+%% TODO(andres): state the byte model (two lines) and the directional
+%% argument in your own words; if you add an explanatory time model, label it
+%% fitted-after-the-fact in the text.
+\todo{byte model + directional argument; optional post-hoc time model}
 
 Section~\ref{sec:results} tests the prediction on both platforms
 (Figure~\ref{fig:f2}); Table~\ref{tab:tb2} checks the model's byte counts

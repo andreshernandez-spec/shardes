@@ -65,7 +65,12 @@ def f2(platform_rows: list[tuple[str, list[dict]]], out: pathlib.Path) -> None:
             c = r["config"]
             if c["mode"] != "strong" or c["devices"] != at_max_d:
                 continue
-            g[(c["strategy"], c["population"], c["d_model"], c["how"])] = r["seconds_median"]
+            # run.py's seconds_iqr is the width q3-q1 (cost.py's is the pair);
+            # normalize to a (lo, hi) bracket around the median either way.
+            m, iqr = r["seconds_median"], r.get("seconds_iqr", 0.0)
+            lo, hi = ((iqr[0], iqr[1]) if isinstance(iqr, (list, tuple))
+                      else (m - iqr / 2, m + iqr / 2))
+            g[(c["strategy"], c["population"], c["d_model"], c["how"])] = (m, (lo, hi))
         grids[name] = (at_max_d, g)
 
     pops = sorted({k[1] for _, g in grids.values() for k in g})
@@ -75,14 +80,20 @@ def f2(platform_rows: list[tuple[str, list[dict]]], out: pathlib.Path) -> None:
     for name, (_, g) in grids.items():
         for s in STRATEGIES:
             z = np.full((len(dims), len(pops)), np.nan)
+            noisy = np.zeros((len(dims), len(pops)), bool)
             for i, d in enumerate(dims):
                 for j, n in enumerate(pops):
                     a, b = g.get((s, n, d, "A")), g.get((s, n, d, "B"))
                     if a and b:
-                        z[i, j] = np.log10(b / a)
-            panels[(name, s)] = z
+                        z[i, j] = np.log10(b[0] / a[0])
+                        # Within measurement noise if the B/A ratio interval built
+                        # from the two IQRs straddles 1: the sign is then not a
+                        # finding, and the cell says so instead of implying one.
+                        lo, hi = b[1][0] / a[1][1], b[1][1] / a[1][0]
+                        noisy[i, j] = lo <= 1.0 <= hi
+            panels[(name, s)] = (z, noisy)
 
-    everything = np.concatenate([z.ravel() for z in panels.values()])
+    everything = np.concatenate([z.ravel() for z, _ in panels.values()])
     lim = float(np.nanmax(np.abs(everything))) or 1.0
     norm = TwoSlopeNorm(vmin=-lim, vcenter=0.0, vmax=lim)
 
@@ -92,13 +103,16 @@ def f2(platform_rows: list[tuple[str, list[dict]]], out: pathlib.Path) -> None:
     for i, (name, (at_max_d, _)) in enumerate(grids.items()):
         for j, s in enumerate(STRATEGIES):
             ax = axes[i][j]
-            z = panels[(name, s)]
+            z, noisy = panels[(name, s)]
             im = ax.pcolormesh(pops, dims, z, cmap=CROSSOVER, norm=norm,
                                shading="nearest")
             for ii, d in enumerate(dims):
                 for jj, n in enumerate(pops):
                     if not np.isnan(z[ii, jj]):
-                        ax.text(n, d, f"{z[ii, jj]:+.2f}", ha="center", va="center",
+                        label = f"{z[ii, jj]:+.2f}"
+                        if noisy[ii, jj]:
+                            label = f"({label})"  # sign within measurement noise
+                        ax.text(n, d, label, ha="center", va="center",
                                 fontsize=8, color=INK)
             ax.set(xscale="log", yscale="log")
             ax.set_xlim(pops[0] / 1.6, pops[-1] * 1.6)
@@ -125,6 +139,52 @@ def f2(platform_rows: list[tuple[str, list[dict]]], out: pathlib.Path) -> None:
     fig.savefig(out / "f2-crossover.png", dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(out / "f2-crossover.png")
+
+
+def f2b(platform_rows: list[tuple[str, list[dict]]], out: pathlib.Path) -> None:
+    """The crossover's trajectory in device count, from the same sweeps.
+
+    F2 shows D=8 only; a referee's next question is whether the sign pattern is
+    a D=8 artifact. One line per (strategy, d, N) cell, log10(t_B/t_A) against
+    D, per platform. The lines answer it from data that already existed: the
+    sweeps measured every D in {1,2,4,8}.
+    """
+    fig, axes = plt.subplots(1, len(platform_rows), figsize=(4.6 * len(platform_rows), 3.6),
+                             sharey=True, squeeze=False)
+    for j, (name, rows) in enumerate(platform_rows):
+        ax = axes[0][j]
+        cells: dict = collections.defaultdict(dict)
+        for r in rows:
+            c = r["config"]
+            if c["mode"] != "strong" or c["strategy"] not in STRATEGIES:
+                continue
+            cells[(c["strategy"], c["d_model"], c["population"])][
+                (c["devices"], c["how"])] = r["seconds_median"]
+        for (s, d, n), by in sorted(cells.items()):
+            ds = sorted({dev for dev, _ in by})
+            pts = [(dev, np.log10(by[(dev, "B")] / by[(dev, "A")]))
+                   for dev in ds if (dev, "A") in by and (dev, "B") in by and dev > 1]
+            if len(pts) >= 2:
+                ax.plot([p[0] for p in pts], [p[1] for p in pts], marker="o", ms=4,
+                        lw=1.3, color=HUES[s], alpha=0.85,
+                        label=s if (d, n) == min((d2, n2) for (s2, d2, n2) in cells
+                                                 if s2 == s) else None)
+        ax.axhline(0.0, color=MUTED, lw=1.0, ls="--")
+        ax.set(xscale="log", xlabel="devices D")
+        ax.set_xticks([2, 4, 8])
+        ax.set_xticklabels(["2", "4", "8"])
+        ax.xaxis.set_minor_locator(NullLocator())
+        _style(ax)
+        ax.set_title(name, color=INK, fontsize=10, loc="left")
+        if j == 0:
+            ax.set_ylabel("$\\log_{10}(t_B / t_A)$")
+        ax.legend(frameon=False, fontsize=7, labelcolor=MUTED)
+    fig.suptitle("F2b  the crossover ratio against device count, one line per "
+                 "(strategy, d, N) cell", color=INK, x=0.02, ha="left", y=1.02)
+    fig.tight_layout()
+    fig.savefig(out / "f2b-crossover-vs-d.png", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(out / "f2b-crossover-vs-d.png")
 
 
 def f1(platform_rows: list[tuple[str, list[dict]]], out: pathlib.Path) -> None:
@@ -192,6 +252,7 @@ def main() -> int:
     out = HERE / "figures"
     out.mkdir(exist_ok=True)
     f2(platform_rows, out)
+    f2b(platform_rows, out)
     f1(platform_rows, out)
     return 0
 

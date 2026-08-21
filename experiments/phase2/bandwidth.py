@@ -49,12 +49,16 @@ def main(argv=None) -> int:
                     help="the --json output of comms.py")
     ap.add_argument("--results", type=pathlib.Path, default=HERE / "results-postfix")
     ap.add_argument("--top", type=int, default=10, help="how many rows to show")
+    ap.add_argument("--reference", default=None,
+                    help='link bandwidth as "NAME:GBPS", or "none" for GB/s only')
     args = ap.parse_args(argv)
 
     comms = json.loads(args.comms.read_text())
     times: dict[tuple, list[float]] = {}
     for p in sorted(args.results.glob("*.json")):
         r = json.loads(p.read_text())
+        if "seconds_median" not in r:
+            continue  # recorded error/OOM rows carry no time (TPU sweep has one)
         c = r["config"]
         times.setdefault(tuple(c[k] for k in KEY), []).append(r["seconds_median"])
     if not times:
@@ -80,21 +84,36 @@ def main(argv=None) -> int:
     rows.sort(reverse=True)
 
     kind = json.loads(next(args.results.glob("*.json")).read_text())["env"]["device_kind"]
+    # The percentage column needs the platform's link bandwidth; NVLink's 600 is
+    # only right for the A100 runs. --reference "NAME:GBPS" overrides it, and
+    # --reference none prints the demanded GB/s alone, for a platform whose link
+    # figure should be cited rather than hardcoded (the v5e's ICI).
+    ref_name, ref_gbps = "an A100's ~600 GB/s NVLink", NVLINK_GBPS
+    if args.reference == "none":
+        ref_gbps = None
+    elif args.reference:
+        ref_name, g = args.reference.rsplit(":", 1)
+        ref_gbps = float(g)
+
     print(f"{args.results.name}: {kind}")
     print(f"{len(rows)} multi-device configurations matched; {unmatched} in the comms table "
           f"had no timing\n")
     print(f"{'d':>6}{'N':>6}  {'strategy':17}{'how':>4}{'D':>3}"
-          f"{'bytes/gen':>12}{'ms/gen':>9}{'GB/s':>9}{'% NVLink':>10}")
+          f"{'bytes/gen':>12}{'ms/gen':>9}{'GB/s':>9}"
+          + (f"{'% link':>10}" if ref_gbps else ""))
     for gbps, m, secs, _ in rows[:args.top]:
+        pct = f"{100 * gbps / ref_gbps:>9.2f}%" if ref_gbps else ""
         print(f"{m['d_model']:>6}{m['population']:>6}  {m['strategy']:17}{m['how']:>4}"
-              f"{m['devices']:>3}{m['bytes']:>12,}{secs * 1e3:>9.2f}{gbps:>9.3f}"
-              f"{100 * gbps / NVLINK_GBPS:>9.2f}%")
+              f"{m['devices']:>3}{m['bytes']:>12,}{secs * 1e3:>9.2f}{gbps:>9.3f}{pct}")
 
     worst, m, secs, _ = rows[0]
     print(f"\nmost demanding: d={m['d_model']} N={m['population']} {m['strategy']}/{m['how']} "
           f"at D={m['devices']}")
-    print(f"  {worst:.3f} GB/s, {100 * worst / NVLINK_GBPS:.2f}% of an A100's "
-          f"~{NVLINK_GBPS:.0f} GB/s NVLink")
+    if ref_gbps:
+        print(f"  {worst:.3f} GB/s, {100 * worst / ref_gbps:.2f}% of {ref_name}")
+    else:
+        print(f"  {worst:.3f} GB/s demanded; divide by the platform's published "
+              "link bandwidth, cited, for the percentage")
     return 0
 
 
