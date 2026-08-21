@@ -36,6 +36,20 @@ Section~\ref{sec:contraction}). One of them does move only scalars; the other
 all-reduces a buffer the size of the model, and it \emph{wins} over much of
 the measured grid anyway (Figure~\ref{fig:f2}).
 
+There is a stability angle as well. Much of deep RL's machinery exists to
+keep updates slow and gradual for provable reasons: target networks hold a
+lagging copy of the weights (an exponential moving average) because
+bootstrapped value learning can otherwise diverge; trust regions and
+clipped ratios exist because a policy-gradient step is only trustworthy
+near the policy that collected the data; language-model RL adds a penalty
+against drifting from a frozen reference model. ES has none of these parts.
+Section~\ref{sec:endtoend} measures whether their absence is load-bearing,
+with a pre-registered experiment whose falsification criteria fired on one
+sub-claim and sharpened the result: the fragility of the RL baseline
+concentrates in its learning rate, not its stabilizers, and ES crosses a
+$64\times$ learning-rate range without a collapse
+(Figure~\ref{fig:f8}).
+
 \paragraph{Contributions.}
 \begin{itemize}
   \item \textbf{shardes}, an open-source JAX library whose core splits the
