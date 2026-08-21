@@ -15,11 +15,20 @@ model; the model only ever runs forward.
 %% uses none of it downstream, so a paragraph may be enough.
 
 \paragraph{The two 2025 algorithms.}
-%% TODO(andres): one honest paragraph per paper, from docs/00. Keep the
-%% storage-vs-compute framing: Qiu pays compute (regenerate noise from seeds
-%% twice) to pay no storage; EGGROLL pays a rank-r approximation to make both
-%% storage and compute per member small.
-\todo{Qiu et al.\ and EGGROLL paragraphs}
+Qiu et al.\ keep the perturbation exact and make its \emph{storage} free:
+each candidate's noise is regenerated from a random seed whenever it is
+needed (once to evaluate, once to assemble the update), so nothing
+model-sized is ever kept per candidate, at the price of generating every
+perturbation twice. EGGROLL makes the perturbation itself cheap: each weight
+matrix's noise is the product of two thin factors, so per-candidate storage
+and compute both shrink by the rank ratio, at the price of the noise no
+longer being full-rank. The two prices are paid in different currencies
+(compute against exactness), which is why neither paper subsumes the other
+and why measuring them in one system is informative at all.
+%% TODO(andres): tighten; keep the different-currencies sentence, it is the
+%% section's job. Add each paper's headline result in one clause (Qiu:
+%% full-parameter fine-tuning at billions of parameters with N=30; EGGROLL:
+%% ~100x throughput, populations in the tens of thousands) with citations.
 
 \paragraph{Why flattening forecloses structure.} A library that first
 concatenates all weights into one vector can only ever perturb that vector
