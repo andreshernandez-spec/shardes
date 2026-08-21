@@ -22,7 +22,8 @@ we document the boundary rather than promise across it.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=0.72\textwidth]{f7-e13-heldout.png}
-  \caption{Countdown (arithmetic puzzle solving) with Qwen2.5-0.5B: held-out
+  \caption{Countdown (arithmetic puzzle solving; the task shape of
+    TinyZero, \citealp{tinyzero2025}) with Qwen2.5-0.5B \citep{qwen25}: held-out
     reward against sample evaluations, three seeds per arm, min--max band.
     The four ES perturbation ranks lie on top of each other; freezing the
     embedding (27\% of parameters) costs nothing; the GRPO reference with
@@ -60,8 +61,8 @@ performance is flat across full-rank and rank-\{1,4,16\} perturbations
 estimator study's fitted curves put all ranks within noise of each other at
 this population-to-effective-dimension ratio.
 
-\paragraph{The reference baseline, honestly.} GRPO with Qiu et al.'s published
-hyperparameters, untuned in either direction: one of three seeds collapses,
+\paragraph{The reference baseline, honestly.} GRPO \citep{deepseekmath2024} with the published
+hyperparameters of \citet{qiu2025}, untuned in either direction: one of three seeds collapses,
 two freeze early. We report it as seed variance in the reference, not as a
 victory for ES; the figure's role is that both algorithm families run end to
 end in comparable budgets, not a leaderboard.
@@ -85,9 +86,10 @@ end in comparable budgets, not a leaderboard.
 
 \subsection{Stability under perturbation}
 The stabilization machinery of deep RL exists for stated reasons: target
-networks and weight averaging answer divergence theorems, trust regions and
-reference-model penalties answer provable step-size limits
-(Section~\ref{sec:related}). ES carries none of that machinery, so we asked
+networks and weight averaging answer divergence theorems
+\citep{baird1995,tsitsiklis1997,mnih2015,vanhasselt2018,zhang2021target},
+trust regions and reference-model penalties answer provable step-size
+limits \citep{kakade2002,schulman2015trpo,schulman2017ppo,ouyang2022}. ES carries none of that machinery, so we asked
 whether its absence is load-bearing, with metrics and falsification criteria
 fixed before the data. The answer has two halves
 (Figure~\ref{fig:f8}).
@@ -104,14 +106,16 @@ anchor entirely, or widening its clip until it never binds, changed little
 at this horizon on this rule-based verifier. The single stabilizers are not
 individually load-bearing here; the fragility is concentrated in the
 learning rate. That is consistent with prior reports that clipping is not
-what makes PPO work and that critic-based PPO trains without a KL penalty,
+what makes PPO work \citep{engstrom2020,andrychowicz2020} and that
+critic-based PPO trains without a KL penalty \citep{orz2025},
 and it narrows our claim to what the data supports.
 
 Stability is also not free. The drift row of the same experiment shows the
 $8\times$-learning-rate ES runs ending roughly $50$ units of parameter
 $\ell_2$ from the pretrained weights, against $0.3$--$2$ for healthy GRPO
 runs: ES tolerates aggressive steps by moving far, which is exactly the
-regime where ES-induced forgetting has been reported. Anyone citing this
+regime where ES-induced forgetting has been reported
+\citep{abdi2026forgetting}. Anyone citing this
 section's stability numbers should read them next to that row.
 %% TODO(andres): tighten to taste; the three paragraphs are the three claims
 %% (collapse asymmetry, honored falsification, drift cost) in that order.
