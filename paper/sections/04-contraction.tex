@@ -29,12 +29,17 @@ The trade is compute against communication, so a crossover in
 %% seen, so any t_B/t_A formula written now is post-hoc and must be labeled
 %% explanatory, never predictive. Do not let the pre-registration claim creep
 %% wider than (a) and (b); a reviewer who checks commit dates would be right.
-The part of the model committed before any measurement is the byte count.
-Per update, strategy A moves the fitness vector, $4N$ bytes of scalars;
-strategy B moves one partial update the size of the model, $4P$ bytes for
-$P$ parameters, plus the same fitness vector. At $d{=}2048$ that is 1\,KB
-against 100\,MB, five orders of magnitude, and Table~\ref{tab:tb2} checks
-these counts against the payload of every collective in the compiled update.
+The part of the model committed before any measurement is the byte
+count, and the measurement corrected it. The committed prediction was $4N$
+bytes of scalars for strategy A and $4P$ bytes for strategy B ($P$
+parameters, float32). Table~\ref{tab:tb2} measures the payload of every
+collective in the compiled update: A actually moves $8N$, a pair of
+$4N$-byte gathers, because the sharded evaluation gathers the member ids
+alongside the shaped fitnesses; B moves $4P{+}4N$, the same gather riding
+beside its model-sized all-reduce. The refined model matches to the byte.
+The correction changes no conclusion, five orders of magnitude at
+$d{=}2048$ either way (2\,KB against 100\,MB), and it is reported as a
+correction rather than folded silently into the prediction.
 The directional prediction, also stated before measuring, follows from what
 each strategy buys with its bytes: B does $1/D$ of A's contraction work, so
 B should win wherever per-candidate contraction work is large (dense or

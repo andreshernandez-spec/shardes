@@ -24,12 +24,16 @@ the alternative of splitting the distribution state saves nothing worth its
 synchronization.
 %% TODO(andres): one sentence from docs/02 C1.4 on why.
 
-\paragraph{Device count cannot change the experiment.} The seed for
-copy $i$ derives from $i$ alone (member-indexed seeds), so the same experiment
-on 1 device and on 8 produces the same update to floating-point tolerance
-(device-count invariance). This is a testable property, it is the most
-important test in the repository, and Section~\ref{sec:endtoend} verifies it
-on real multi-device hardware, bitwise for a fixed compiled program.
+\paragraph{Device count cannot change what is sampled or contracted.}
+The seed for copy $i$ derives from $i$ alone (member-indexed seeds), so the
+population is device-count invariant by construction, and given a fixed set
+of fitnesses the update contracted on 1 device and on 8 agrees to
+floating-point tolerance. This is a testable property and it is the most
+important test in the repository. The guarantee is deliberately narrower
+than trajectory equality: a full training trajectory is reproducible only
+for the same compiled program, because compilation differences flip
+near-ties in generation (Section~\ref{sec:endtoend} states the measured
+boundary).
 
 \paragraph{The cost comparison is fair to both bets.} A rank-$r$ perturbation is
 carried as its two thin factors all the way through evaluation: the model's
@@ -39,7 +43,12 @@ matrix never exists in memory. The library treats a profile showing an
 $(N, m, n)$ allocation under the low-rank path as a bug, and
 Section~\ref{sec:results} shows what honoring that invariant buys: the dense
 baseline runs out of memory over half of the measured grid while the
-structured strategies keep running.
+structured strategies keep running. The honest cost of this generality is
+an API constraint: a model must route its parameterized matrix multiplies
+and embedding lookups through the library's seams (\texttt{shardes.nn}),
+because a structured weight substituted into the parameter tree raises on
+direct arithmetic. Section~\ref{sec:limitations} carries the portability
+consequence.
 
 \paragraph{One deliberate synchronization point.} Fitness shaping needs every
 candidate's score (a global sort for centered ranks), so \emph{tell} gathers

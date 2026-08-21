@@ -9,6 +9,26 @@ v5e-8 (8 chips, 16\,GB high-bandwidth memory each, 2D-torus interconnect).
 The two differ in the ways that matter to ES: the A100 has $5\times$ the
 per-device memory; the v5e's matrix unit multiplies in bfloat16 by default.
 
+\paragraph{Workload.} The systems measurements
+(Figures~\ref{fig:f1}--\ref{fig:f4}, Tables~\ref{tab:tb1}--\ref{tab:tb3})
+are microbenchmarks of a single, deliberately simplified transformer
+block: six square $d\times d$ matrices (attention q, k, v, o and a
+two-matrix MLP), a single head, no learned normalization parameters,
+$d_{\mathrm{ff}}{=}d$ where a real transformer uses roughly $4d$,
+synthetic inputs and targets, mean-squared-error loss. Every matrix being
+square keeps the effective sampling dimension a single number per rank,
+which is what the estimator study needs; the simplifications move
+arithmetic intensity and memory, and are stated in
+Section~\ref{sec:limitations}. Parameter count is $P{=}6d^2$, so
+$d{=}2048$ means 25.2M parameters and a 100.7\,MB float32 update. Every
+generation evaluates the whole population on one shared batch of 8
+sequences of length 32. The scaling grid is $d\in\{512, 2048\}$ with
+populations 128--1024 (strong) and 16--128 per device (weak) over
+$D\in\{1,2,4,8\}$; the cost surfaces use their own committed
+configurations with wider population ranges. Conclusions from these grids
+are microbenchmark conclusions; everything demonstrated on a real model
+lives in Section~\ref{sec:endtoend}.
+
 \paragraph{Matched shapes, not matched memory.} Cross-platform comparisons
 run identical (model size, population, strategy, datatype) cells on both
 platforms. Cells that exceed a device's memory are recorded as
@@ -35,5 +55,6 @@ bfloat16; the loss reduction is where float32 begins.
 \paragraph{Provenance.} Every result record stamps its commit hash, library
 versions and device; benchmark configurations are committed before runs and
 cited by hash; every figure and table in this paper regenerates from a
-committed script.
-%% TODO(andres): repo URL + archived artifact DOI when one exists.
+committed script in the released repository
+(\url{https://github.com/andreshernandez-spec/shardes}).
+%% TODO(andres): archived artifact DOI + version tag at submission.
