@@ -9,7 +9,8 @@
 
 Every measurement in this paper is a comparison, and a comparison is only as
 good as the guarantee that both sides compute the same thing. This section
-describes the instrument (shardes) in those terms: not what the library
+describes the instrument (shardes, built on JAX and its
+compiler-driven sharding \citealp{jax2018,gspmd2021}) in those terms: not what the library
 offers a user, but what it must guarantee for Sections~\ref{sec:results}
 and~\ref{sec:endtoend} to mean anything. It exposes the classic
 ask/evaluate/tell loop: \emph{ask} for $N$ perturbed copies of the model (the

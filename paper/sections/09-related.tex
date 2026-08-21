@@ -2,21 +2,24 @@
 \section{Related work}
 \label{sec:related}
 
-Four threads. \emph{ES at scale}: Salimans et al.\ made distributed ES
+Four threads. \emph{ES at scale}: \citet{salimans2017} made distributed ES
 credible with scalar-only communication and fixed hyperparameters across
-tasks; the 2025 pair (Qiu et al., EGGROLL) brought it to LLMs with the
-opposite structural bets this paper measures; ARS and deep neuroevolution
-are the simplicity-first ancestors. \emph{Zeroth-order optimization for
-LLMs}: the MeZO lineage and its successors optimize with perturbations for
+tasks; the 2025 pair \citep{qiu2025,eggroll2025} brought it to LLMs with the
+opposite structural bets this paper measures; ARS \citep{mania2018} and deep neuroevolution
+\citep{such2017,conti2017,chrabaszcz2018} are the simplicity-first
+ancestors. \emph{Zeroth-order optimization for
+LLMs}: the MeZO lineage \citep{malladi2023} and its successors optimize with
+perturbations for
 memory reasons rather than parallelism ones, a sibling motivation with
 different systems consequences. \emph{Estimator theory}: Nesterov and
-Spokoiny's smoothed-objective analysis and its dimension-dependence lower
-bounds are the frame our accuracy measurements live in; the coupling and
+Spokoiny's smoothed-objective analysis \citep{nesterov2017} and its
+dimension-dependence lower bounds \citep{duchi2015,berahas2022} are the
+frame our accuracy measurements live in; the coupling and
 quasi-Monte-Carlo literature promised variance reductions that our phase-0
 study measured as absent in the relevant regime, a negative result recorded
 rather than repeated. \emph{Systems}: JAX's shard\_map lineage is the
-substrate; evosax is the incumbent library whose flattening design this
-paper measures the consequences of, in Table~\ref{tab:tb1}'s failure row
+substrate \citep{jax2018,gspmd2021}; evosax \citep{lange2022evosax} is the incumbent library whose
+flattening design this paper measures the consequences of, in Table~\ref{tab:tb1}'s failure row
 rather than in prose.
 %% TODO(andres): expand each thread by one or two sentences with the
 %% citations from references.bib (keys in docs/09); the four-thread order is

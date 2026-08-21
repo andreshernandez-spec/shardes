@@ -4,10 +4,10 @@
 \label{sec:background}
 
 \paragraph{The estimator.} ES estimates a direction of improvement by weighting
-random perturbations by how well they scored: with weights $\theta$, noise
+random perturbations by how well they scored \citep{wierstra2014,nesterov2017}: with weights $\theta$, noise
 $\epsilon_i$, scale $\sigma$ and fitness $f$, the update is proportional to
 $\frac{1}{N\sigma}\sum_i w_i\,\epsilon_i$ where the $w_i$ are a function of the
-fitnesses $f(\theta + \sigma\epsilon_i)$ (in this paper, centered ranks: sort
+fitnesses $f(\theta + \sigma\epsilon_i)$ (in this paper, centered ranks \citep{salimans2017}: sort
 the fitnesses and replace each by its normalized position, which makes the
 update indifferent to the scale of the loss). No gradients flow through the
 model; the model only ever runs forward.
@@ -15,11 +15,11 @@ model; the model only ever runs forward.
 %% uses none of it downstream, so a paragraph may be enough.
 
 \paragraph{The two 2025 algorithms.}
-Qiu et al.\ keep the perturbation exact and make its \emph{storage} free:
+\citet{qiu2025} keep the perturbation exact and make its \emph{storage} free:
 each candidate's noise is regenerated from a random seed whenever it is
 needed (once to evaluate, once to assemble the update), so nothing
 model-sized is ever kept per candidate, at the price of generating every
-perturbation twice. EGGROLL makes the perturbation itself cheap: each weight
+perturbation twice. EGGROLL \citep{eggroll2025} makes the perturbation itself cheap: each weight
 matrix's noise is the product of two thin factors, so per-candidate storage
 and compute both shrink by the rank ratio, at the price of the noise no
 longer being full-rank. The two prices are paid in different currencies
