@@ -8,9 +8,9 @@ the weights with random noise, evaluate each perturbed copy, and move the weight
 toward the copies that scored well (a zeroth-order, or gradient-free, method).
 For years this was considered too sample-hungry for large models. In 2025, two
 papers changed that assessment, and they did it with opposite structural bets.
-Qiu et al.\ perturb every weight independently and avoid storing the noise by
+\citet{qiu2025} perturb every weight independently and avoid storing the noise by
 regenerating it from random seeds (full-rank perturbations with seed
-regeneration). Sarkar et al.'s EGGROLL never builds the full noise matrix at
+regeneration). Sarkar et al.'s EGGROLL \citep{eggroll2025} never builds the full noise matrix at
 all: it perturbs each weight matrix with the product of two thin matrices (a
 rank-$r$, or low-rank, factorization), which turns the expensive per-copy work
 into a small correction on top of one shared matrix multiply.
@@ -39,10 +39,10 @@ can find, nobody has measured:
 Measuring any of these fairly has a prerequisite that explains why it had not
 happened: the two bets lived in incompatible codebases, so any comparison
 confounded the algorithm with its implementation, and the incumbent library
-(evosax) can express neither bet at LLM scale because it flattens every
+(evosax; \citealp{lange2022evosax}) can express neither bet at LLM scale because it flattens every
 candidate into one long vector (\texttt{ravel\_pytree}), destroying the
 per-matrix structure the low-rank bet is made of. We therefore built the
-instrument first: \textbf{shardes}, an open-source JAX library whose core
+instrument first: \textbf{shardes}, an open-source JAX \citep{jax2018} library whose core
 splits the population of perturbed model copies across devices, with the
 perturbation scheme as a pluggable strategy, so both bets and their
 combinations run in one system and a measured difference is a difference
