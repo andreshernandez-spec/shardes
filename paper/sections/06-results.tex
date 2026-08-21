@@ -84,6 +84,28 @@ step-equivalence between implementations. The arms differ in antithetic
 pairing, shaping and normalization details by design, and the honest unit of
 comparison is throughput at the same shapes, which is how both papers report.
 
+Beyond parity, the measurements locate three concrete reasons to prefer the
+instrument over the reference implementations, stated with their caveats.
+First, none of the references shards: at eight devices the instrument reaches
+$6\times$ the reference's single-chip ceiling (Table~\ref{tab:tb1b}), which
+is a statement about released code, not about what the papers' internal
+systems could do. Second, choices the references hardcode are measured to
+matter: the contraction placement flips winner by platform
+(Figure~\ref{fig:f2}), and EGGROLL's antithetic pairing is built into its
+sampler, while the unpaired variant it cannot express estimates the gradient
+about $1.34\times$ better per sample at matched population in the large-$N$
+regime its own paper targets (the phase-0 curves behind
+Figure~\ref{fig:f5}); the pairing halves factor storage in exchange, and at
+small $N$ the difference is within noise, so this is a choice to expose, not
+a defect. Third, the reference's rank-1 path does not compile on a 16\,GB
+TPU chip at $d{=}512$, $N{=}16384$ (24.1\,GiB of compiler temporaries,
+reproducible with no TPU via the compile-only probe in the repository), the
+same pathology this instrument diagnosed and works around; the same cell
+runs here at 245\,ms. Their reference also declines embedding tables
+outright, a seam this instrument carries.
+%% TODO(andres): your voice; the four claims and their caveats are the
+%% content, the order is deliberate (systems, choices, feasibility, seams).
+
 %% TODO(andres): three sentences: within 0.68-0.85x of EGGROLL's own
 %% implementation single-device with a general API; 6x past their ceiling at
 %% D=8 because no reference shards; evosax OOMs at d=2048 on 16 GB at every
@@ -93,9 +115,12 @@ comparison is throughput at the same shapes, which is how both papers report.
 \subsection{The shaping barrier, priced}
 %% TODO(andres): the E10 numbers from section 3, one short table or inline:
 %% gather flat at 2.4-6 us, sort 12.1 ms at 2^18 and D-independent, the
-%% redundant-local-compute reading, and the honest ceiling caveat (isolation
-%% measurement; a real generation may overlap some of it).
-\todo{barrier numbers}
+%% redundant-local-compute reading. The isolation caveat is CLOSED by the
+%% in-context check (results-barrier-context): shaping on-vs-off inside full
+%% generations at the sweep's largest cells differs by 41-149 us medians,
+%% inside the repeat spreads and within the isolation ceiling. One sentence:
+%% invisible in context at measured scales; 12 ms at 2^18 is the ceiling.
+\todo{barrier numbers + in-context closure}
 
 \subsection{Ablations}
 \input{generated/tb3}
