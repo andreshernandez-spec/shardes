@@ -146,14 +146,34 @@ rather than argued from source code.
 %% cost-of-generality framing of the first row.
 
 \subsection{The shaping barrier, priced}
-%% TODO(andres): the E10 numbers from section 3, one short table or inline:
-%% gather flat at 2.4-6 us, sort 12.1 ms at 2^18 and D-independent, the
-%% redundant-local-compute reading. The isolation caveat is CLOSED by the
-%% in-context check (results-barrier-context): shaping on-vs-off inside full
-%% generations at the sweep's largest cells differs by 41-149 us medians,
-%% inside the repeat spreads and within the isolation ceiling. One sentence:
-%% invisible in context at measured scales; 12 ms at 2^18 is the ceiling.
-\todo{barrier numbers + in-context closure}
+Section~\ref{sec:design} declared one deliberate synchronization point;
+here is its bill, measured in isolation across 84 cells on the TPU. The
+communication half is not the story at any scale: the gather runs at
+2.4--6\,$\mu$s, flat in $N$ (the payload at $N{=}2^{18}$ is 1\,MB) and
+about 3\,$\mu$s dearer at $D{=}8$ than at $D{=}1$. The cost that grows is
+the sort, and it is local compute paid redundantly rather than
+communication: 12.1\,ms at $N{=}2^{18}$, identical to within $0.3\%$
+between one device and eight, because every chip sorts the same
+replicated array, about 46\,ns per member on this chip. At the
+populations the source papers actually run, 30 to a few thousand, the
+whole barrier is under 60\,$\mu$s against generation times in the
+milliseconds. It becomes a leading term only where $N$ reaches the
+rank-$r$ regime's extremes and the per-member work is cheap; at
+$N{=}2^{18}$ a 12\,ms sort would rival a low-rank generation itself, and
+a psum-based shaping or a sharded sort would remove it at the design
+cost Section~\ref{sec:design} documents declining.
+
+An isolation number is the barrier's worst case, since a real generation
+may overlap part of the latency behind compute, so we also closed the
+caveat in context: identical full generations with shaping on and off,
+at the largest cells the sweep measured on this platform, differ by
+41\,$\mu$s ($d{=}512$, $N{=}1024$) and 149\,$\mu$s ($d{=}2048$,
+$N{=}256$) in the median, both inside their own repeat spreads. At
+measured scales the barrier is statistically invisible inside a
+generation; the 12\,ms sort stands as the ceiling for a population
+regime where a full generation does not fit this hardware anyway.
+%% TODO(andres): your voice; keep the redundant-local-compute reading and
+%% the in-context closure as the two beats.
 
 \subsection{Ablations}
 \input{generated/tb3}
