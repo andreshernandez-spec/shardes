@@ -72,18 +72,21 @@ perturbation is not what limits estimation quality. That, arguably, is
 
 \paragraph{The task, and what was fixed in advance.} The campaign that
 tests the prediction is specified in Table~\ref{tab:e2e}: both algorithm
-families train on the same puzzle pool with the published hyperparameters
-of \citet{qiu2025}, are scored on the same 2000 disjoint held-out puzzles
-by greedy decode, and stop at the same total budget of scored
-completions, which is the unit the x-axis of Figure~\ref{fig:f7} counts.
+families train on the same puzzle pool with the published core
+hyperparameters of \citet{qiu2025} (one disclosed budget difference:
+8 puzzles per update against their protocol's 200 training samples), are
+scored on the same 2000 disjoint held-out puzzles by greedy decode, and
+stop at the same total budget of scored training completions, which is
+the unit the x-axis of Figure~\ref{fig:f7} counts.
 
 \begin{table*}[t]
 \centering
 \small
-\caption{End-to-end setup. A sample evaluation is one scored completion;
-  both families consume 240 per update (ES: 30 members $\times$ 8
-  puzzles; GRPO: 30 completions $\times$ 8 prompts), so the 120{,}000
-  budget is 500 updates for each.}
+\caption{End-to-end setup. A sample evaluation is one scored
+  \emph{training} completion (held-out scoring is not counted); both
+  families consume 240 per update (ES: 30 members $\times$ 8 puzzles;
+  GRPO: 30 completions $\times$ 8 prompts), so the 120{,}000 budget is
+  500 updates for each.}
 \label{tab:e2e}
 \begin{tabular}{lp{0.78\linewidth}}
 \toprule
@@ -94,8 +97,10 @@ data & training pool 256 puzzles, 8 per update; held-out 2000 disjoint
 prompts, decode & chat template, prompts padded to 128 tokens, 96 new
   tokens; ES rollouts and all held-out evals decode greedily \\
 ES arms & $N{=}30$, $\sigma{=}10^{-3}$, $\alpha{=}5\times10^{-4}$ (the
-  published values), centered-rank shaping; full rank and ranks 1, 4, 16,
-  plus rank 1 with the embedding (27\% of parameters) frozen \\
+  published values; implemented as $\mathrm{lr}{=}\alpha\sigma{=}5\times10^{-7}$
+  because the library's update divides by $\sigma$), centered-rank
+  shaping; full rank and ranks 1, 4, 16, plus rank 1 with the embedding
+  (27\% of parameters) frozen \\
 GRPO arm & TRL implementation; group size 30, 8 prompts per step,
   learning rate $10^{-5}$ constant, KL $\beta{=}10^{-3}$, clip
   $\epsilon{=}0.2$, rollout temperature 1.0 with no top-$p$/top-$k$ \\
@@ -113,7 +118,8 @@ hardware & one A100-SXM4-80GB; the campaign is $\sim$13\,h \\
   \includegraphics[width=0.72\textwidth]{f7-e13-heldout.png}
   \caption{Countdown (arithmetic puzzle solving; the task shape of
     TinyZero, \citealp{tinyzero2025}) with Qwen2.5-0.5B \citep{qwen25}:
-    held-out reward against sample evaluations, mean over three seeds,
+    held-out reward against training sample evaluations, mean over three
+    seeds,
     min--max band. The four ES perturbation ranks lie on top of each
     other; freezing the embedding shows no detectable difference in this
     three-seed experiment; the GRPO reference with its published settings
@@ -165,14 +171,17 @@ to end in comparable budgets, not a leaderboard.
 \end{figure*}
 
 \subsection{Stability under perturbation}
-The stabilization machinery of deep RL exists for stated reasons: target
-networks and weight averaging answer divergence theorems
+The stabilization machinery of deep RL exists for stated reasons, and the
+recipe tested here carries two pieces of it: a clipped surrogate objective
+against provable step-size limits \citep{kakade2002,schulman2015trpo,schulman2017ppo}
+and a reference-model KL penalty anchoring the policy \citep{ouyang2022}.
+(The value-based lineage's target networks and weight averaging, which
+answer divergence theorems
 \citep{baird1995,tsitsiklis1997,mnih2015,vanhasselt2018,zhang2021target},
-trust regions and reference-model penalties answer provable step-size
-limits \citep{kakade2002,schulman2015trpo,schulman2017ppo,ouyang2022}. ES carries none of that machinery, so we asked
-whether its absence is load-bearing, with metrics and falsification criteria
-fixed before the data. The answer has two halves
-(Figure~\ref{fig:f8}).
+are not part of this recipe and are not tested.) ES carries none of that
+machinery, so we asked whether its absence is load-bearing, with metrics
+and falsification criteria fixed before the data. The answer has two
+halves (Figure~\ref{fig:f8}).
 
 First, the half we expected, and the one matched comparison in the
 experiment: multiplying the learning rate by 8 destroys GRPO on every

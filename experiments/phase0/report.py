@@ -176,7 +176,7 @@ def main(argv=None) -> int:
     lines += ["", PROSE.strip(), "",
               "## Reproduce", "",
               "```sh", "cd experiments/phase0", "python run.py       # resumable",
-              "python plot.py      # figures/f5-estimator-quality.png",
+              "python plot.py      # figures/f5-estimator-quality.png (defaults = the paper slice)",
               "python report.py    # this file", "```", ""]
 
     text = "\n".join(lines)

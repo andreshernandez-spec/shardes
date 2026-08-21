@@ -5,10 +5,11 @@ measurable all along, and measured, they narrow. ES moves only scalars
 under one of two contraction placements, and the placement that moves a
 model-sized buffer every update wins much of the measured grid anyway;
 where each wins moves with the accelerator. The low-rank rewrite's
-GPU-shaped motivation strengthens rather than inverts on TPU. The one
-synchronization in the measured update path belongs to fitness shaping,
-costs microseconds at the populations the source papers use, and is
-redundant local compute at the populations where it costs milliseconds.
+GPU-shaped motivation strengthens rather than inverts on TPU. The only
+synchronization point is the fitness gather, microseconds at every
+measured cell; the shaping barrier above it is a replicated local sort
+that reaches milliseconds only at extreme populations, and communication
+is never the cost.
 On one 0.5B-parameter task, the fast perturbation family shows no
 detectable quality loss over three seeds, the outcome the estimator
 study's fitted curves predicted; and the folklore stability advantage
