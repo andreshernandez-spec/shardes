@@ -33,13 +33,32 @@ we document the boundary rather than promise across it.
   \label{fig:f7}
 \end{figure*}
 
+\paragraph{But is the fast strategy accurate?} The speed results of
+Section~\ref{sec:results} would mean little if the low-rank rewrite bought
+its speed with estimation quality, so the accuracy chain is stated in full.
+Per sample, on the phase-0 objectives, mirrored low-rank matches mirrored
+full-rank almost exactly at matched population: each low-rank sample loses
+about $2.2\times$ to projecting the gradient through thin factors, and
+low-rank's smaller effective dimension wins almost exactly that factor back
+(the cancellation behind Figure~\ref{fig:f5}). Those fitted curves then
+\emph{predicted} the task-level tie at $N{=}30$ before the campaign ran
+(predicted cosines $1.7\times10^{-4}$ full against $2.7$--$2.8\times10^{-4}$
+for ranks 1 and 4, all within noise of each other at this
+population-to-dimension ratio), and the campaign confirmed it
+(Figure~\ref{fig:f7}). The reason this is not luck: at LLM scale the
+population is always minuscule against the parameter count, and in that
+regime the rank of the perturbation is not what limits estimation quality.
+That is, arguably, \emph{why} the low-rank bet works at all.
+%% TODO(andres): E15 (in flight) closes the synthetic-to-real link by
+%% measuring the same cosines against the true gradient of the NLL on
+%% Qwen-0.5B itself; wire its numbers into this paragraph when the results
+%% directory lands, replacing this comment.
+
 \paragraph{Task quality across ranks.} At population $N{=}30$, held-out
 performance is flat across full-rank and rank-\{1,4,16\} perturbations
 (Figure~\ref{fig:f7}), and this tie is \emph{predicted}: the phase-0
 estimator study's fitted curves put all ranks within noise of each other at
 this population-to-effective-dimension ratio.
-%% TODO(andres): one sentence with the predicted cosine numbers (C6b) from
-%% experiments/countdown/analysis_c6b.py.
 
 \paragraph{The reference baseline, honestly.} GRPO with Qiu et al.'s published
 hyperparameters, untuned in either direction: one of three seeds collapses,
