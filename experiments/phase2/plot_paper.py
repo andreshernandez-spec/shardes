@@ -209,26 +209,38 @@ def f1(platform_rows: list[tuple[str, list[dict]]], out: pathlib.Path) -> None:
             ds = sorted(by_d)
             ax_s.plot(ds, [by_d[d] for d in ds], marker=MARKERS[how], ms=6, lw=1.8,
                       color=HUES[s], label=f"{s} / {how}")
+        # Parallel efficiency, each series against ITS OWN smallest measured
+        # device count: eff(D) = (T(D0) * D0) / (T(D) * D) in throughput terms.
+        # The panel used to plot absolute members/second against one ideal
+        # line anchored to the alphabetically first series, which made
+        # cross-series comparisons against that line meaningless (a faster
+        # series crossed it without any superlinear scaling). Efficiency
+        # gives every series the same ideal (1.0) whatever its D0, which
+        # also handles arms whose D=1 cell is out of memory.
         for (s, how), by_d in sorted(weak.items()):
             ds = sorted(by_d)
-            ax_w.plot(ds, [by_d[d] for d in ds], marker=MARKERS[how], ms=6, lw=1.8,
-                      color=HUES[s])
-        if weak:
-            first = sorted(weak.items())[0][1]
-            d0 = min(first)
-            ds = sorted({d for by_d in weak.values() for d in by_d})
-            ax_w.plot(ds, [first[d0] / d0 * d for d in ds], ls="--", lw=1.4,
-                      color=MUTED, label="ideal (linear)" if j == 0 else None)
+            d0 = ds[0]
+            ax_w.plot(ds, [(by_d[d] / d) / (by_d[d0] / d0) for d in ds],
+                      marker=MARKERS[how], ms=6, lw=1.8, color=HUES[s])
+            print(f"  weak {name} {s}/{how}: D0={d0} "
+                  + " ".join(f"eff(D={d})={(by_d[d] / d) / (by_d[d0] / d0):.2f}"
+                             for d in ds))
+        ax_w.axhline(1.0, ls="--", lw=1.4, color=MUTED,
+                     label="ideal" if j == 0 else None)
 
         ticks = sorted({d for by_d in strong.values() for d in by_d})
-        for ax, ylab in ((ax_s, "seconds / generation"), (ax_w, "members / second")):
-            ax.set(xscale="log", yscale="log")
+        for ax, ylab, ylog in ((ax_s, "seconds / generation", True),
+                               (ax_w, "weak-scaling efficiency", False)):
+            ax.set(xscale="log")
+            if ylog:
+                ax.set_yscale("log")
             ax.set_xticks(ticks)
             ax.set_xticklabels([str(d) for d in ticks])
             ax.xaxis.set_minor_locator(NullLocator())
             _style(ax)
             if j == 0:
                 ax.set_ylabel(ylab)
+        ax_w.set_ylim(0.0, 1.25)
         ax_s.set_title(f"{name}\nstrong: d=2048, N=256", color=INK, loc="left",
                        fontsize=10)
         ax_w.set_title("weak: d=2048, N/device=32", color=INK, loc="left", fontsize=10)

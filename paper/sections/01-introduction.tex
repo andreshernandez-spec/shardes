@@ -39,9 +39,11 @@ can find, nobody has measured:
 Measuring any of these fairly has a prerequisite that explains why it had not
 happened: the two bets lived in incompatible codebases, so any comparison
 confounded the algorithm with its implementation, and the incumbent library
-(evosax; \citealp{lange2022evosax}) can express neither bet at LLM scale because it flattens every
-candidate into one long vector (\texttt{ravel\_pytree}), destroying the
-per-matrix structure the low-rank bet is made of. We therefore built the
+(evosax; \citealp{lange2022evosax}) forecloses both in its core path, which
+materializes the population as one dense (population, parameter-count)
+matrix: that makes the factored bet inexpressible without bypassing the
+API's central object, and the full-rank bet memory-infeasible at LLM
+scale. We therefore built the
 instrument first: \textbf{shardes}, an open-source JAX \citep{jax2018} library whose core
 splits the population of perturbed model copies across devices, with the
 perturbation scheme as a pluggable strategy, so both bets and their
@@ -49,29 +51,40 @@ combinations run in one system and a measured difference is a difference
 between algorithms, not implementations. The library is released and citable;
 this paper is about what it measured.
 
-\paragraph{Findings.}
+\paragraph{Contributions, in order of strength.} The primary
+contribution is the contraction study: where each update placement wins,
+measured on both accelerators. Secondary is the instrument result, that
+one abstraction expresses both published perturbation families at
+competitive throughput (Table~\ref{tab:tb1}). The end-to-end experiments
+are validation and exploration at one model size, not co-equal pillars:
+a three-seed quality check and a scoped robustness comparison.
 \begin{itemize}
   \item \textbf{The scalar folk claim is true and beside the point.} Strategy
     A does move only scalars (measured: twice the naive byte count,
     Table~\ref{tab:tb2}); strategy B moves a model-sized buffer every update
-    and \emph{wins} over much of the measured grid anyway: the most
-    demanding cell asks 7.9\,GB/s of the A100's NVLink, 1.3\% of it
-    (12.2\,GB/s demanded on the v5e, against its published interconnect
-    figure). Where each wins forms a
+    and \emph{wins} over much of the measured grid anyway: as a payload-rate
+    sanity check (collective payload over generation time, not a
+    network-utilization measurement), even its most demanding cell amounts
+    to 7.9\,GB/s against the A100's 600\,GB/s peak NVLink figure
+    (12.2\,GB/s on the v5e). Where each wins forms a
     crossover in (population, model size) space that moves between an
     8$\times$A100 node and a TPU v5e-8 (Section~\ref{sec:results},
-    Figure~\ref{fig:f2}), matching a cost model written before the
-    measurements (Section~\ref{sec:contraction}).
+    Figure~\ref{fig:f2}), in the direction predicted before the
+    measurements; the byte model itself was corrected by them
+    (Section~\ref{sec:contraction}, Table~\ref{tab:tb2}).
   \item \textbf{The low-rank motivation does not invert on TPU; it
     strengthens.} At matched shapes, rank-1 perturbations cost
     $0.05$--$0.18\times$ the dense baseline on the v5e against
     $0.13$--$0.42\times$ on the A100, and the dense baseline is infeasible
     over most of the 16\,GB grid besides (Figure~\ref{fig:f4}).
-  \item \textbf{The synchronization ES cannot avoid is a sort, not
-    communication.} The fitness gather costs 2.4--6\,$\mu$s at every measured
-    population and device count; the rank sort behind fitness shaping costs
-    12\,ms at $N{=}2^{18}$ and is identical on 1 and 8 devices.
-  \item \textbf{Stability, measured with pre-registered criteria}: the RL
+  \item \textbf{The one synchronization in the measured update path
+    is a sort, and it is local compute, not communication.} It belongs to
+    centered-rank fitness shaping rather than to ES itself: the fitness
+    gather costs 2.4--6\,$\mu$s at every measured population and device
+    count, and the sort costs 12\,ms at $N{=}2^{18}$, identical on 1 and 8
+    devices.
+  \item \textbf{Stability, measured with criteria pre-specified in a
+    committed protocol}: the RL
     baseline collapses to zero on every seed at $8\times$ its published
     learning rate while ES crosses the same $64\times$ range without a
     collapse; and our own falsification criteria caught the part of the claim
