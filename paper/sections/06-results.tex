@@ -37,10 +37,10 @@ two strategies have the most contraction work to replicate; the same
 strategies under B hold $0.79$--$1.00$. The dense baseline's B placement misses its one-device point on the
 TPU strong panel, a memory ceiling (Figure~\ref{fig:f4} maps it). The
 full per-cell grids behind this figure, both platforms, are in
-Appendix~\ref{sec:grids}.
-%% TODO(andres): a closing sentence with one concrete pair of numbers read
-%% off the figure (e.g. seconds/generation at D=1 vs D=8 for mirrored_lr1),
-%% so the reader is taught how to read the panel.
+Appendix~\ref{sec:grids}. As one concrete reading of the top row, the
+mirrored rank-1/A arm falls from 102 to 19.9\,ms per generation on the A100
+and from 67.8 to 9.73\,ms on the v5e between one and eight devices: $5.1\times$
+and $7.0\times$ speedups, respectively.
 
 % F2 -- experiments/phase2/figures/f2-crossover.png (plot_paper.py)
 \begin{figure*}[t]
@@ -70,10 +70,11 @@ the grid, with A ahead at $d{=}2048$. Both halves match the prediction: B's
 advantage grows with per-candidate work, and A returns where that work
 vanishes; its trajectory in device count is monotone
 (Figure~\ref{fig:f2b}). The folk claim resolves as true and beside the
-point. Strategy A really does move only scalars, at exactly twice the naive
-count (Table~\ref{tab:tb2}: the sharded evaluation makes two $4N$-byte
-gathers real); strategy B moves a model-sized buffer every update and wins
-much of the grid anyway: as a payload-rate sanity check, its most
+point: A moves only scalars, but B all-reduces a model-sized buffer and still
+wins whenever the contraction it avoids costs more than those bytes.
+Strategy A's scalar payload is exactly twice the naive count
+(Table~\ref{tab:tb2}: the sharded evaluation makes two $4N$-byte gathers
+real). As a payload-rate sanity check, B's most
 demanding measured cell's collective payload over generation time is
 7.9\,GB/s against the A100's 600\,GB/s peak NVLink figure, roughly
 $75\times$ of payload-to-peak headroom. (Payload over time is not network
@@ -82,8 +83,6 @@ and peak figures are not achieved bandwidth, so this ratio bounds nothing
 by itself; the timing columns, not this ratio, are the evidence that
 communication does not bind at the measured cells.) The claim guarded
 against a cost that did not bind anywhere we measured.
-%% TODO(andres): your phrasing of true-and-beside-the-point; it is the
-%% paper's best line and should sound like you.
 
 \input{generated/tb2}
 
@@ -111,13 +110,13 @@ $0.05$--$0.18\times$ dense against $0.13$--$0.42\times$ on the A100) and
 in feasibility (the 16\,GB chip renders the dense baseline infeasible over
 most of the grid, drawn as wins because feasibility is the strongest form
 of paying off). The platforms move the constants, never the ordering. The
-same figure prices Qiu's bet \citep{qiu2025} honestly: seed regeneration costs
+comparison is shape-for-shape: no v5e workload was reduced to
+accommodate its smaller memory. The same figure prices Qiu's bet
+\citep{qiu2025} honestly: seed regeneration costs
 $5$--$6\times$ the materializing baseline per device on the TPU against
 $1.3$--$3\times$ on the GPU, and its family (mirrored or not) is the
 only one that never runs out of memory on either platform, which is
 precisely the storage-for-compute trade it advertises.
-%% TODO(andres): one sentence reminding the reader of the matched-shapes
-%% rule from section 5, which is what makes the two rows comparable.
 
 \subsection{Baselines}
 \input{generated/tb1}
@@ -127,7 +126,7 @@ step-equivalence between implementations. The arms differ in antithetic
 pairing, shaping and normalization details by design, and the honest unit of
 comparison is throughput at the same shapes, which is how both papers report \citep{qiu2025,eggroll2025}.
 
-Beyond parity, the measurements locate three concrete reasons to prefer the
+Beyond parity, the measurements locate four concrete reasons to prefer the
 instrument over the reference implementations, stated with their caveats.
 First, none of the references shards: at eight devices the instrument reaches
 $6\times$ the reference's single-chip ceiling (Table~\ref{tab:tb1b}), which
@@ -145,10 +144,10 @@ a defect. Third, the reference's rank-1 path does not compile on a 16\,GB
 TPU chip at $d{=}512$, $N{=}16384$ (24.1\,GiB of compiler temporaries,
 reproducible with no TPU via the compile-only probe in the repository), the
 same pathology this instrument diagnosed and works around; the same cell
-runs here at 245\,ms. Their reference also declines embedding tables
-outright, a seam this instrument carries.
-%% TODO(andres): your voice; the four claims and their caveats are the
-%% content, the order is deliberate (systems, choices, feasibility, seams).
+runs here at 245\,ms. Finally, their reference declines embedding tables
+outright, while the instrument carries that seam. These are properties of
+the released implementations, not evidence that the underlying algorithms
+require the same restrictions.
 
 Three rows carry the table's weight. Single-device, the instrument runs
 within 3\% of EGGROLL's own implementation on the A100
@@ -160,8 +159,6 @@ reference shards and the rows say so rather than hiding it. And evosax, the
 incumbent, runs out of memory at $d{=}2048$ on a 16\,GB chip at every
 device count: the flattening design decision, measured as a failure row
 rather than argued from source code.
-%% TODO(andres): your voice; keep the three-row structure and the
-%% cost-of-generality framing of the first row.
 
 \subsection{The shaping barrier, priced}
 Section~\ref{sec:design} declared one deliberate synchronization point;
@@ -188,11 +185,10 @@ caveat in context: identical full generations with shaping on and off,
 at the largest cells the sweep measured on this platform, differ by
 41\,$\mu$s ($d{=}512$, $N{=}1024$) and 149\,$\mu$s ($d{=}2048$,
 $N{=}256$) in the median, both inside their own repeat spreads. At
-measured cells the barrier is indistinguishable from repeat noise
-inside a generation (seven repeats per point); the 12\,ms sort stands as the ceiling for a population
+measured cells the experiment does not resolve the barrier above
+generation-to-generation repeat variation (seven repeats per point); the
+12\,ms sort stands as the ceiling for a population
 regime where a full generation does not fit this hardware anyway.
-%% TODO(andres): your voice; keep the redundant-local-compute reading and
-%% the in-context closure as the two beats.
 
 \subsection{Ablations}
 \input{generated/tb3}
@@ -209,5 +205,3 @@ family, whose per-candidate correction multiplies are the operations being
 upgraded. A practitioner running defaults gets Figure~\ref{fig:f4}'s
 speedups; our scaling sweeps, which pin full precision for cross-device
 comparability, were conservative against the low-rank arms specifically.
-%% TODO(andres): keep the last sentence; it preempts the question of why
-%% the two experiment families pin different precisions.

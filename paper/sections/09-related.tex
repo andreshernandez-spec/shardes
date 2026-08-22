@@ -2,35 +2,54 @@
 \section{Related work}
 \label{sec:related}
 
-Five threads locate the gap this paper fills. \emph{ES at scale}: \citet{salimans2017} made distributed ES
-credible with scalar-only communication and fixed hyperparameters across
-tasks; the 2025 pair \citep{qiu2025,eggroll2025} brought it to LLMs with the
-opposite structural bets this paper measures; ARS \citep{mania2018} and deep neuroevolution
-\citep{such2017,conti2017,chrabaszcz2018} are the simplicity-first
-ancestors. \emph{Zeroth-order optimization for
-LLMs}: the MeZO lineage \citep{malladi2023} and its successors optimize with
-perturbations for
-memory reasons rather than parallelism ones, a sibling motivation with
-different systems consequences. \emph{Estimator theory}: Nesterov and
-Spokoiny's smoothed-objective analysis \citep{nesterov2017} and its
-dimension-dependence lower bounds \citep{duchi2015,berahas2022} are the
-frame the accuracy measurements of Section~\ref{sec:endtoend} live in;
-the coupling and quasi-Monte-Carlo literature promised variance
-reductions that our estimator study measured as absent in the relevant
-regime (Figure~\ref{fig:f5}), a negative result recorded rather than
-repeated. \emph{RL stability}: the stabilization machinery ES omits
-exists for stated reasons, from the divergence results behind target
-networks \citep{baird1995,tsitsiklis1997,vanhasselt2018} to the step-size
-limits behind trust regions and reference-model penalties
-\citep{kakade2002,schulman2015trpo,ouyang2022}; large-scale empirical
-studies question which parts bind in practice
-\citep{engstrom2020,andrychowicz2020,orz2025}, and ES-side reports of
-drift-induced forgetting \citep{abdi2026forgetting} are the cost side of
-the same ledger. Section~\ref{sec:endtoend} measures both sides on one
-task under one protocol. \emph{Systems}: JAX's shard\_map lineage is the
-substrate \citep{jax2018,gspmd2021}; evosax \citep{lange2022evosax} is the incumbent library whose
-flattening design this paper measures the consequences of, in Table~\ref{tab:tb1}'s failure row
-rather than in prose.
-%% TODO(andres): expand each thread by one or two sentences with the
-%% citations from references.bib (keys in docs/09); the five-thread order
-%% is deliberate, ending on systems so the instrument section lands next.
+\paragraph{ES at scale.} \citet{salimans2017} made distributed ES credible by
+sending scalar returns rather than gradients and reusing one set of
+hyperparameters across tasks; ARS \citep{mania2018} and deep neuroevolution
+\citep{such2017,conti2017,chrabaszcz2018} belong to the same
+simplicity-first lineage. The two 2025 systems push that lineage to language
+models by attacking opposite costs: \citet{qiu2025} regenerate exact noise and
+fine-tune billion-parameter models with populations as small as 30, while
+EGGROLL \citep{eggroll2025} factors the noise and reports roughly
+$100\times$ throughput gains with populations in the tens of thousands.
+Neither work measures the update-placement crossover or places both
+perturbation families in one implementation across GPUs and TPUs.
+
+\paragraph{Zeroth-order optimization for language models.} MeZO
+\citep{malladi2023} also obtains gradients from forward evaluations, but its
+central goal is optimizer-state memory comparable to inference, not
+population-parallel throughput. It is therefore a close algorithmic sibling
+with a different systems bottleneck: this paper asks how a population is
+represented, sharded, and contracted once many evaluations run together.
+
+\paragraph{Estimator design.} Analysis of Gaussian smoothing and zeroth-order
+rates makes the dimension dependence explicit
+\citep{nesterov2017,duchi2015,berahas2022}. Natural ES, CMA-ES, and
+information-geometric optimization adapt richer search distributions
+\citep{wierstra2014,hansen2001,hansen2016,ollivier2017}; this paper instead
+holds the optimizer family fixed to isolate perturbation representation.
+Structured orthogonal estimators and geometrically coupled Monte Carlo
+predict gains from designing samples jointly
+\citep{choromanski2018structured,rowland2018coupled}. Figure~\ref{fig:f5}'s
+null result for orthogonal Hadamard and scrambled Sobol sampling is scoped to
+the high-dimensional, low-sample, rank-shaped regime measured here; it does
+not claim that coupling or quasi-Monte Carlo is ineffective in general.
+
+\paragraph{RL stability.} The machinery ES omits has distinct lineages: target
+networks address value-learning divergence
+\citep{baird1995,tsitsiklis1997,mnih2015,vanhasselt2018,zhang2021target},
+whereas trust regions, clipping, and reference-model penalties constrain
+policy updates \citep{kakade2002,schulman2015trpo,schulman2017ppo,ouyang2022}.
+Large empirical studies question which ingredients are load-bearing
+\citep{engstrom2020,andrychowicz2020,orz2025}, while ES-side reports of
+drift-induced forgetting supply a cost to apparent robustness
+\citep{abdi2026forgetting}. Section~\ref{sec:endtoend} tests only the latter
+policy-optimization recipe and reports collapse and drift together.
+
+\paragraph{Distributed systems.} JAX transformations and GSPMD provide the
+compiler and sharding substrate \citep{jax2018,gspmd2021}. Evosax
+\citep{lange2022evosax} is the incumbent JAX ES library; rather than infer the
+effect of its flattened-population interface from source alone,
+Table~\ref{tab:tb1} records the resulting memory ceiling as a failure row.
+The missing piece across these threads is a common, structured-perturbation
+harness in which algorithm, placement, and accelerator can be varied
+independently.

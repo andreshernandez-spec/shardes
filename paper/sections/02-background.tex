@@ -10,25 +10,27 @@ $\frac{1}{N\sigma}\sum_i w_i\,\epsilon_i$ where the $w_i$ are a function of the
 fitnesses $f(\theta + \sigma\epsilon_i)$ (in this paper, centered ranks \citep{salimans2017}: sort
 the fitnesses and replace each by its normalized position, which makes the
 update indifferent to the scale of the loss). No gradients flow through the
-model; the model only ever runs forward.
-%% TODO(andres): decide how much estimator variance theory to state; the paper
-%% uses none of it downstream, so a paragraph may be enough.
+model; the model only ever runs forward. The estimator targets the gradient
+of a Gaussian-smoothed objective, and its variance carries a
+dimension-dependent cost \citep{nesterov2017,duchi2015,berahas2022}. Rather
+than assume an asymptotic formula for that cost, Section~\ref{sec:endtoend}
+measures directional accuracy against the population-to-effective-dimension
+ratio $N/d_{\mathrm{eff}}$.
 
 \paragraph{The two 2025 algorithms.}
 \citet{qiu2025} keep the perturbation exact and make its \emph{storage} free:
 each candidate's noise is regenerated from a random seed whenever it is
 needed (once to evaluate, once to assemble the update), so nothing
 model-sized is ever kept per candidate, at the price of generating every
-perturbation twice. EGGROLL \citep{eggroll2025} makes the perturbation itself cheap: each weight
-matrix's noise is the product of two thin factors, so per-candidate storage
-and compute both shrink by the rank ratio, at the price of the noise no
-longer being full-rank. The two prices are paid in different currencies
-(compute against exactness), which is why neither paper subsumes the other
-and why measuring them in one system is informative at all.
-%% TODO(andres): tighten; keep the different-currencies sentence, it is the
-%% section's job. Add each paper's headline result in one clause (Qiu:
-%% full-parameter fine-tuning at billions of parameters with N=30; EGGROLL:
-%% ~100x throughput, populations in the tens of thousands) with citations.
+perturbation twice. Their headline demonstration is full-parameter
+fine-tuning of billion-parameter language models with populations as small
+as 30. EGGROLL \citep{eggroll2025} instead makes the perturbation cheap: each
+weight matrix's noise is the product of two thin factors, so per-candidate
+storage and compute shrink by the rank ratio, at the price of the noise no
+longer being full-rank; it reports roughly $100\times$ throughput gains and
+populations in the tens of thousands. The two prices are paid in different
+currencies (compute against exactness), which is why neither paper subsumes
+the other and why measuring them in one system is informative at all.
 
 \paragraph{Why flattening forecloses structure.} A rank-$r$
 perturbation is a statement about one weight \emph{matrix} (its noise is a

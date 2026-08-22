@@ -23,39 +23,24 @@ contraction). There are two natural placements:
     measured); compute per device: $D\times$ less contraction work than A.
 \end{itemize}
 
-The trade is compute against communication, so a crossover in
-(population $N$, model size $d$) space is predicted rather than assumed:
-%% HONESTY NOTE (2026-08-21 review): what was actually committed BEFORE the
-%% measurements is (a) the BYTE model, comms.py's predicted(), confronted
-%% exactly by TB2, and (b) the DIRECTIONAL prediction in prose above. There is
-%% no pre-registered quantitative TIME model, and the measurements have been
-%% seen, so any t_B/t_A formula written now is post-hoc and must be labeled
-%% explanatory, never predictive. Do not let the pre-registration claim creep
-%% wider than (a) and (b); a reviewer who checks commit dates would be right.
-The part of the model committed before any measurement is the byte
-count, and the measurement corrected it. The committed prediction was $4N$
-bytes of scalars for strategy A and $4P$ bytes for strategy B ($P$
-parameters, float32). Table~\ref{tab:tb2} measures the payload of every
-collective in the compiled update: A actually moves $8N$, a pair of
-$4N$-byte gathers, because the sharded evaluation gathers the member ids
-alongside the shaped fitnesses; B moves $4P{+}4N$, the same gather riding
-beside its model-sized all-reduce. The refined model matches to the byte.
-The correction changes no conclusion, five orders of magnitude at
-$d{=}2048$ either way (2\,KB against 100\,MB), and it is reported as a
-correction rather than folded silently into the prediction.
-The directional prediction, also stated before measuring, follows from what
-each strategy buys with its bytes: B does $1/D$ of A's contraction work, so
-B should win wherever per-candidate contraction work is large (dense or
-regenerated perturbations, bigger populations) and the model-sized transfer
-amortizes, while A should return wherever that work is already small (the
-low-rank family) and the transfer is pure overhead. No quantitative time
-model was committed before the runs, and none is claimed as a prediction;
-Section~\ref{sec:results} tests exactly the two statements above.
-%% TODO(andres): your derivation order and voice; keep the last sentence's
-%% honesty (byte model exact + direction only). If you add a fitted time
-%% model for exposition, label it post-hoc in the same breath.
+The trade is compute against communication, so it predicts a crossover in
+(population $N$, model size $d$) space rather than one universal winner. The
+record committed before measurement contained two claims. The quantitative
+claim was a byte count: $4N$ bytes of scalars for A and $4P$ bytes for B
+($P$ parameters, float32). Table~\ref{tab:tb2} corrected an omitted
+collective. A actually moves $8N$, two $4N$-byte gathers because the sharded
+evaluation gathers member ids alongside the shaped fitnesses; B moves
+$4P{+}4N$, its model-sized all-reduce plus the fitness gather. The refined
+model matches every measured payload to the byte. The correction changes no
+conclusion---2\,KB against 100\,MB at $d{=}2048$---and is reported rather
+than silently folded into the prediction.
 
-Section~\ref{sec:results} tests the prediction on both platforms
-(Figure~\ref{fig:f2}); Table~\ref{tab:tb2} checks the model's byte counts
-against the payload of every collective in the compiled update, where the
-factor-of-two the naive count misses is itself informative.
+The directional claim followed from what each placement buys with those
+bytes. B does $1/D$ of A's contraction work, so it should win when
+per-candidate contraction is expensive (dense or regenerated perturbations,
+larger populations) and the model-sized transfer amortizes. A should return
+when that work is already cheap (the low-rank family) and the transfer is
+pure overhead. No quantitative time model was committed before the runs, and
+none is retroactively presented as a prediction. Section~\ref{sec:results}
+tests the byte count and this directional claim on both platforms
+(Figure~\ref{fig:f2}).

@@ -7,8 +7,6 @@
     NVLink node and the TPU results a single v5e host. Scaling past the host
     boundary (multi-host, 32--64 chips) is designed for and untested;
     it is the natural follow-up.
-    %% TODO(andres): if the TRC grant lands before submission, this bullet
-    %% becomes F3 and moves to results.
   \item \textbf{The systems workload is a simplified block.} The
     scaling and cost grids benchmark one synthetic transformer block
     (square matrices, $d_{\mathrm{ff}}{=}d$, single head, no learned
