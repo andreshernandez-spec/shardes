@@ -30,7 +30,7 @@ seed: 0
 # evaluation is already batched). 15 mirrored directions / chunk 5 = 3 scan steps.
 # Memory: chunk * |params| in bf16 plus chunk KV caches, ~7 GB at 0.5B, sized for the
 # A100's 80 GB with room for the f32 master.
-eval_chunk: 5
+eval_chunk: 4                    # 8 mirrored directions per device at N=16; chunk must divide them (5 does not)
 
 puzzle_seed: 7
 n_puzzles: 256                   # the rotating pool
