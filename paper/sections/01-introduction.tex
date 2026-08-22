@@ -76,9 +76,10 @@ contribution is the contraction study: where each update placement wins,
 measured on both accelerators. Secondary is the instrument result, that
 one abstraction expresses both published perturbation families at
 competitive throughput (Table~\ref{tab:tb1}). The end-to-end experiments
-are validation and exploration at one model size, not co-equal pillars:
-they are the links of the validity chain just described, a three-seed
-quality check and a scoped robustness comparison.
+are validation and exploration, not co-equal pillars: the training campaign
+uses one model size, while the true-gradient check spans two. They are the
+links of the validity chain just described, a three-seed quality check and a
+scoped robustness comparison.
 \begin{itemize}
   \item \textbf{The scalar folk claim is true and beside the point.} Strategy
     A does move only scalars (measured: twice the naive byte count,
@@ -92,7 +93,9 @@ quality check and a scoped robustness comparison.
     8$\times$A100 node and a TPU v5e-8 (Section~\ref{sec:results},
     Figure~\ref{fig:f2}), in the direction predicted before the
     measurements; the byte model itself was corrected by them
-    (Section~\ref{sec:contraction}, Table~\ref{tab:tb2}).
+    (Section~\ref{sec:contraction}, Table~\ref{tab:tb2}). Both signs also
+    reappear when the crossover is measured on Qwen2.5-0.5B itself
+    (Table~\ref{tab:tb5}).
   \item \textbf{The low-rank motivation does not invert on TPU; it
     strengthens.} At matched shapes, rank-1 perturbations cost
     $0.05$--$0.18\times$ the dense baseline on the v5e against
@@ -111,6 +114,7 @@ quality check and a scoped robustness comparison.
     same 64-fold interval; and our own falsification criteria caught the part of the claim
     that was wrong, since removing the baseline's individual stabilizers
     changed little (Section~\ref{sec:endtoend}, Figure~\ref{fig:f8}).
-  \item Every number in this paper regenerates from a committed script and a
-    recorded environment in the released repository.
+  \item Every figure and generated table regenerates from a committed script;
+    every reported result traces to a committed configuration, result record,
+    and recorded environment in the released repository.
 \end{itemize}

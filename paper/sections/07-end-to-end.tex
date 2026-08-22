@@ -8,8 +8,9 @@
 % estimator result, then the task prediction and its outcome, then the GRPO
 % baseline, then stability. The argument is prediction-before-campaign, so the
 % prediction's evidence now comes before the campaign's.
-This section is the validity chain the introduction promised, on a real
-model (Qwen2.5-0.5B on the Countdown task) with the same instrument, in
+This section is the validity chain the introduction promised, centered on a
+real model (Qwen2.5-0.5B on the Countdown task) with a true-gradient
+replication at 1.5B, all through the same instrument, in
 an order where each claim rests on the one before it. First,
 reproducibility: the systems prices of Section~\ref{sec:results} are
 worth acting on only if what was measured is the algorithm, so the
@@ -19,15 +20,15 @@ unmeasured half of the low-rank belief. Third, stability: the one folk
 claim that cannot exist on a microbenchmark, measured last because its
 verdicts lean on both of the claims before it.
 
-\paragraph{Determinism and invariance on real hardware.} For a fixed seed and
-compiled program, the full training step is bitwise reproducible across
-processes on an 8-GPU node, and the update computed on 1 and 8 devices agrees
-to $6\times10^{-6}$ relative error under a fixed set of fitnesses. Trajectory
-equality across \emph{different} compiled programs is explicitly not claimed:
-greedy decoding flips near-ties under different compiler fusion choices, and
-we document the boundary rather than promise across it.
-%% TODO(andres): compress or expand from the C6d README; the three claims are
-%% deliberately separate because they fail differently.
+\paragraph{Determinism and invariance on real hardware.} Two independent
+20-generation runs of the same $D{=}8$ program agree byte for byte in every
+logged reward and exactly in all 494M final parameters. Holding the fitness
+vector fixed, the $D{=}1$ and $D{=}8$ updates agree to $6.3\times10^{-6}$
+norm-relative error. Neither result implies trajectory equality across
+separately compiled programs: XLA fusion and autotuning can flip near-tied
+greedy tokens, after which the sampled trajectories diverge. The guarantee is
+therefore per-program bitwise reproducibility and per-update device invariance
+at floating-point tolerance, not cross-program trajectory identity.
 
 % F5 -- experiments/phase0/figures/f5-estimator-quality.png
 % (experiments/phase0/plot.py --sigma 0.001 --shaping centered_ranks)
@@ -86,8 +87,8 @@ per-sample advantage, predicted at $1.34\times$ and measured at
 $1.36\times$. Two further probes pin the correction down. Rerunning the
 two bracketing arms on a freshly drawn frozen prompt batch reproduces
 both ratios to two decimals (full rank $0.93\times$ against $0.94\times$;
-rank 1 $0.51\times$ against $0.52\times$), so the factor belongs to the
-model and estimator, not to the prompts
+rank 1 $0.51\times$ against $0.52\times$), so neither shortfall is specific
+to the original prompt batch
 (\texttt{results-e16-gate}). And on Qwen2.5-1.5B, with both predictions
 frozen before the run, the scaling law transfers unrefitted (within-arm
 $N$-scaling $2.80\times$ and $2.94\times$ against $\sqrt{8}=2.83$),
@@ -199,10 +200,10 @@ Section~\ref{sec:results} price at microbenchmark scale, here on the
 real model), so the same 500 generations take 2785\,s against 1594\,s,
 and the time to first reach the shared plateau (held-out reward 0.15)
 is 1041--1745\,s for full rank against 623--897\,s for rank 1 across
-seeds: disjoint ranges, about $1.7\times$ less accelerator time for the
+seeds: disjoint ranges, a $1.7\times$ accelerator-time advantage at the
 same quality. This is where the systems and quality halves meet: the
-cheap perturbation reaches matched quality in $1.7\times$ less training
-time precisely because Figure~\ref{fig:f7} shows it needed no more
+cheap perturbation reaches matched quality faster precisely because
+Figure~\ref{fig:f7} shows it needed no more
 samples.
 
 \paragraph{The crossover, re-measured on the real model.} The
@@ -217,8 +218,8 @@ $+0.212$, stronger than the block showed at its largest model size. The
 memory column doubles as a finding: rank 1 on the real model does not
 fit one 16\,GB chip even at $N{=}32$ while the seed arm runs at every
 cell, the storage-for-compute trade at production scale. The one absent
-cell died in compilation with its A sibling already over memory at the
-same shape, infeasible either way.
+B cell was killed during compilation; its A sibling exceeded memory at the
+same shape, so no feasible placement was demonstrated for that cell.
 
 \input{generated/tb5}
 
@@ -285,12 +286,11 @@ what makes PPO work \citep{engstrom2020,andrychowicz2020} and that
 critic-based PPO trains without a KL penalty \citep{orz2025},
 and it narrows our claim to what the data supports.
 
-Stability is also not free. The drift row of the same experiment shows the
+Stability is also not retention. The drift row of the same experiment shows the
 $8\times$-learning-rate ES runs ending roughly $50$ units of parameter
 $\ell_2$ from the pretrained weights, against $0.3$--$2$ for healthy GRPO
-runs: ES tolerates aggressive steps by moving far, which is exactly the
-regime where ES-induced forgetting has been reported
-\citep{abdi2026forgetting}. Anyone citing this
-section's stability numbers should read them next to that row.
-%% TODO(andres): tighten to taste; the three paragraphs are the three claims
-%% (collapse asymmetry, honored falsification, drift cost) in that order.
+runs. The experiment therefore separates update robustness from parameter
+retention; it does not establish that drift causes the robustness. The same
+large-drift regime is where ES-induced forgetting has been reported
+\citep{abdi2026forgetting}, so the stability numbers should be read beside
+that row.

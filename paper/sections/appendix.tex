@@ -72,20 +72,31 @@ crossover whose platform dependence Figure~\ref{fig:f2} summarizes.
 \end{figure*}
 
 \section{Reproduction}
-Every number in the paper regenerates from a committed script against a
-committed results directory, and every results directory's README records
-the exact session that produced it (platform, commit, environment, cost,
-and any incident). The figure and table map: F1, F2 and F2b from
+Every figure and generated table regenerates from a committed script against
+a committed results directory, and every reported result traces to a script,
+configuration, and record. Each results directory's README documents the
+session that produced it (platform, commit, environment, cost, and any
+incident). The figure and table map: F1, F2 and F2b from
 \texttt{plot\_paper.py}; F4 from \texttt{plot\_cost.py}; F5 from
 \texttt{experiments/phase0/plot.py}; F7 and F7b from \texttt{plot\_e13.py}; F8 from
 \texttt{plot\_e14.py}; the appendix grids (M1--M3, both platforms) from
-\texttt{plot.py} against each platform's results directory; Tables~1--3 from \texttt{tb1.py},
-\texttt{tb2.py} and \texttt{tb3.py} with \texttt{--latex}, which write
-the exact files this document inputs. The test suite runs on CPU with no
-network; the multi-device logic is exercised on eight simulated devices, so
-correctness properties (including the device-count invariance test) are
-checkable without any accelerator, and the two TPU compile probes
+\texttt{plot.py} against each platform's results directory;
+Tables~\ref{tab:tb1}, \ref{tab:tb2}, and~\ref{tab:tb3} from
+\texttt{tb1.py}, \texttt{tb2.py}, and \texttt{tb3.py};
+Table~\ref{tab:tb4} from
+\texttt{analysis\_e15.py}; and Table~\ref{tab:tb5} from
+\texttt{tb5\_e17.py}. Each table
+script accepts \texttt{--latex} and writes the exact file this document
+inputs. The E16 ratios in the prose are the recorded medians divided by the
+predictions frozen in \texttt{e16-gate.yaml} and
+\texttt{e16-stage2.yaml}; their result READMEs show the arithmetic. The test
+suite runs on CPU with no network; the multi-device logic is exercised on
+eight simulated devices, so correctness properties (including the
+device-count invariance test) are checkable without any accelerator, and the
+two TPU compile probes
 (\texttt{probe\_lr1.py}, \texttt{probe\_eggroll\_tpu.py}) reproduce
-the compiler-level claims from any Linux machine.
-%% TODO(andres): repo URL, commit or tag of the submitted version, and the
-%% one-line clone-and-build once the artifact is frozen.
+the compiler-level claims from any Linux machine. Source and result records
+are at \url{https://github.com/andreshernandez-spec/shardes}. With the project
+extras installed, \texttt{make -C paper} regenerates all five tables and
+builds the PDF; the provenance paragraph in Section~\ref{sec:setup} names the
+frozen submission tag once assigned.
