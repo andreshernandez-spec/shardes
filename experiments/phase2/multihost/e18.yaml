@@ -1,0 +1,26 @@
+# E18: the contraction crossover across a real host boundary. Committed
+# before any rental, cited by SHA. Design and hypotheses: docs/10.
+#
+# Cells are sweep-consistent.yaml cells, so the 1x8 topology reproduces
+# committed numbers (the sanity anchor) and 2x8 extends known curves.
+# Populations divide 16 in whole antithetic pairs.
+#
+# Frozen hypotheses (docs/10 section 2): H1 same-D boundary isolation at
+# 2x4 vs 1x8; H2 seed_regenerated keeps B at 2x8; H3 mirrored_lr1 flips
+# to A at 2x8; H4 predictions.json (written by predict.py from the
+# preflight calibrations plus committed single-node results, BEFORE the
+# 2x8 cells run) gets the sign right.
+
+arms: [seed_regenerated, mirrored_lr1]
+hows: [A, B]
+cells:
+  - {d: 512, N: 1024}     # near-parity for lr1 on NVLink (M3)
+  - {d: 2048, N: 128}     # A-leaning for lr1, B-favored for seed
+  - {d: 2048, N: 256}     # the largest committed cell
+batch: 8
+seq: 32
+warmup: 3
+repeats: 7                # 5 + 2: network jitter
+matmul_precision: highest
+
+results_dir: results-e18
