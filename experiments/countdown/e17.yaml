@@ -1,0 +1,48 @@
+# E17: the contraction crossover on the real model. Committed before any run,
+# cited by SHA.
+#
+# The systems sweeps measured the A/B crossover on the simplified block and
+# the limitations section says so; this measures a complete production update
+# (ask / evaluate the NLL / tell) on Qwen2.5-0.5B itself, same evaluator and
+# frozen prompt batch as E15, at D in {1,2,4,8} per platform. No training, no
+# quality claim: generation time only, the sweeps' warmup/repeat discipline.
+#
+# N is {32, 240}, not {30, 240}: the population must divide across devices in
+# whole antithetic pairs (30 fails at D of 4 and 8). Timing only, so the
+# substitution is free.
+#
+# Directional predictions, frozen here before any run, from the committed M3
+# phase diagrams (figures*/m3-crossover.png):
+#   mirrored_seed: B wins at D=8 on BOTH platforms, clearly (its contraction
+#     is the largest and A replicates it; log10(tB/tA) was strongly negative
+#     at every measured cell).
+#   mirrored_lr1: near parity, platform-leaning: on the TPU, A ahead or
+#     parity (A led at d=2048, parity at d=512; Qwen's MLP shapes sit closer
+#     to the large-d regime); on the GPU, parity within a few percent.
+# Qwen's heterogeneous shapes (896x896 attention, 896x4864 MLP, a 152k-row
+# embedding through the embed seam) are outside the square grid, which is
+# exactly what makes the rank-1 sign informative either way. A mismatch on
+# the seed arm would falsify the transfer; a mismatch on rank 1 would locate
+# which production-model cost moves the boundary.
+#
+# Cells that exceed a device's memory are recorded as OOM outcomes, per the
+# matched-shapes rule (D=1 at N=240 is expected to OOM on the v5e and to be
+# marginal on the A100).
+
+model: Qwen/Qwen2.5-0.5B-Instruct
+puzzle_seed: 7                 # E15's frozen batch, unchanged
+n_prompts: 8
+pad_to: 128
+sigma: 0.001
+eval_chunk: 1
+
+strategies: [mirrored_seed, mirrored_lr1]
+hows: [A, B]
+populations: [32, 240]
+devices: [1, 2, 4, 8]
+
+warmup: 3
+repeats: 5
+matmul_precision: highest      # the scaling sweeps' setting, for cross-D comparability
+
+results_dir: results-e17
