@@ -1,0 +1,12 @@
+{
+  "id": "USERNAME/shardes-t7-ladder",
+  "title": "shardes t7 ladder",
+  "code_file": "t7ladder.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [], "competition_sources": [],
+  "kernel_sources": [], "model_sources": []
+}
