@@ -58,8 +58,10 @@ rather than inverting. The only synchronization point is a scalar
 gather; the barrier above it is a replicated local sort. On a
 0.5B-parameter task the cheap perturbation family matches full-rank
 quality at equal samples in $1.7\times$ less accelerator time, the
-outcome fitted estimator-quality curves predicted, and the fit itself is
-validated against true gradients on the real model. The stability
+outcome fitted estimator-quality curves predicted; checked against true
+gradients on the real model, the fit transfers exactly for full rank and
+up to one systematic factor of two for the low-rank family, with every
+relative prediction intact. The stability
 folklore narrows to the learning-rate margin, with a measured
 parameter-drift cost reported beside it. Every number regenerates from a
 committed script in the released repository.

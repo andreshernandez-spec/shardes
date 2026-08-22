@@ -1,0 +1,32 @@
+# E16 stage 1, the gate: is E15's low-rank correction a property of the
+# objective batch? Committed before the run, cited by SHA.
+#
+# E15 measured the low-rank family uniformly at ~0.5x the fitted prediction
+# (0.43-0.67x; geometric mean ~0.53x) on ONE frozen 8-prompt batch. This gate
+# reruns the two bracketing arms at the tightest-variance population on a NEW
+# frozen batch (puzzle_seed 41, chosen by fair dice roll, committed here) and
+# nothing else changed.
+#
+# Frozen expectations, written before any run:
+#   mirrored_seed N=240: near the raw prediction 4.5e-4 (E15 measured 0.94x)
+#   mirrored_lr1  N=240: near 0.5x the raw 7.6e-4 prediction, i.e. ~3.8e-4
+# PASS (both hold within replicate spread): the correction is not an accident
+#   of the prompt batch; stage 2 (Qwen2.5-1.5B, original batch, calibrated
+#   0.53x prediction frozen in its own config) is worth an A100-day.
+# STOP (the lr1 ratio moves substantially): the correction is
+#   objective-dependent; the next experiment is objective dependence, not
+#   model scaling, and stage 2 does not run.
+
+model: Qwen/Qwen2.5-0.5B-Instruct
+puzzle_seed: 41
+n_prompts: 8
+pad_to: 128
+sigma: 0.001
+eval_chunk: 1
+member_chunk: 30
+
+strategies: [mirrored_seed, mirrored_lr1]
+populations: [240]
+replicates: 5
+
+results_dir: results-e16-gate
