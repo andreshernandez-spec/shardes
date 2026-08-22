@@ -77,7 +77,9 @@ def main(argv=None) -> int:
     cells = [(64, 8), (64, 16)] if args.smoke else CELLS
     out_dir = HERE / ("results-regen-smoke" if args.smoke else "results-regen")
     out_dir.mkdir(exist_ok=True)
-    env = harness.capture_env(HERE, (out_dir.name,))
+    # Both outputs are excluded so the two T7 scripts can share one checkout
+    # in either order without the second stamping the first's output as dirt.
+    env = harness.capture_env(HERE, (out_dir.name, "results-ladder"))
     kind = jax.devices()[0].device_kind.replace(" ", "-").lower()
 
     for d, n in cells:
