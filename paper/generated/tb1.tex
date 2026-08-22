@@ -25,7 +25,7 @@ $d{=}2048$, $N{=}256$ & TPU v5e & 3.22M & 34k & 4.52M & 140k & OOM \\
 \centering
 \small
 \setlength{\tabcolsep}{5pt}
-\caption{Eight devices: what sharding adds. The references have no sharding path and idle seven devices; these rows are context, not a like-for-like ratio.}
+\caption{Eight devices: what sharding adds. The references have no sharding path and idle seven devices: on the v5e they were run at $D{=}8$ anyway and reproduce their $D{=}1$ rows, on the A100 they were not rerun (dashes). These rows are context, not a like-for-like ratio.}
 \label{tab:tb1b}
 \begin{tabular}{llrrrrr}
 \toprule

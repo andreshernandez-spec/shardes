@@ -1,17 +1,18 @@
 % Full per-platform figure sets and anything the page budget pushes out.
 \section{Full scaling grids}
 \label{sec:grids}
-The main text summarizes each sweep at its largest common cell
-(Figure~\ref{fig:f1}) or at $D{=}8$ (Figure~\ref{fig:f2}); this appendix
+The main text summarizes the scaling sweeps in prose
+(Section~\ref{sec:results}) and the $D{=}8$ placement map in
+Figure~\ref{fig:f2}; this appendix
 carries the complete per-cell grids both platforms produced, from the same
 committed results directories. Figure~\ref{fig:f2b} answers whether the
-$D{=}8$ crossover pattern is an endpoint artifact.
+$D{=}8$ placement pattern is an endpoint artifact.
 Figures~\ref{fig:m1-a100} and~\ref{fig:m1-tpu} are the full strong-scaling
 grids (the missing \texttt{iid\_gaussian}/B point at $D{=}1$ on the TPU is
-the recorded out-of-memory cell discussed with Figure~\ref{fig:f1});
+the recorded out-of-memory cell discussed in Section~\ref{sec:results});
 Figures~\ref{fig:m2-a100} and~\ref{fig:m2-tpu} the weak-scaling grids; and
-Figures~\ref{fig:m3-a100} and~\ref{fig:m3-tpu} the per-cell contraction
-crossover whose platform dependence Figure~\ref{fig:f2} summarizes.
+Figures~\ref{fig:m3-a100} and~\ref{fig:m3-tpu} the per-cell placement
+outcomes whose platform dependence Figure~\ref{fig:f2} summarizes.
 % F2b: the referee's is-it-a-D=8-artifact question, answered from the sweeps.
 \begin{figure*}[p]
   \centering
@@ -41,7 +42,9 @@ crossover whose platform dependence Figure~\ref{fig:f2} summarizes.
   \caption{Strong scaling, all cells, TPU v5e-8. The dense arm has no
     $D{=}1$ point at $d{=}2048$, $N{=}256$ (out of memory on one 16\,GB
     chip), so its efficiency there is normalized to its smallest measured
-    device count, $D{=}2$.}
+    device count, $D{=}2$. The efficiencies above one at $d{=}512$ are real:
+    the single-chip point is memory-bound at those populations, and
+    Section~\ref{sec:results} reads them.}
   \label{fig:m1-tpu}
 \end{figure*}
 \begin{figure*}[p]
@@ -59,16 +62,18 @@ crossover whose platform dependence Figure~\ref{fig:f2} summarizes.
 \begin{figure*}[p]
   \centering
   \includegraphics[width=.9\textwidth]{../experiments/phase2/figures/m3-crossover.png}
-  \caption{Contraction crossover per cell, 8$\times$A100: B wins 10 of 16
-    cells.}
+  \caption{Contraction-placement outcome per cell, 8$\times$A100: B wins
+    10 of 16 cells.}
   \label{fig:m3-a100}
 \end{figure*}
 \begin{figure*}[p]
   \centering
   \includegraphics[width=.9\textwidth]{../experiments/phase2/figures-tpu-v5e8/m3-crossover.png}
-  \caption{Contraction crossover per cell, TPU v5e-8: B wins everywhere for
+  \caption{Contraction-placement outcome per cell, TPU v5e-8: B wins
+    everywhere for
     the dense and seed-regenerated arms, while A leads for both low-rank
-    strategies at $d{=}2048$. The platform moves the crossover, which is why
+    strategies at $d{=}2048$. The platform moves the low-rank sign flip,
+    which is why
     it is reported as a measured surface rather than a rule.}
   \label{fig:m3-tpu}
 \end{figure*}

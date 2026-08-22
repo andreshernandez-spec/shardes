@@ -2,10 +2,11 @@
 \section{Conclusion}
 The usual scalar-communication account of distributed ES is true under one
 update placement but incomplete as a systems model. Across the measured GPU
-and TPU grids, locally contracting population shards and all-reducing a
+and TPU grids, one host each on a fat fabric, locally contracting
+population shards and all-reducing a
 model-sized update wins every dense and seed-regenerated cell. Repeating the
 contraction after a scalar gather returns as the better placement when
-low-rank perturbations make the avoided work small. The crossover moves with
+low-rank perturbations make the avoided work small. The sign map moves with
 the accelerator and recurs, with both signs intact, on Qwen2.5-0.5B. The
 low-rank rewrite's GPU-shaped motivation also strengthens rather than inverts
 on the TPU. Centered-rank shaping adds one shared fitness gather followed by a
@@ -15,12 +16,22 @@ barrier at extreme populations.
 The validation chain gives the systems result a measured quality boundary. An
 approximately square-root alignment law from a synthetic block predicts
 full-rank cosine with the true teacher-forced-NLL gradient within 10\% at 0.5B
-and 1.5B parameters. A low-rank correction calibrated at 0.5B predicts the
-1.5B cells within 26\%, while drifting enough that it should not be treated as
-scale-invariant. On decoded-reward Countdown training, a three-seed experiment
+and 1.5B parameters. The low-rank family lands near half its raw prediction,
+a factor whose own scatter is about a quarter and which drifts with scale,
+so it is a patch rather than a law. On decoded-reward Countdown training, a three-seed experiment
 resolves no quality difference among full rank and ranks 1, 4, and 16 at equal
 training samples, while rank 1 uses 44\% less steady-state time per update.
 That task result is consistent with the NLL alignment evidence, not a claim
 that the objectives are interchangeable. The next systems measurement is
 past the single-host boundary, where the interconnect should change the
 contraction question most sharply.
+
+\paragraph{What to do differently.} On a single host with a fat
+interconnect, contract locally and all-reduce (B) unless the perturbation
+is low-rank at large model size, where gathering scalars and repeating the
+contraction (A) is ahead by tens of percent. Keep fitness in float32:
+bfloat16 collapses a population's losses to a handful of ties and
+rank-based shaping of ties is noise. Do not force full matmul precision on
+a low-rank run; it costs $1.6$--$1.9\times$ there and nearly nothing on the
+dense arms. Above populations of about $10^4$, budget for the shaping
+sort, which is replicated local compute, not communication.

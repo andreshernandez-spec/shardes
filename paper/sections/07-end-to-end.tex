@@ -37,7 +37,12 @@ On the synthetic block of Section~\ref{sec:setup}, we measured cosine between
 the centered-rank ES update and the exact MSE gradient, with 30 replicates per
 cell over 456 cells. Per-strategy fits of
 $\log\cos = a + b\log(N/d_{\mathrm{samp}})$ have slopes from 0.494 to
-0.508 (Figure~\ref{fig:f5}). At matched population, mirrored low-rank and
+0.508 (Figure~\ref{fig:f5}). That exponent is the classical
+Gaussian-smoothing scaling, $\cos \propto \sqrt{N/d}$
+\citep{nesterov2017,duchi2015}, confirmed rather than discovered; what the
+measurement adds is that it survives centered-rank shaping, which changes
+the estimand (Section~\ref{sec:background}), to within $0.01$ of one half.
+At matched population, mirrored low-rank and
 mirrored full-rank have similar alignment: the low-rank curves have lower
 intercepts against $N/d_{\mathrm{samp}}$, while their smaller sampling
 dimension shifts a fixed-$N$ comparison to the right.
@@ -71,7 +76,13 @@ $\sqrt{8}=2.83$, and the raw full-rank prediction remains within 5--8\%.
 Multiplying the rank-1 fit by the 0.53 correction measured at 0.5B predicts
 the 1.5B cells within 23--26\%; the observed correction itself moves to about
 0.40, so it is useful across this scale step but not scale-invariant
-(Table~\ref{tab:tb6}). Within these models, this objective, and the measured
+(Table~\ref{tab:tb6}). The correction is an empirical patch for a variable
+that is not quite right: $d_{\mathrm{samp}}$ counts draws, and the
+cell-to-cell scatter of the factor ($0.43$--$0.67$, about a quarter either
+side of its mean) is as large as the $23$--$26\%$ it then predicts within,
+so the defensible statement is that the low-rank family lands near half its
+raw prediction, drifting with scale. Deriving the variable that absorbs the
+factor is future work. Within these models, this objective, and the measured
 populations and ranks, perturbation rank does not dominate alignment at equal
 $N$. That is consistent with---but does not by itself explain---the task-level
 parity tested next.
@@ -144,7 +155,16 @@ hardware & one A100-SXM4-80GB; the campaign is $\sim$13\,h \\
 \paragraph{Task quality across ranks.} At population $N{=}30$, held-out
 performance shows no detectable difference across full-rank and
 rank-\{1,4,16\} perturbations in this three-seed experiment
-(Figure~\ref{fig:f7}); no inferential test is claimed at $n{=}3$. The
+(Figure~\ref{fig:f7}); no inferential test is claimed at $n{=}3$. Two
+facts bound what that null can mean. The setup does resolve a known-worse
+arm: the $4\times$ noise-scale ES arm of the appendix stress test stays at
+the base-model floor for its whole 150-step horizon
+(Appendix~\ref{sec:stability}). But every arm here saturates by about
+update 100 (24{,}000 of the 120{,}000 samples), freezing 27\% of the
+parameters changes nothing, and no arm expected to be modestly worse at
+this population (a halved $N$, say) was run as a control; the null is no
+detectable difference in a setup that resolves a freeze and may not
+resolve a modest loss. The
 outcome agrees with the alignment study's pre-campaign prediction that the
 ranks would be closer than a three-seed experiment could resolve. Because the
 training objective is decoded reward rather than NLL, this non-difference is

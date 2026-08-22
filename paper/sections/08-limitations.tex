@@ -3,9 +3,23 @@
 \label{sec:limitations}
 
 \begin{itemize}
-  \item \textbf{Eight devices, one host.} The GPU results are a single
-    NVLink node and the TPU results a single v5e host. Scaling past a host
-    boundary is untested and may move the contraction crossover substantially.
+  \item \textbf{Eight devices, one host, a fat fabric.} The GPU results are
+    a single NVLink node and the TPU results a single v5e host: the two
+    interconnects on which a model-sized all-reduce is cheapest. The scalar
+    folk claim was made for commodity clusters of hundreds of workers
+    \citep{salimans2017}, where it may well hold; the dense-side result here
+    is the easy case for B. Scaling past a host boundary is untested and may
+    move the crossover substantially.
+  \item \textbf{Costs are attributed in bytes, not in time.} Every timing
+    is end-to-end wall clock; no collective is timed in isolation at $P$
+    bytes on either fabric, no achieved bandwidth is reported, and the
+    regeneration-versus-matmul-versus-collective split of a generation is
+    not profiled. The crossover is an observation, not a cost model.
+  \item \textbf{The placement space is larger than A and B.} Reduce-scatter
+    with sharded update application, compressed collectives, hierarchical
+    contraction, and overlapping the all-reduce with the next evaluation are
+    all unmeasured (Section~\ref{sec:contraction}); overlap in particular
+    could remove the low-rank side of the crossover.
   \item \textbf{The systems workload is a simplified block.} The scaling and
     cost grids use square matrices, $d_{\mathrm{ff}}{=}d$, one head, no
     learned norms, MSE loss, batch 8, and sequence length 32. These choices
@@ -26,11 +40,19 @@
     transferred to another accelerator or interconnect without measurement.
     The real-model crossover was measured only on the v5e; cross-accelerator
     comparisons use the controlled block workload.
-  \item \textbf{Task validation is one task and one training model size.}
-    Countdown with a 0.5B-parameter model, three seeds, and $N{=}30$ cannot
-    establish rank parity on other tasks, populations, or scales. The
+  \item \textbf{Task validation is one task and one training model size,
+    with a weak positive control.} Countdown with a 0.5B-parameter model,
+    three seeds, and $N{=}30$ cannot
+    establish rank parity on other tasks, populations, or scales; the
+    setup saturates early and resolves a frozen arm but was not shown to
+    resolve a modestly worse one. The
     alignment chain spans 0.5B and 1.5B models, but no 1.5B training run was
     performed.
+  \item \textbf{The low-rank correction is empirical.} The 0.53 factor has a
+    cell-to-cell scatter of about a quarter and drifts to 0.40 at 1.5B; it
+    patches a sampling-dimension variable that counts draws rather than
+    measuring overlap with the gradient, and no derivation of the right
+    variable is offered.
   \item \textbf{NLL alignment is a proxy, not the task objective.} The exact
     gradients in Tables~\ref{tab:tb4} and~\ref{tab:tb6} are for
     teacher-forced NLL, whereas the campaign optimizes a nondifferentiable
