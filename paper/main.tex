@@ -27,10 +27,11 @@
 
 \graphicspath{{../experiments/phase2/figures/}{../experiments/phase0/figures/}{../experiments/countdown/figures/}}
 
-\title{The contraction crossover in sharded evolution strategies on GPUs and TPUs}
+\title{Update-contraction placement in sharded evolution strategies on GPUs and TPUs}
 %% FRAMING (decided 2026-08-21): the paper is the investigation; the library is
 %% the instrument, cited and released but not the subject.
-\author{Andres Hernandez}
+\author{Andres Hernandez\\
+  \href{mailto:andres.hernandez@gmx.net}{\texttt{andres.hernandez@gmx.net}}}
 \date{}
 
 \begin{document}
@@ -38,32 +39,27 @@
 
 \begin{abstract}
 Evolution strategies (ES) are often described as cheap to distribute because
-workers exchange scalar fitnesses rather than gradients. That description
-omits where the population-weighted update is contracted. We compare two
-placements: gather fitnesses and repeat the contraction on every device, or
-contract local population shards and all-reduce a model-sized partial update.
-Using one implementation of seed-regenerated full-rank and never-materialized
-low-rank perturbations, we measure the crossover on an 8$\times$A100 node and
-a TPU v5e-8. The model-sized all-reduce wins every measured dense and
-seed-regenerated cell; repeating the contraction returns as the better choice
-when low-rank perturbations make that work small. The crossover moves with the
-accelerator and recurs, with both signs intact, on Qwen2.5-0.5B. The low-rank
-rewrite also pays more, not less, on the TPU: matched rank-1 cells cost
-$0.05$--$0.18\times$ the materializing dense baseline on the v5e, versus
-$0.13$--$0.42\times$ on the A100. The synchronization shared by both
-placements is one fitness gather; centered-rank shaping then performs a
-replicated local sort.
+workers exchange scalar fitnesses rather than gradients, but they must still
+place the population-weighted update contraction. We compare gathering
+fitnesses and repeating the contraction on every device with contracting local
+population shards and all-reducing model-sized partial updates. In a common
+implementation of seed-regenerated full-rank and never-materialized low-rank
+perturbations, we measure where each placement wins on an 8$\times$A100 node and a TPU
+v5e-8, one host each, the fattest interconnects available. On those fabrics
+all-reduce wins every measured dense and seed-regenerated cell, whereas
+repeated contraction wins when low-rank structure makes the local work small.
+The hardware-dependent outcome recurs with both signs on Qwen2.5-0.5B.
 
 We separately test whether the faster perturbations preserve useful update
-directions. Synthetic measurements give an approximately square-root law for
-cosine alignment with the true gradient. On 0.5B- and 1.5B-parameter models,
-the same law predicts full-rank alignment with the true teacher-forced-NLL
-gradient within 10\%, while a low-rank correction calibrated at 0.5B predicts
-1.5B alignment within 26\%. On a decoded-reward Countdown task, a three-seed
-experiment resolves no quality difference between full rank and ranks 1, 4,
-and 16 at equal training samples; rank 1 uses 44\% less steady-state time per
-update. Scripts, configurations, result records, and environments are archived
-with the released instrument.
+directions. Synthetic measurements yield an approximately square-root law for
+cosine alignment with the true gradient. Across 0.5B- and 1.5B-parameter
+models, it predicts full-rank teacher-forced-NLL alignment within 10\%; the
+low-rank family lands near half its raw prediction, a factor with a quarter's
+scatter of its own that carries from 0.5B to 1.5B within that scatter.
+On decoded-reward Countdown, three seeds resolve no quality difference among
+full rank and ranks 1, 4, and 16 at equal training samples, while rank 1 reduces
+steady-state update time by 44\%. We release the code, configurations, and
+results.
 \end{abstract}
 
 \input{sections/01-introduction}
@@ -73,8 +69,10 @@ with the released instrument.
 % numbers; this list is the section order.
 \input{sections/02-background}
 \input{sections/09-related}
-\input{sections/03-design}
+% The contraction question precedes the instrument: it is what motivates the
+% instrument's guarantees (review 7).
 \input{sections/04-contraction}
+\input{sections/03-design}
 \input{sections/05-setup}
 \input{sections/06-results}
 \input{sections/07-end-to-end}
