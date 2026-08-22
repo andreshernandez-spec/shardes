@@ -4,9 +4,6 @@
 \section{The instrument}
 \label{sec:design}
 
-%% TODO(andres): this section is yours more than any other (ground rule 1).
-%% The skeleton fixes only the order of ideas and the measured anchors.
-
 Every measurement in this paper is a comparison, and a comparison is only as
 good as the guarantee that both sides compute the same thing. This section
 describes the instrument (shardes, built on JAX and its
@@ -21,8 +18,10 @@ back to produce an update. Four properties do the work.
 $D$ devices holds the full weights and $N/D$ of the perturbed copies (the
 population is sharded, the distribution state replicated). For isotropic ES
 the alternative of splitting the distribution state saves nothing worth its
-synchronization.
-%% TODO(andres): one sentence from docs/02 C1.4 on why.
+synchronization: isotropic or diagonal state is no larger than the
+already-replicated model, while sharding it on the population axis would make
+every device gather the same state again before perturbing every parameter
+leaf.
 
 \paragraph{Device count cannot change what is sampled or contracted.}
 The seed for copy $i$ derives from $i$ alone (member-indexed seeds), so the

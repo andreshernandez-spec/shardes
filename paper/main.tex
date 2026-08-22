@@ -7,9 +7,8 @@
 %     technical term in parentheses after, so a reader outside the area can
 %     follow and an expert can anchor. Rewrite freely; the structure, figures,
 %     tables and number-to-source wiring are the part meant to survive.
-%   - %% TODO(andres) marks where a judgement or your voice is required.
-%   - Tables in generated/ are emitted by experiments/phase2/tb{1,2,3}.py
-%     (--latex). Never edit them by hand; rerun the scripts (make tables).
+%   - Tables in generated/ are emitted by committed analysis scripts. Never
+%     edit them by hand; rerun the scripts (make tables).
 %
 % CLASS: neutral article for now. When the MLSys 2027 CFP lands, replace the
 % next line with their class file and delete the geometry package.
@@ -25,12 +24,8 @@
 % barriered by placeins; their drift is bounded by [t] placement.
 \usepackage[section]{placeins}
 \usepackage[hidelinks]{hyperref}
-\usepackage{xcolor}
 
 \graphicspath{{../experiments/phase2/figures/}{../experiments/phase0/figures/}{../experiments/countdown/figures/}}
-
-% Draft-only helper: visible TODO marks. Delete for submission.
-\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
 \title{Sharded evolution strategies on GPUs and TPUs}
 %% FRAMING (decided 2026-08-21): the paper is the investigation; the library is
@@ -57,22 +52,21 @@ moves with the accelerator. The low-rank motivation strengthens on TPU
 rather than inverting. The only synchronization point is a scalar
 gather; the barrier above it is a replicated local sort. On a
 0.5B-parameter task the cheap perturbation family matches full-rank
-quality at equal samples in $1.7\times$ less accelerator time, the
-outcome fitted estimator-quality curves predicted; checked against true
-gradients on real models at two sizes, the fit transfers exactly for
-full rank, up to one calibrated factor for the low-rank family, with
-every relative prediction intact, and the contraction crossover itself
-re-measures on the production model with both signs intact. The stability
-folklore narrows to the learning-rate margin, with a measured
-parameter-drift cost reported beside it. Every number regenerates from a
-committed script in the released repository.
-%% TODO(andres): your voice; written from the contributions list, one
-%% sentence per result, no number the sections do not carry.
+quality at equal samples with a $1.7\times$ accelerator-time advantage, as
+the fitted estimator-quality curves predicted. Against true gradients on
+real models at two sizes, the fit predicts full-rank cosine
+within 10\%, its square-root population scaling transfers unrefitted, and a
+correction calibrated at 0.5B predicts 1.5B low-rank cosine within 26\%.
+The contraction crossover also reappears on the production model with
+both signs intact. The stability folklore narrows to the learning-rate
+margin, with a measured
+parameter-drift cost reported beside it. Every result traces to a committed
+script, configuration, and result record in the released repository.
 \end{abstract}
 
 \input{sections/01-introduction}
 % Related work sits early (third), so what is novel is clear before the
-% instrument is described; its four threads deliberately end on systems so
+% instrument is described; its five threads deliberately end on systems so
 % the instrument section lands next. Filenames keep their historical
 % numbers; this list is the section order.
 \input{sections/02-background}
@@ -89,8 +83,6 @@ committed script in the released repository.
 The TPU measurements ran on Kaggle's free TPU v5e-8 tier; the GPU
 measurements ran on rented commodity A100 nodes. No grant or employer
 resources were used.
-%% TODO(andres): if the TRC grant is used before submission, credit the
-%% TPU Research Cloud program here as its terms ask.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
