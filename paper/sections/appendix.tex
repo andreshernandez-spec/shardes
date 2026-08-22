@@ -18,8 +18,10 @@ crossover whose platform dependence Figure~\ref{fig:f2} summarizes.
   \includegraphics[width=.85\textwidth]{f2b-crossover-vs-d.png}
   \caption{The contraction ratio against device count, every strong-scaling
     cell. B's advantage over the materializing and seed-regenerated arms grows
-    monotonically with $D$ on both platforms; the low-rank family stays within
-    a few percent of parity throughout. The $D{=}8$ pattern of
+    monotonically with $D$ on both platforms; the low-rank family stays far
+    closer to parity (B/A between 0.92 and 1.46 over every cell and device
+    count, against 0.18--0.83 for the dense and seed-regenerated arms at
+    $D{=}8$). The $D{=}8$ pattern of
     Figure~\ref{fig:f2} is the endpoint of a monotone trend, not an artifact.}
   \label{fig:f2b}
 \end{figure*}
@@ -78,11 +80,21 @@ because they are boundary conditions rather than results. The reference's
 rank-1 path does not compile on a 16\,GB TPU chip at $d{=}512$,
 $N{=}16384$: the compiler allocates 24.1\,GiB of temporaries,
 reproducible with no TPU via the compile-only probe in the repository,
-the same pathology this instrument diagnosed and works around; the same
-cell runs here at 245\,ms. And the reference declines embedding tables
+the same pathology this instrument diagnosed and works around. The workaround
+pads rank-1 factors with one zero column so the compiler retains a fused matrix
+multiply; its numerical footprint and regression check are archived, and the
+same cell runs here at 245\,ms. The reference also declines embedding tables
 outright, while the instrument carries that seam
 (Section~\ref{sec:design}). Both are properties of the released
 implementations, not of the algorithms.
+
+\section{Systems ablations}
+\label{sec:systems-ablations}
+\input{generated/tb3}
+The main text carries the two ablations that affect interpretation: compute
+datatype changes these cells by at most 12\%, whereas forcing full-precision
+matmuls costs the low-rank family $1.6$--$1.9\times$. The remaining rows are
+included here as implementation checks rather than promoted to results.
 
 \section{Stability exploration}
 \label{sec:stability}
@@ -92,6 +104,17 @@ endpoints of each perturbation interval. It lives in the appendix
 because its question (comparative optimizer robustness) is separate from
 the paper's systems argument; its metrics and falsification criteria
 were nevertheless fixed in a committed protocol before the data.
+
+The relevant stabilization mechanisms have distinct lineages. Target networks
+address value-learning divergence
+\citep{baird1995,tsitsiklis1997,mnih2015,vanhasselt2018,zhang2021target}; the
+recipe tested here instead carries a clipped policy objective and a
+reference-model KL penalty
+\citep{kakade2002,schulman2015trpo,schulman2017ppo,ouyang2022}. Empirical work
+questions which ingredients are load-bearing
+\citep{engstrom2020,andrychowicz2020,orz2025}. Reports of ES-induced forgetting
+also motivate reporting drift beside apparent robustness
+\citep{abdi2026forgetting,schweighofer2026awd}.
 
 % F8 -- experiments/countdown/figures/f8-robustness.png (plot_e14.py);
 % verdicts: analyze_e14.py; design and pre-specified criteria: docs/08.
@@ -111,14 +134,9 @@ were nevertheless fixed in a committed protocol before the data.
   \label{fig:f8}
 \end{figure*}
 
-The stabilization machinery of deep RL exists for stated reasons, and the
-recipe tested here carries two pieces of it: a clipped surrogate objective
-against provable step-size limits \citep{kakade2002,schulman2015trpo,schulman2017ppo}
-and a reference-model KL penalty anchoring the policy \citep{ouyang2022};
-the value-based lineage's stabilizers are neither part of this recipe nor
-tested (Section~\ref{sec:related}). ES carries none of that
-machinery, so we asked whether its absence is load-bearing. The answer
-has two halves (Figure~\ref{fig:f8}).
+ES carries neither the clipped objective nor the KL anchor in the tested
+recipe, so we asked whether their absence is load-bearing. The answer has two
+halves (Figure~\ref{fig:f8}).
 
 First, the half we expected: multiplying the learning rate by 8 destroys
 GRPO on every
@@ -140,9 +158,9 @@ Second, the half our own falsification criteria caught: removing GRPO's KL
 anchor entirely, or widening its clip until it never binds, changed little
 at this horizon on this rule-based verifier. At this one setting the
 single stabilizers are not individually load-bearing; interactions
-between stabilizers, and other settings, were not tested, so this
-localizes the observed fragility at the learning rate rather than
-establishing that fragility lives nowhere else. It is consistent with
+between stabilizers, and other settings, were not tested. The only collapse
+observed was at the aggressive learning-rate endpoint, but the experiment does
+not identify learning rate as the unique source of fragility. It is consistent with
 prior reports that clipping is not
 what makes PPO work \citep{engstrom2020,andrychowicz2020} and that
 critic-based PPO trains without a KL penalty \citep{orz2025}.
@@ -162,7 +180,7 @@ should be read beside both.
 \input{generated/tb3b}
 Table~\ref{tab:tb3b} collects the checks behind the systems claims that
 are not themselves timing results: held-out task quality by rank, the
-estimator-quality study's coverage, the sub-float32 fitness guard, and
+update--gradient-alignment study's coverage, the sub-float32 fitness guard, and
 device-count invariance. Each row names the committed artifact that
 carries it.
 
@@ -176,8 +194,9 @@ incident). The figure and table map: F1, F2 and F2b from
 \texttt{experiments/phase0/plot.py}; F7 and F7b from \texttt{plot\_e13.py}; F8 from
 \texttt{plot\_e14.py}; the appendix grids (M1--M3, both platforms) from
 \texttt{plot.py} against each platform's results directory;
-Tables~\ref{tab:tb1}, \ref{tab:tb2}, and~\ref{tab:tb3} from
-\texttt{tb1.py}, \texttt{tb2.py}, and \texttt{tb3.py};
+Tables~\ref{tab:tb1} and~\ref{tab:tb1b} from \texttt{tb1.py};
+Table~\ref{tab:tb2} from \texttt{tb2.py}; Tables~\ref{tab:tb3}
+and~\ref{tab:tb3b} from \texttt{tb3.py};
 Table~\ref{tab:tb4} from
 \texttt{analysis\_e15.py}; Table~\ref{tab:tb5} from
 \texttt{tb5\_e17.py}; and Table~\ref{tab:tb6} from
@@ -194,6 +213,6 @@ two TPU compile probes
 (\texttt{probe\_lr1.py}, \texttt{probe\_eggroll\_tpu.py}) reproduce
 the compiler-level claims from any Linux machine. Source and result records
 are at \url{https://github.com/andreshernandez-spec/shardes}. With the project
-extras installed, \texttt{make -C paper} regenerates all five tables and
+extras installed, \texttt{make -C paper} regenerates all generated tables and
 builds the PDF; the provenance paragraph in Section~\ref{sec:setup} names the
 frozen submission tag once assigned.

@@ -3,10 +3,11 @@
 \centering
 \small
 \caption{The synthetic-to-real bridge, measured. Cosine between one
-  full ES update and the true NLL gradient on Qwen2.5-0.5B
+  centered-rank ES update and the true teacher-forced-NLL gradient
+  on Qwen2.5-0.5B
   ($\times 10^{-4}$; median [min, max] over 5 seeds), against the
-  estimator study's fitted prediction at the same $N/d_{\mathrm{eff}}$
-  (centered-rank slice, the shaping the update applies). The estimator
+  synthetic alignment study's fitted prediction at the same
+  $N/d_{\mathrm{samp}}$. The alignment
   study has no rank-16 curve, so that arm is measured only.}
 \label{tab:tb4}
 \begin{tabular}{llllr}

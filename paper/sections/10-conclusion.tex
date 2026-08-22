@@ -1,27 +1,26 @@
 % CLAIM: restates the hierarchy and the boundary of evidence. No new claims.
 \section{Conclusion}
-The load-bearing beliefs about distributed evolution strategies were
-measurable all along, and measured, they narrow. ES moves only scalars
-under one of two contraction placements, and the placement that moves a
-model-sized buffer every update wins much of the measured grid anyway;
-where each wins moves with the accelerator, and both crossover signs recur
-on the real model. The low-rank rewrite's GPU-shaped motivation strengthens
-rather than inverts on TPU. The only synchronization shared by both
-placements is the fitness gather, microseconds at every measured cell; the
-shaping barrier above it is a replicated local sort that reaches
-milliseconds only at extreme populations; and strategy B's model-sized
-all-reduce, the one synchronization beyond these, did not stop B from
-winning the dense cells while its overhead sets the low-rank side of the
-crossover. On a 0.5B-parameter task, the fast perturbation family shows no
-detectable quality loss over three seeds at $1.8\times$ lower steady-state
-cost per update. Against true gradients at 0.5B and
-1.5B, the estimator law predicts full-rank cosine within 10\%, gets the
-within-arm population scaling right, and transfers a 0.5B low-rank
-calibration to 1.5B within 26\%, although the correction itself drifts with
-scale. An exploratory stress test (Appendix~\ref{sec:stability}) collapsed one
-RL recipe at its learning-rate margin while ES survived the tested
-endpoints, at a measured parameter-drift cost; that is a stress test's
-evidence on one task and three seeds, not a stability guarantee.
-The instrument that made these comparisons commensurable is released.
-The natural next measurement is past the single-host boundary, where the
-contraction question changes character because the interconnect does.
+The usual scalar-communication account of distributed ES is true under one
+update placement but incomplete as a systems model. Across the measured GPU
+and TPU grids, locally contracting population shards and all-reducing a
+model-sized update wins every dense and seed-regenerated cell. Repeating the
+contraction after a scalar gather returns as the better placement when
+low-rank perturbations make the avoided work small. The crossover moves with
+the accelerator and recurs, with both signs intact, on Qwen2.5-0.5B. The
+low-rank rewrite's GPU-shaped motivation also strengthens rather than inverts
+on the TPU. Centered-rank shaping adds one shared fitness gather followed by a
+replicated local sort; the sort, rather than communication, dominates that
+barrier at extreme populations.
+
+The validation chain gives the systems result a measured quality boundary. An
+approximately square-root alignment law from a synthetic block predicts
+full-rank cosine with the true teacher-forced-NLL gradient within 10\% at 0.5B
+and 1.5B parameters. A low-rank correction calibrated at 0.5B predicts the
+1.5B cells within 26\%, while drifting enough that it should not be treated as
+scale-invariant. On decoded-reward Countdown training, a three-seed experiment
+resolves no quality difference among full rank and ranks 1, 4, and 16 at equal
+training samples, while rank 1 uses 44\% less steady-state time per update.
+That task result is consistent with the NLL alignment evidence, not a claim
+that the objectives are interchangeable. The next systems measurement is
+past the single-host boundary, where the interconnect should change the
+contraction question most sharply.

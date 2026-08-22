@@ -1,23 +1,32 @@
-% CLAIM: none of ours. The estimator, the two algorithms, and why flattening
+% CLAIM: none of ours. The update construction, the two algorithms, and why flattening
 % forecloses the structured one. Citations plus docs/00's framing.
 \section{Background}
 \label{sec:background}
 
-\paragraph{The estimator.} ES estimates a direction of improvement by weighting
-random perturbations by how well they scored \citep{wierstra2014,nesterov2017}: with weights $\theta$, noise
+\paragraph{The update direction.} ES constructs a direction of improvement by weighting
+random perturbations by how well they scored \citep{wierstra2014,nesterov2017}: with parameters $\theta$, noise
 $\epsilon_i$, scale $\sigma$ and fitness $f$, the update is proportional to
-$\frac{1}{N\sigma}\sum_i w_i\,\epsilon_i$ where the $w_i$ are a function of the
-fitnesses $f(\theta + \sigma\epsilon_i)$ (in this paper, centered ranks \citep{salimans2017}: sort
-the fitnesses and replace each by its normalized position, which makes the
-update indifferent to the scale of the loss). No gradients flow through the
-model; the model only ever runs forward. The estimator targets the gradient
-of a Gaussian-smoothed objective, and its variance carries a
-dimension-dependent cost \citep{nesterov2017,duchi2015,berahas2022}. Rather
-than assume an asymptotic formula for that cost, Section~\ref{sec:endtoend}
-measures directional accuracy against the population-to-effective-dimension
-ratio $N/d_{\mathrm{eff}}$.
+$\frac{1}{N\sigma}\sum_i w_i\,\epsilon_i$, where the $w_i$ depend on the
+fitnesses $f(\theta + \sigma\epsilon_i)$. With raw fitnesses, the standard
+Gaussian estimator targets the gradient of a smoothed objective and carries a
+dimension-dependent variance cost \citep{nesterov2017,duchi2015,berahas2022}.
+This paper instead uses centered ranks \citep{salimans2017}: fitnesses are
+replaced by normalized ranks, making the update invariant to strictly increasing
+transformations of fitness but changing its estimand. We therefore call cosine
+with an automatic-differentiation gradient \emph{update--gradient alignment},
+not estimator bias or accuracy. No gradients flow through the ES model; the
+gradient exists only as an offline reference in the validation experiments.
 
-\paragraph{The two 2025 algorithms.}
+For comparing populations, define the sampling dimension $d_{\mathrm{samp}}$
+as the number of independent scalar random variables in one perturbation. It
+equals the full parameter count for dense and seed-regenerated noise. For a
+rank-$r$ perturbation of an $m\times n$ matrix it contributes $r(m+n)$, while
+non-matrix leaves contribute their full size. Section~\ref{sec:endtoend}
+measures alignment against $N/d_{\mathrm{samp}}$; cross-rank comparisons are
+also reported at equal $N$, because $d_{\mathrm{samp}}$ is a property of the
+sampler rather than the dimension of the model gradient.
+
+\paragraph{The two recent algorithms.}
 \citet{qiu2025} keep the perturbation exact and make its \emph{storage} free:
 each candidate's noise is regenerated from a random seed whenever it is
 needed (once to evaluate, once to assemble the update), so nothing
@@ -42,6 +51,6 @@ matrix of materialized noise, has nowhere efficient to attach that
 statement: the flattening is invertible (\texttt{ravel\_pytree} returns an
 unflattening function), but a lazy, never-materialized per-matrix
 perturbation is incompatible with an API whose contract is that the dense
-noise matrix exists. This is a design commitment, not a bug, and it is why
-expressing both 2025 algorithms efficiently required a new core rather
-than a patch.
+noise matrix exists. This is a design commitment, not a bug. The instrument
+therefore bypasses the flattened population representation rather than
+patching it.

@@ -131,7 +131,7 @@ def main() -> int:
             systems += dtype_cost(cells(d), platform)
     systems += precision_cost()
     validation = task_quality() + [
-        "| estimator quality vs rank, σ, N | phase 0 | E1 / F5: "
+        "| update--gradient alignment vs rank, σ, N | phase 0 | E1 / F5: "
         "`experiments/phase0/` (measured, committed) |",
         "| sub-f32 fitness | guard | refused by `tell`; measured collapse "
         "256 losses -> 2 in bf16 (docs/proposal-bf16-policy.md) |",

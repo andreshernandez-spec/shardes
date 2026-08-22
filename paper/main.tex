@@ -27,7 +27,7 @@
 
 \graphicspath{{../experiments/phase2/figures/}{../experiments/phase0/figures/}{../experiments/countdown/figures/}}
 
-\title{Sharded evolution strategies on GPUs and TPUs}
+\title{The contraction crossover in sharded evolution strategies on GPUs and TPUs}
 %% FRAMING (decided 2026-08-21): the paper is the investigation; the library is
 %% the instrument, cited and released but not the subject.
 \author{Andres Hernandez}
@@ -37,39 +37,38 @@
 \maketitle
 
 \begin{abstract}
-Two 2025 papers made evolution strategies work at LLM scale with opposite
-structural bets: full-rank perturbations regenerated from seeds, and
-rank-$r$ factored perturbations that are never materialized. Between them
-sits a set of widely repeated but unmeasured beliefs: that ES is cheap to
-distribute because only scalars cross the wire, that the low-rank rewrite
-pays because GPUs are bad at dense noise, and that ES does not need
-reinforcement learning's stabilizers. We measure the first two, on an
-8$\times$A100 node and a TPU v5e-8, with an open-source instrument that
-expresses both bets in one system, and stress-test the third. The scalar claim is true and beside
-the point: the update placement that all-reduces a model-sized buffer
-wins much of the measured grid anyway, and where each placement wins
-moves with the accelerator. The low-rank motivation strengthens on TPU
-rather than inverting. The only synchronization shared by both
-placements is a scalar gather; the shaping barrier above it is a
-replicated local sort. On a 0.5B-parameter task the cheap perturbation
-family shows no detectable quality loss against full rank at equal
-samples over three seeds, at $1.8\times$ lower
-steady-state cost per update, as the fitted estimator-quality curves
-predicted. Against true gradients on
-real models at two sizes, the fit predicts full-rank cosine
-within 10\%, its square-root population scaling transfers unrefitted, and a
-correction calibrated at 0.5B predicts 1.5B low-rank cosine within 26\%.
-The contraction crossover also reappears on the real model with
-both signs intact. An exploratory stress test collapses the RL recipe
-only at its learning-rate margin while ES survives the tested
-endpoints, at a measured parameter-drift cost reported beside it.
-Every result traces to a committed
-script, configuration, and result record in the released repository.
+Evolution strategies (ES) are often described as cheap to distribute because
+workers exchange scalar fitnesses rather than gradients. That description
+omits where the population-weighted update is contracted. We compare two
+placements: gather fitnesses and repeat the contraction on every device, or
+contract local population shards and all-reduce a model-sized partial update.
+Using one implementation of seed-regenerated full-rank and never-materialized
+low-rank perturbations, we measure the crossover on an 8$\times$A100 node and
+a TPU v5e-8. The model-sized all-reduce wins every measured dense and
+seed-regenerated cell; repeating the contraction returns as the better choice
+when low-rank perturbations make that work small. The crossover moves with the
+accelerator and recurs, with both signs intact, on Qwen2.5-0.5B. The low-rank
+rewrite also pays more, not less, on the TPU: matched rank-1 cells cost
+$0.05$--$0.18\times$ the materializing dense baseline on the v5e, versus
+$0.13$--$0.42\times$ on the A100. The synchronization shared by both
+placements is one fitness gather; centered-rank shaping then performs a
+replicated local sort.
+
+We separately test whether the faster perturbations preserve useful update
+directions. Synthetic measurements give an approximately square-root law for
+cosine alignment with the true gradient. On 0.5B- and 1.5B-parameter models,
+the same law predicts full-rank alignment with the true teacher-forced-NLL
+gradient within 10\%, while a low-rank correction calibrated at 0.5B predicts
+1.5B alignment within 26\%. On a decoded-reward Countdown task, a three-seed
+experiment resolves no quality difference between full rank and ranks 1, 4,
+and 16 at equal training samples; rank 1 uses 44\% less steady-state time per
+update. Scripts, configurations, result records, and environments are archived
+with the released instrument.
 \end{abstract}
 
 \input{sections/01-introduction}
 % Related work sits early (third), so what is novel is clear before the
-% instrument is described; its five threads deliberately end on systems so
+% instrument is described; its four threads deliberately end on systems so
 % the instrument section lands next. Filenames keep their historical
 % numbers; this list is the section order.
 \input{sections/02-background}
