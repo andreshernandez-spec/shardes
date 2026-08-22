@@ -34,16 +34,10 @@ unaware of prior work measuring:
     between perturbation families is only meaningful if the cheap family
     estimates as well as the expensive one, which is its own unmeasured
     half (Section~\ref{sec:endtoend}).
-  \item \emph{``ES is the stable one.''} ES carries none of the machinery
-    reinforcement learning uses to keep its updates slow and gradual (lagging
-    weight copies, trust regions, penalties against drifting from a reference
-    model), and the folklore says it does not need it. Folklore is not a
-    measurement, and this belief, unlike the first two, cannot be measured
-    on a microbenchmark at all: it only exists where something real is
-    being trained (Section~\ref{sec:endtoend}).
 \end{itemize}
 
-The three beliefs fix the paper's shape. The first two are priced on a
+The two beliefs are systems questions; the second carries the quality
+requirement just stated. That fixes the paper's shape. The beliefs are priced on a
 controlled microbenchmark (Sections~\ref{sec:contraction}
 and~\ref{sec:results}), where every byte and millisecond is attributable.
 Those prices then need a validity chain before they are worth acting on,
@@ -51,11 +45,13 @@ and Section~\ref{sec:endtoend} is that chain, on a real model with the
 same instrument: first that the measurements are of the algorithm rather
 than of scheduling noise (reproducibility and device-count invariance on
 hardware), then that the fast bet does not buy its speed with estimation
-quality (the accuracy chain, closing belief two), and only then the third
-belief, stability, which needs everything before it: its collapse-or-not
-verdicts are worth reading only because the training runs they come from
-are reproducible and the families being perturbed were first shown
-comparable in quality.
+or task quality (the accuracy chain, closing the requirement). A third
+folk belief, that ES does not need the stabilizing machinery
+reinforcement learning carries, is a question about comparative
+optimizer robustness rather than about distributed ES; it cannot be
+measured on a microbenchmark at all, and we report an exploratory
+stress test of it in Appendix~\ref{sec:stability}, scoped to what one
+task, one recipe, and three seeds can say.
 
 Measuring any of these fairly has a prerequisite that explains why it had not
 happened: the two bets lived in incompatible codebases, so any comparison
@@ -80,8 +76,8 @@ one abstraction expresses both published perturbation families at
 competitive throughput (Table~\ref{tab:tb1}). The end-to-end experiments
 are validation and exploration, not co-equal pillars: the training campaign
 uses one model size, while the true-gradient check spans two. They are the
-links of the validity chain just described, a three-seed quality check and a
-scoped robustness comparison.
+links of the validity chain just described, closed by a three-seed quality
+check; the robustness stress test is exploratory and lives in the appendix.
 \begin{itemize}
   \item \textbf{The scalar folk claim is true and beside the point.} Strategy
     A does move only scalars (measured: twice the naive byte count,
@@ -109,13 +105,15 @@ scoped robustness comparison.
     ES) costs 12\,ms at $N{=}2^{18}$ and is identical on 1 and 8
     devices: replicated local compute. Strategy B adds the one
     synchronization beyond these, its model-sized all-reduce.
-  \item \textbf{Stability, measured with criteria pre-specified in a
-    committed protocol}: the RL
+  \item \textbf{Exploratory, in the appendix: a stress test of the
+    stability folklore}, with criteria pre-specified in a committed
+    protocol. The RL
     baseline collapses to zero on every seed at $8\times$ its published
     learning rate while ES shows no collapse at either endpoint of the
-    same 64-fold interval; and our own falsification criteria caught the part of the claim
+    same 64-fold interval; our own falsification criteria caught the part of the claim
     that was wrong, since removing the baseline's individual stabilizers
-    changed little (Section~\ref{sec:endtoend}, Figure~\ref{fig:f8}).
+    changed little. One task, one recipe, three seeds; a stress test,
+    not a margin (Appendix~\ref{sec:stability}, Figure~\ref{fig:f8}).
   \item Every figure and generated table regenerates from a committed script;
     every reported result traces to a committed configuration, result record,
     and recorded environment in the released repository.

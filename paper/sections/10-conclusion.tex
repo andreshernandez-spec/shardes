@@ -18,8 +18,10 @@ cost per update. Against true gradients at 0.5B and
 1.5B, the estimator law predicts full-rank cosine within 10\%, gets the
 within-arm population scaling right, and transfers a 0.5B low-rank
 calibration to 1.5B within 26\%, although the correction itself drifts with
-scale. The folklore stability advantage over one RL recipe is real at the learning-rate
-margin but concentrated there, with a measured drift cost reported beside
-it. The instrument that made these comparisons commensurable is released.
+scale. An exploratory stress test (Appendix~\ref{sec:stability}) collapsed one
+RL recipe at its learning-rate margin while ES survived the tested
+endpoints, at a measured parameter-drift cost; that is a stress test's
+evidence on one task and three seeds, not a stability guarantee.
+The instrument that made these comparisons commensurable is released.
 The natural next measurement is past the single-host boundary, where the
 contraction question changes character because the interconnect does.

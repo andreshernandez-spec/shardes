@@ -43,9 +43,9 @@ rank-$r$ factored perturbations that are never materialized. Between them
 sits a set of widely repeated but unmeasured beliefs: that ES is cheap to
 distribute because only scalars cross the wire, that the low-rank rewrite
 pays because GPUs are bad at dense noise, and that ES does not need
-reinforcement learning's stabilizers. We measure all three, on an
+reinforcement learning's stabilizers. We measure the first two, on an
 8$\times$A100 node and a TPU v5e-8, with an open-source instrument that
-expresses both bets in one system. The scalar claim is true and beside
+expresses both bets in one system, and stress-test the third. The scalar claim is true and beside
 the point: the update placement that all-reduces a model-sized buffer
 wins much of the measured grid anyway, and where each placement wins
 moves with the accelerator. The low-rank motivation strengthens on TPU
@@ -60,9 +60,10 @@ real models at two sizes, the fit predicts full-rank cosine
 within 10\%, its square-root population scaling transfers unrefitted, and a
 correction calibrated at 0.5B predicts 1.5B low-rank cosine within 26\%.
 The contraction crossover also reappears on the real model with
-both signs intact. The stability folklore narrows to the learning-rate
-margin, with a measured
-parameter-drift cost reported beside it. Every result traces to a committed
+both signs intact. An exploratory stress test collapses the RL recipe
+only at its learning-rate margin while ES survives the tested
+endpoints, at a measured parameter-drift cost reported beside it.
+Every result traces to a committed
 script, configuration, and result record in the released repository.
 \end{abstract}
 
