@@ -1,6 +1,6 @@
-% Seeded from the 2026-08-20 stability research spike (docs/09). Keys match the
-% memo. Entries marked LISTING-ONLY were verified as arXiv listings but not read;
-% re-verify before citing in the submitted PDF.
+% Seeded from the 2026-08-20 stability research spike (docs/09). Every entry was
+% checked against a primary or authoritative bibliographic, documentation, or
+% project record on 2026-08-22.
 
 % ---- the two recent ES-at-LLM-scale papers ----
 @inproceedings{qiu2025,
@@ -17,15 +17,18 @@
   year={2025}
 }
 
-@article{sheng2022tpu,
+@inproceedings{sheng2020tpu,
   title={Distributed Evolution Strategies Using {TPUs} for Meta-Learning},
   author={Sheng, Alex and He, Derek},
-  journal={arXiv preprint arXiv:2201.00093},
-  year={2022}
+  booktitle={2020 IEEE Symposium Series on Computational Intelligence (SSCI)},
+  pages={721--728},
+  year={2020},
+  doi={10.1109/SSCI47803.2020.9308334},
+  note={arXiv:2201.00093}
 }
 
 @misc{nvidiaA100,
-  title={{NVIDIA A100 Tensor Core GPU} Architecture},
+  title={{NVIDIA A100 Tensor Core GPU}},
   author={{NVIDIA Corporation}},
   howpublished={\url{https://www.nvidia.com/en-us/data-center/a100/}},
   year={2020},
@@ -43,16 +46,17 @@
 % ---- RL instability: theory ----
 @inproceedings{baird1995,
   title={Residual Algorithms: Reinforcement Learning with Function Approximation},
-  author={Baird, Leemon},
+  author={Baird, III, Leemon C.},
   booktitle={Proceedings of the 12th International Conference on Machine Learning},
-  publisher={Morgan Kaufmann}, year={1995}
+  pages={30--37}, publisher={Morgan Kaufmann}, year={1995},
+  doi={10.1016/B978-1-55860-377-6.50013-X}
 }
 @article{tsitsiklis1997,
   title={An Analysis of Temporal-Difference Learning with Function Approximation},
   author={Tsitsiklis, John N. and Van Roy, Benjamin},
   journal={IEEE Transactions on Automatic Control},
   volume={42}, number={5}, pages={674--690},
-  year={1997}
+  year={1997}, doi={10.1109/9.580874}
 }
 @book{sutton2018,
   title={Reinforcement Learning: An Introduction},
@@ -84,8 +88,9 @@
 }
 @inproceedings{kakade2002,
   title={Approximately Optimal Approximate Reinforcement Learning},
-  author={Kakade, Sham and Langford, John},
-  booktitle={ICML}, year={2002}
+  author={Kakade, Sham M. and Langford, John},
+  booktitle={Proceedings of the 19th International Conference on Machine Learning},
+  pages={267--274}, publisher={Morgan Kaufmann}, year={2002}
 }
 @inproceedings{schulman2015trpo,
   title={Trust Region Policy Optimization},
@@ -102,7 +107,8 @@
 @article{williams1992,
   title={Simple statistical gradient-following algorithms for connectionist reinforcement learning},
   author={Williams, Ronald J.},
-  journal={Machine Learning}, volume={8}, pages={229--256}, year={1992}
+  journal={Machine Learning}, volume={8}, pages={229--256}, year={1992},
+  doi={10.1007/BF00992696}
 }
 @article{greensmith2004,
   title={Variance Reduction Techniques for Gradient Estimates in Reinforcement Learning},
@@ -135,10 +141,9 @@
 }
 @article{clipentropy2025,
   title={Clip-Low Increases Entropy and Clip-High Decreases Entropy in Reinforcement Learning of Large Language Models},
-  author={{authors not independently verified}},
+  author={Park, Jaesung R. and Kim, Junsu and Kim, Gyeongman and Jo, Jinyoung and Choi, Sean and Cho, Jaewoong and Ryu, Ernest K.},
   journal={arXiv preprint arXiv:2509.26114},
-  year={2025},
-  note={LISTING-ONLY: verify authors before citing}
+  year={2025}
 }
 @article{narvekar2020,
   title={Curriculum Learning for Reinforcement Learning Domains: A Framework and Survey},
@@ -157,12 +162,14 @@
 @article{nesterov2017,
   title={Random Gradient-Free Minimization of Convex Functions},
   author={Nesterov, Yurii and Spokoiny, Vladimir},
-  journal={Foundations of Computational Mathematics}, volume={17}, pages={527--566}, year={2017}
+  journal={Foundations of Computational Mathematics}, volume={17}, number={2}, pages={527--566}, year={2017},
+  doi={10.1007/s10208-015-9296-2}
 }
 @article{duchi2015,
   title={Optimal Rates for Zero-Order Convex Optimization: The Power of Two Function Evaluations},
   author={Duchi, John C. and Jordan, Michael I. and Wainwright, Martin J. and Wibisono, Andre},
-  journal={IEEE Transactions on Information Theory}, volume={61}, number={5}, year={2015},
+  journal={IEEE Transactions on Information Theory}, volume={61}, number={5}, pages={2788--2806}, year={2015},
+  doi={10.1109/TIT.2015.2409256},
   note={arXiv:1312.2139}
 }
 @article{berahas2022,
@@ -196,12 +203,13 @@
 @article{hansen2001,
   title={Completely Derandomized Self-Adaptation in Evolution Strategies},
   author={Hansen, Nikolaus and Ostermeier, Andreas},
-  journal={Evolutionary Computation}, volume={9}, number={2}, pages={159--195}, year={2001}
+  journal={Evolutionary Computation}, volume={9}, number={2}, pages={159--195}, year={2001},
+  doi={10.1162/106365601750190398}
 }
 @article{ollivier2017,
   title={Information-Geometric Optimization Algorithms: A Unifying Picture via Invariance Principles},
   author={Ollivier, Yann and Arnold, Ludovic and Auger, Anne and Hansen, Nikolaus},
-  journal={JMLR}, volume={18}, year={2017}
+  journal={Journal of Machine Learning Research}, volume={18}, number={18}, pages={1--65}, year={2017}
 }
 @article{salimans2017,
   title={Evolution Strategies as a Scalable Alternative to Reinforcement Learning},
@@ -218,7 +226,9 @@
 @inproceedings{parmas2018,
   title={{PIPPS}: Flexible Model-Based Policy Search Robust to the Curse of Chaos},
   author={Parmas, Paavo and Rasmussen, Carl Edward and Peters, Jan and Doya, Kenji},
-  booktitle={ICML}, year={2018}
+  booktitle={Proceedings of the 35th International Conference on Machine Learning},
+  series={Proceedings of Machine Learning Research}, volume={80}, pages={4065--4074},
+  publisher={PMLR}, year={2018}
 }
 @inproceedings{metz2019,
   title={Understanding and correcting pathologies in the training of learned optimizers},
@@ -235,7 +245,8 @@
 @article{rudolph2001,
   title={Self-Adaptive Mutations May Lead to Premature Convergence},
   author={Rudolph, G{\"u}nter},
-  journal={IEEE Transactions on Evolutionary Computation}, volume={5}, number={4}, pages={410--414}, year={2001}
+  journal={IEEE Transactions on Evolutionary Computation}, volume={5}, number={4}, pages={410--414}, year={2001},
+  doi={10.1109/4235.942534}
 }
 
 % ---- experimental record ----
@@ -246,7 +257,7 @@
   note={arXiv:1709.06560}
 }
 @inproceedings{engstrom2020,
-  title={Implementation Matters in Deep {RL}: A Case Study on {PPO} and {TRPO}},
+  title={Implementation Matters in Deep Policy Gradients: A Case Study on {PPO} and {TRPO}},
   author={Engstrom, Logan and Ilyas, Andrew and Santurkar, Shibani and Tsipras, Dimitris and Janoos, Firdaus and Rudolph, Larry and Madry, Aleksander},
   booktitle={ICLR}, year={2020},
   note={arXiv:2005.12729}
@@ -287,11 +298,14 @@
   journal={arXiv preprint arXiv:2503.20783},
   year={2025}
 }
-@article{sober2025,
-  title={A Sober Look at Progress in Language Model Reasoning},
-  author={Hochlehnert, Andreas and others},
-  journal={arXiv preprint arXiv:2504.07086},
-  year={2025}
+@inproceedings{sober2025,
+  title={A Sober Look at Progress in Language Model Reasoning: Pitfalls and Paths to Reproducibility},
+  author={Hochlehnert, Andreas and Bhatnagar, Hardik and Udandarao, Vishaal and Albanie, Samuel and Prabhu, Ameya and Bethge, Matthias},
+  booktitle={Proceedings of the 2nd Conference on Language Modeling ({COLM} 2025)},
+  address={Montreal, Canada}, month=oct, publisher={OpenReview},
+  url={https://openreview.net/forum?id=90UrTTxp5O},
+  year={2025},
+  note={arXiv:2504.07086}
 }
 @article{openai5,
   title={Dota 2 with Large Scale Deep Reinforcement Learning},
@@ -340,12 +354,12 @@
   journal={arXiv preprint arXiv:2503.24290},
   year={2025}
 }
-@article{hoy2026geometry,
+@inproceedings{hoy2026geometry,
   title={Matching Accuracy, Different Geometry: Evolution Strategies vs {GRPO} in {LLM} Post-Training},
-  author={Hoy, {and others; not independently verified}},
-  journal={arXiv preprint arXiv:2604.01499},
+  author={Hoy, William and Wang, Binxu and Pan, Xu},
+  booktitle={Conference on Language Modeling},
   year={2026},
-  note={LISTING-ONLY: verify before citing}
+  note={arXiv:2604.01499}
 }
 @article{schweighofer2026awd,
   title={Overcoming Forgetting in {LLM} Fine-Tuning with Evolution Strategies},
@@ -371,7 +385,7 @@
 @misc{jax2018,
   title={{JAX}: composable transformations of {Python}+{NumPy} programs},
   author={Bradbury, James and Frostig, Roy and Hawkins, Peter and Johnson, Matthew James and Leary, Chris and Maclaurin, Dougal and Necula, George and Paszke, Adam and VanderPlas, Jake and Wanderman-Milne, Skye and Zhang, Qiao},
-  url={http://github.com/jax-ml/jax},
+  url={https://github.com/jax-ml/jax},
   year={2018}
 }
 @article{gspmd2021,
