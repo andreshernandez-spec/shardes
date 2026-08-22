@@ -6,13 +6,15 @@ under one of two contraction placements, and the placement that moves a
 model-sized buffer every update wins much of the measured grid anyway;
 where each wins moves with the accelerator, and both crossover signs recur
 on the real model. The low-rank rewrite's GPU-shaped motivation strengthens
-rather than inverts on TPU. The only synchronization point is the fitness
-gather, microseconds at every measured cell; the shaping barrier above it is
-a replicated local sort that reaches milliseconds only at extreme
-populations, and communication is not the dominant cost in any measured
-cell. On a 0.5B-parameter task, the fast perturbation family shows no
-detectable quality loss over three seeds and reaches that quality with a
-$1.7\times$ accelerator-time advantage. Against true gradients at 0.5B and
+rather than inverts on TPU. The only synchronization shared by both
+placements is the fitness gather, microseconds at every measured cell; the
+shaping barrier above it is a replicated local sort that reaches
+milliseconds only at extreme populations; and strategy B's model-sized
+all-reduce, the one synchronization beyond these, did not stop B from
+winning the dense cells while its overhead sets the low-rank side of the
+crossover. On a 0.5B-parameter task, the fast perturbation family shows no
+detectable quality loss over three seeds at $1.8\times$ lower steady-state
+cost per update. Against true gradients at 0.5B and
 1.5B, the estimator law predicts full-rank cosine within 10\%, gets the
 within-arm population scaling right, and transfers a 0.5B low-rank
 calibration to 1.5B within 26\%, although the correction itself drifts with

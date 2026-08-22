@@ -22,13 +22,12 @@ verdicts lean on both of the claims before it.
 
 \paragraph{Determinism and invariance on real hardware.} Two independent
 20-generation runs of the same $D{=}8$ program agree byte for byte in every
-logged reward and exactly in all 494M final parameters. Holding the fitness
-vector fixed, the $D{=}1$ and $D{=}8$ updates agree to $6.3\times10^{-6}$
-norm-relative error. Neither result implies trajectory equality across
-separately compiled programs: XLA fusion and autotuning can flip near-tied
-greedy tokens, after which the sampled trajectories diverge. The guarantee is
-therefore per-program bitwise reproducibility and per-update device invariance
-at floating-point tolerance, not cross-program trajectory identity.
+logged reward and exactly in all 494M final parameters, and with the
+fitness vector held fixed the $D{=}1$ and $D{=}8$ updates agree to
+$6.3\times10^{-6}$ norm-relative error. The guarantee stops at separately
+compiled programs, where XLA fusion and autotuning can flip near-tied
+greedy tokens and the sampled trajectories then diverge; we document that
+boundary rather than promise across it.
 
 % F5 -- experiments/phase0/figures/f5-estimator-quality.png
 % (experiments/phase0/plot.py --sigma 0.001 --shaping centered_ranks)
@@ -66,44 +65,46 @@ full-rank almost exactly at matched population: each low-rank sample loses
 about $2.2\times$ to projecting the gradient through thin factors, and
 low-rank's smaller effective dimension wins almost exactly that factor back
 (the cancellation behind Figure~\ref{fig:f5}). Those fitted curves,
-evaluated at the task's operating point before the campaign ran, put all
-ranks within noise of each other (predicted cosines $1.7\times10^{-4}$
-full against $2.7$--$2.8\times10^{-4}$ for ranks 1 and 4). The
+evaluated at the task's operating point before the campaign ran,
+predicted no rank ordering a three-seed campaign could resolve
+(predicted cosines $1.7\times10^{-4}$ full against
+$2.7$--$2.8\times10^{-4}$ for ranks 1 and 4, the low-rank family
+slightly ahead). The
 extrapolation is far and is stated as one: one to three decades below the
 smallest measured $N/d_{\mathrm{eff}}$, from a synthetic block to a real
 model, with rank 16 riding on the rank-1/rank-4 trend because the
 estimator study never measured it. That extrapolation is now measured
 rather than trusted. On Qwen2.5-0.5B itself, the cosine between one
-production update and the true gradient of the same teacher-forced loss
+full update and the true gradient of the same teacher-forced loss
 (five seeds per cell, Table~\ref{tab:tb4}) lands within 10\% of the
 fitted prediction for full rank, and uniformly at about half of it for
 the low-rank family (ratios $0.43$--$0.67\times$ across ranks and
 populations): the real transformer's loss surface charges roughly twice
 what the synthetic block did for the low-rank projection, as one
-systematic factor. Because the shortfall is uniform, everything relative
-transfers to the real model: the cross-rank tie at $N{=}30$, the
+systematic factor. Because the shortfall is uniform, the main relative
+regularities transfer to the real model: the cross-rank tie at $N{=}30$, the
 square-root scaling in $N$ inside every arm, and the unpaired scheme's
 per-sample advantage, predicted at $1.34\times$ and measured at
 $1.36\times$. Two further probes pin the correction down. Rerunning the
 two bracketing arms on a freshly drawn frozen prompt batch reproduces
-both ratios to two decimals (full rank $0.93\times$ against $0.94\times$;
-rank 1 $0.51\times$ against $0.52\times$), so neither shortfall is specific
-to the original prompt batch
-(\texttt{results-e16-gate}). And on Qwen2.5-1.5B, with both predictions
+both ratios to two decimals ($0.94\times$ and $0.52\times$ on either
+batch, Table~\ref{tab:tb6}), so neither shortfall is specific
+to the original prompt batch. And on Qwen2.5-1.5B, with both predictions
 frozen before the run, the scaling law transfers unrefitted (within-arm
 $N$-scaling $2.80\times$ and $2.94\times$ against $\sqrt{8}=2.83$),
 full rank stays on its raw prediction ($0.92$--$0.95\times$) at
 $3.1\times$ the parameters, and the 0.5B-calibrated low-rank prediction
-lands within $22$--$26\%$ where the raw fit misses by $2.4$--$2.6\times$;
+lands within $23$--$26\%$ where the raw fit misses by $2.4$--$2.6\times$;
 the effective correction drifts from $0.53$ to about $0.40$ across the
 scale step, so one constant carries most of the transfer without being
-scale-invariant (\texttt{results-e16-stage2}). The mechanism's reading: in the LLM-ES
-regimes studied here and in the source papers, the population is
-minuscule against the parameter count, and in that regime the rank of the
-perturbation is not what limits estimation quality. That, arguably, is
-\emph{why} the low-rank bet can work at all.
+scale-invariant (Table~\ref{tab:tb6}). The mechanism's reading: in the
+models, objective, population range, and perturbation ranks measured
+here, the population is minuscule against the parameter count, and rank
+was not the dominant limitation on estimation quality. That, arguably,
+is \emph{why} the low-rank bet can work at all in this regime.
 
 \input{generated/tb4}
+\input{generated/tb6}
 
 \paragraph{The task, and what was fixed in advance.} The campaign that
 tests the prediction is specified in Table~\ref{tab:e2e}: both algorithm
@@ -172,8 +173,9 @@ performance shows no detectable difference across full-rank and
 rank-\{1,4,16\} perturbations in this three-seed experiment
 (Figure~\ref{fig:f7}); no inferential test is claimed at $n{=}3$. The
 outcome is the one the estimator study's fitted curves predicted, which
-put all ranks within noise of each other at this
-population-to-effective-dimension ratio; a non-difference is consistent
+put all ranks near parity at this
+population-to-effective-dimension ratio, closer than a three-seed
+campaign resolves; a non-difference is consistent
 with the estimator mechanism, not proof of it.
 
 % F7b -- experiments/countdown/figures/f7b-e13-wallclock.png (plot_e13.py)
@@ -181,47 +183,34 @@ with the estimator mechanism, not proof of it.
   \centering
   \includegraphics[width=0.72\textwidth]{f7b-e13-wallclock.png}
   \caption{The curves of Figure~\ref{fig:f7}, ES arms only, against
-    cumulative accelerator time in steady state: generation 0 is excluded
-    because it contains one-time compilation (335--581\,s against
-    steady-state 2.4--4.3\,s per generation), and held-out evaluation
-    decode is excluded on both axes as measurement overhead. Each point's
-    x is the mean cumulative time over three seeds; bands are min--max of
-    reward. GRPO is deliberately absent: it runs in a different framework
-    with a different decoder, so its wall clock is not commensurate with
-    these curves.}
+    cumulative accelerator time in steady state: generations 0 and 1 are
+    both excluded because both are compilation-scale events in every arm
+    and seed (335--671\,s against steady-state 2.4--4.3\,s per update),
+    and held-out evaluation decode is excluded on both axes as
+    measurement overhead. The evaluation at generation $g$ runs before
+    update $g$, so its x is the cumulative time of updates strictly
+    before $g$. Each point's x is the mean cumulative time over three
+    seeds; bands are min--max of reward. GRPO is deliberately absent: it
+    runs in a different framework with a different decoder, so its wall
+    clock is not commensurate with these curves.}
   \label{fig:f7b}
 \end{figure*}
 
 \paragraph{Equal samples, unequal seconds.} Figure~\ref{fig:f7}
-establishes equal sample efficiency across ranks; Figure~\ref{fig:f7b}
-prices it. A steady-state full-rank generation costs 4.3\,s against
-2.4\,s for rank 1 (the regeneration compute the cost surfaces of
-Section~\ref{sec:results} price at microbenchmark scale, here on the
-real model), so the same 500 generations take 2785\,s against 1594\,s,
-and the time to first reach the shared plateau (held-out reward 0.15)
-is 1041--1745\,s for full rank against 623--897\,s for rank 1 across
-seeds: disjoint ranges, a $1.7\times$ accelerator-time advantage at the
-same quality. This is where the systems and quality halves meet: the
-cheap perturbation reaches matched quality faster precisely because
-Figure~\ref{fig:f7} shows it needed no more
-samples.
-
-\paragraph{The crossover, re-measured on the real model.} The
-contraction question of Section~\ref{sec:contraction} was priced on the
-simplified block; Table~\ref{tab:tb5} re-measures it on Qwen2.5-0.5B
-itself, one production update per cell on the fixed prompt batch, with
-both directional predictions frozen before the run. Both transfer with
-their signs intact and widening in device count: the seed-regenerated
-arm's B advantage grows monotonically to $\log_{10}(t_B/t_A) = -0.164$
-at $D{=}8$, and rank 1 flips to A everywhere it fits, growing to
-$+0.212$, stronger than the block showed at its largest model size. The
-memory column doubles as a finding: rank 1 on the real model does not
-fit one 16\,GB chip even at $N{=}32$ while the seed arm runs at every
-cell, the storage-for-compute trade at production scale. The one absent
-B cell was killed during compilation; its A sibling exceeded memory at the
-same shape, so no feasible placement was demonstrated for that cell.
-
-\input{generated/tb5}
+resolves no rank-dependent quality difference over three seeds;
+Figure~\ref{fig:f7b} prices the same curves in accelerator time. A
+steady-state full-rank update costs 4.29\,s against 2.41\,s for rank 1,
+means over the 498 steady-state updates each run observed (the
+regeneration compute the cost surfaces of Section~\ref{sec:results}
+price at microbenchmark scale, here on the real model): a $1.78\times$
+per-update advantage, an estimated 2147\,s against 1205\,s for a
+500-update run. Time to first reach the shared plateau (held-out reward
+0.15) is 419--1069\,s for full rank against 236--483\,s for rank 1
+across seeds; the ranges overlap between 419 and 483\,s, so three seeds
+do not resolve a strict time-to-threshold ordering, and the per-update
+ratio is the clean claim. This is where the systems and quality halves
+meet: the cheap perturbation costs $1.78\times$ less per update while
+Figure~\ref{fig:f7} shows it needed no more samples.
 
 \paragraph{The reference baseline, honestly.} GRPO
 \citep{deepseekmath2024} with the published hyperparameters of
@@ -256,11 +245,9 @@ to end in comparable budgets, not a leaderboard.
 The stabilization machinery of deep RL exists for stated reasons, and the
 recipe tested here carries two pieces of it: a clipped surrogate objective
 against provable step-size limits \citep{kakade2002,schulman2015trpo,schulman2017ppo}
-and a reference-model KL penalty anchoring the policy \citep{ouyang2022}.
-(The value-based lineage's target networks and weight averaging, which
-answer divergence theorems
-\citep{baird1995,tsitsiklis1997,mnih2015,vanhasselt2018,zhang2021target},
-are not part of this recipe and are not tested.) ES carries none of that
+and a reference-model KL penalty anchoring the policy \citep{ouyang2022};
+the value-based lineage's stabilizers are neither part of this recipe nor
+tested (Section~\ref{sec:related}). ES carries none of that
 machinery, so we asked whether its absence is load-bearing, with metrics
 and falsification criteria fixed before the data. The answer has two
 halves (Figure~\ref{fig:f8}).

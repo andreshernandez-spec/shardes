@@ -10,7 +10,10 @@ The two differ in the ways that matter to ES: the A100 has $5\times$ the
 per-device memory; the v5e's matrix unit multiplies in bfloat16 by default.
 
 \paragraph{Workload.} The systems measurements
-(Figures~\ref{fig:f1}--\ref{fig:f4}, Tables~\ref{tab:tb1}--\ref{tab:tb3})
+% Enumerated, not a range: table numbers follow order of appearance and
+% the real-model crossover table (tb5) sits between these in section 6.
+(Figures~\ref{fig:f1}--\ref{fig:f4}, Tables~\ref{tab:tb2}, \ref{tab:tb1},
+\ref{tab:tb1b}, and~\ref{tab:tb3})
 are microbenchmarks of a single, deliberately simplified transformer
 block: six square $d\times d$ matrices (attention q, k, v, o and a
 two-matrix MLP), a single head, no learned normalization parameters,
