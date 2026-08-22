@@ -150,10 +150,11 @@ def main() -> int:
                                for x in jax.tree.leaves(delta)])
         fingerprints[name] = flat
     ref_path = HERE / "e18-invariance-ref.npz"
-    if TOPOLOGY == "1x8":
-        if PID == 0:
-            np.savez(ref_path, **fingerprints)
-        log("invariance reference written (1x8)")
+    if NPROC == 1:
+        # The single-process topology is the anchor, whatever its device
+        # count: 1x8 on the cluster, 1x2 on the L1 smoke pod.
+        np.savez(ref_path, **fingerprints)
+        log(f"invariance reference written ({TOPOLOGY})")
     elif PID == 0:
         # PID 0 only: on a real cluster the reference lives on node 0's
         # disk and node 1 cannot see it. Every process COMPUTES the
