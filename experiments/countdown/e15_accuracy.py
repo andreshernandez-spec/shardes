@@ -93,7 +93,7 @@ def main(argv=None) -> int:
                    member_chunk=2,  # 2 and 4 chunks: exercises the concat path
                    results_dir=cfg["results_dir"] + "-smoke")
 
-    mcfg = qwen2.Config.qwen25_05b()
+    mcfg = getattr(qwen2.Config, cfg.get("model_config", "qwen25_05b"))()
     if args.smoke:
         mcfg = qwen2.Config(vocab=256, d_model=64, n_layers=2, n_heads=4,
                             n_kv_heads=2, d_ff=128)
@@ -138,8 +138,16 @@ def main(argv=None) -> int:
                 print(f"skip {outfile.name}: already measured", flush=True)
                 continue
             chunk = min(cfg.get("member_chunk", n), n)
-            cosines = []
-            for rep in range(cfg["replicates"]):
+            # Per-replicate resume: replicate seeds are independent
+            # (key(1000 + rep)), so a killed session continues from the
+            # partial file instead of repeating finished replicates.
+            partial = out / f"{outfile.name}.partial"
+            cosines = (json.loads(partial.read_text())["cosines"]
+                       if partial.exists() else [])
+            if cosines:
+                print(f"resume {outfile.name}: {len(cosines)} replicates found",
+                      flush=True)
+            for rep in range(len(cosines), cfg["replicates"]):
                 es = ShardedES(STRATEGIES[strategy](cfg), n=n,
                                sigma=cfg["sigma"], lr=1.0, mesh=mesh,
                                compute_dtype=jnp.bfloat16)
@@ -177,6 +185,7 @@ def main(argv=None) -> int:
                                    new.params, state.params)
                 c = cosine(est, neg_grad)
                 cosines.append(c)
+                partial.write_text(json.dumps({"cosines": cosines}))
                 print(f"{strategy} N={n} rep={rep}: cos {c:.5f} "
                       f"({time.perf_counter() - t0:.0f}s)", flush=True)
             rec = {"config": {"strategy": strategy, "population": n,
@@ -189,6 +198,7 @@ def main(argv=None) -> int:
                    "cosine_median": statistics.median(cosines),
                    "env": env}
             outfile.write_text(json.dumps(rec, indent=1))
+            partial.unlink(missing_ok=True)
     return 0
 
 
