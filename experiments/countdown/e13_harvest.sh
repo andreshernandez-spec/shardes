@@ -9,7 +9,7 @@ dest=${1:?destination directory}; shift
 mkdir -p "$dest"
 for d in "${@:-results-es-*}"; do
   [ -d "$d" ] || continue
-  name=${d#results-}            # es-<arm>-s<seed>
+  name=$(basename "$d"); name=${name#results-}   # es-<arm>-s<seed>, any path
   cp "$d/log.jsonl" "$dest/$name-log.jsonl"
   cp "$d/eval.jsonl" "$dest/$name-eval.jsonl"
   echo "$d -> $dest/$name-{log,eval}.jsonl"
