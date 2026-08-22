@@ -4,111 +4,84 @@
 \section{Accuracy and task validation}
 \label{sec:endtoend}
 
-% ORDER (revised 2026-08-23, fifth review): determinism, then the synthetic
-% estimator result, then the task prediction and its outcome, then the GRPO
-% baseline, then a short pointer to the appendix stress test. The argument is
-% prediction-before-campaign, so the prediction's evidence comes before the
-% campaign's; stability moved to the appendix as exploratory.
-This section is the validity chain the introduction promised, centered on a
-real model (Qwen2.5-0.5B on the Countdown task) with a true-gradient
-replication at 1.5B, all through the same instrument, in
-an order where each claim rests on the one before it. First,
-reproducibility: the systems prices of Section~\ref{sec:results} are
-worth acting on only if what was measured is the algorithm, so the
-determinism boundary is stated exactly. Second, quality: the estimator
-study's prediction, then the campaign that tests it, closing the
-unmeasured half of the low-rank belief. An exploratory stress test of
-the stability folklore, a separate question, closes the section by
-pointer; it lives in Appendix~\ref{sec:stability}.
-
-\paragraph{Determinism and invariance on real hardware.} Two independent
-20-generation runs of the same $D{=}8$ program agree byte for byte in every
-logged reward and exactly in all 494M final parameters, and with the
-fitness vector held fixed the $D{=}1$ and $D{=}8$ updates agree to
-$6.3\times10^{-6}$ norm-relative error. The guarantee stops at separately
-compiled programs, where XLA fusion and autotuning can flip near-tied
-greedy tokens and the sampled trajectories then diverge; we document that
-boundary rather than promise across it.
+This section asks whether the systems savings preserve useful update
+directions and task quality. The objectives form a deliberate chain rather
+than one continuous experiment. The synthetic study uses mean-squared error;
+the real-model alignment studies use teacher-forced negative log-likelihood
+(NLL), whose exact gradient is available; and the training campaign optimizes
+a nondifferentiable reward from decoded Countdown answers. Thus the alignment
+experiments test whether a prediction transfers from a synthetic block to a
+real language-model loss. The task campaign is a subsequent outcome check, not
+a direct true-gradient validation of the decoded-reward objective.
 
 % F5 -- experiments/phase0/figures/f5-estimator-quality.png
 % (experiments/phase0/plot.py --sigma 0.001 --shaping centered_ranks)
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{f5-estimator-quality.png}
-  \caption{Estimator quality on the synthetic block, at the slice the task
-    prediction uses ($\sigma{=}10^{-3}$, centered-rank shaping, the shaping
-    the update applies): cosine between the ES update direction and the
-    true gradient, against the population-to-effective-dimension ratio
-    $N/d_{\mathrm{eff}}$, one panel per perturbation rank. Every fitted
-    curve has slope one half. The design-based sampling schemes (orthogonal
-    Hadamard, scrambled Sobol) are indistinguishable from plain mirrored
-    sampling, the negative result Section~\ref{sec:related} records. The
-    unpaired i.i.d.\ scheme sits a factor $1.34$--$1.38$ above the mirrored
-    family at every matched population in the low-rank panels, the ordering
-    Section~\ref{sec:results}'s baseline comparison cites. The low-rank
-    panels pay a per-sample projection loss (a lower intercept) that their
-    smaller effective dimension wins back at matched population, the
-    cancellation the accuracy chain relies on.}
+  \caption{Update--gradient alignment on the synthetic block at the slice
+    used for the real-model prediction ($\sigma{=}10^{-3}$, centered ranks):
+    cosine between the ES update and the exact MSE gradient against
+    $N/d_{\mathrm{samp}}$, with one panel per perturbation rank. Fitted
+    log--log slopes range from 0.494 to 0.508, approximately one half.
+    Orthogonal Hadamard sampling shows no resolved gain over plain mirroring;
+    scrambled Sobol also shows no gain and is slightly worse at the two
+    largest populations in both low-rank panels. At every matched population,
+    unpaired i.i.d.\ sampling lies $1.34$--$1.38\times$ above mirrored rank 1
+    and $1.36$--$1.41\times$ above mirrored rank 4.}
   \label{fig:f5}
 \end{figure*}
 
-\paragraph{But is the fast strategy accurate?} The speed results of
-Section~\ref{sec:results} would mean little if the low-rank rewrite bought
-its speed with estimation quality, so the accuracy chain is stated in
-full, with its methods. The estimator study measured, on the
-synthetic block of Section~\ref{sec:setup}, the cosine between the ES
-update direction and the exact gradient from automatic differentiation,
-30 replicates per cell over 456 cells, and fitted
-$\log\cos = a + b\log(N/d_{\mathrm{eff}})$ per strategy; every fitted
-slope is one half (Figure~\ref{fig:f5}).
-Per sample, on those objectives, mirrored low-rank matches mirrored
-full-rank almost exactly at matched population: each low-rank sample loses
-about $2.2\times$ to projecting the gradient through thin factors, and
-low-rank's smaller effective dimension wins almost exactly that factor back
-(the cancellation behind Figure~\ref{fig:f5}). Those fitted curves,
-evaluated at the task's operating point before the campaign ran,
-predicted no rank ordering a three-seed campaign could resolve
-(predicted cosines $1.7\times10^{-4}$ full against
-$2.7$--$2.8\times10^{-4}$ for ranks 1 and 4, the low-rank family
-slightly ahead). The
-extrapolation is far and is stated as one: one to three decades below the
-smallest measured $N/d_{\mathrm{eff}}$, from a synthetic block to a real
-model, with rank 16 riding on the rank-1/rank-4 trend because the
-estimator study never measured it. That extrapolation is now measured
-rather than trusted. On Qwen2.5-0.5B itself, the cosine between one
-full update and the true gradient of the same teacher-forced loss
-(five seeds per cell, Table~\ref{tab:tb4}) lands within 10\% of the
-fitted prediction for full rank, and uniformly at about half of it for
-the low-rank family (ratios $0.43$--$0.67\times$ across ranks and
-populations): the real transformer's loss surface charges roughly twice
-what the synthetic block did for the low-rank projection, as one
-systematic factor. Because the shortfall is uniform, the main relative
-regularities transfer to the real model: the cross-rank tie at $N{=}30$, the
-square-root scaling in $N$ inside every arm, and the unpaired scheme's
-per-sample advantage, predicted at $1.34\times$ and measured at
-$1.36\times$. Two further probes pin the correction down. Rerunning the
-two bracketing arms on a freshly drawn frozen prompt batch reproduces
-both ratios to two decimals ($0.94\times$ and $0.52\times$ on either
-batch, Table~\ref{tab:tb6}), so neither shortfall is specific
-to the original prompt batch. And on Qwen2.5-1.5B, with both predictions
-frozen before the run, the scaling law transfers unrefitted (within-arm
-$N$-scaling $2.80\times$ and $2.94\times$ against $\sqrt{8}=2.83$),
-full rank stays on its raw prediction ($0.92$--$0.95\times$) at
-$3.1\times$ the parameters, and the 0.5B-calibrated low-rank prediction
-lands within $23$--$26\%$ where the raw fit misses by $2.4$--$2.6\times$;
-the effective correction drifts from $0.53$ to about $0.40$ across the
-scale step, so one constant carries most of the transfer without being
-scale-invariant (Table~\ref{tab:tb6}). The mechanism's reading: in the
-models, objective, population range, and perturbation ranks measured
-here, the population is minuscule against the parameter count, and rank
-was not the dominant limitation on estimation quality. That, arguably,
-is \emph{why} the low-rank bet can work at all in this regime.
+\subsection{Synthetic alignment law}
+On the synthetic block of Section~\ref{sec:setup}, we measured cosine between
+the centered-rank ES update and the exact MSE gradient, with 30 replicates per
+cell over 456 cells. Per-strategy fits of
+$\log\cos = a + b\log(N/d_{\mathrm{samp}})$ have slopes from 0.494 to
+0.508 (Figure~\ref{fig:f5}). At matched population, mirrored low-rank and
+mirrored full-rank have similar alignment: the low-rank curves have lower
+intercepts against $N/d_{\mathrm{samp}}$, while their smaller sampling
+dimension shifts a fixed-$N$ comparison to the right.
+
+Before the task campaign ran, evaluating these fits at its operating point
+predicted no rank ordering that three seeds were likely to resolve: cosine
+$1.6\times10^{-4}$ for full rank and $2.7$--$2.8\times10^{-4}$ for ranks 1
+and 4. This was a long extrapolation---one to three decades below the smallest
+measured $N/d_{\mathrm{samp}}$, from a synthetic MSE block to a real model.
+Rank 16 was inferred only from the rank-1/rank-4 trend because the synthetic
+study did not measure it.
+
+\subsection{Transfer to language-model NLL}
+We tested that extrapolation on the teacher-forced NLL of Qwen2.5-0.5B. For
+each cell, five perturbation seeds produced one full ask--NLL--tell update,
+which was compared with the exact NLL gradient (Table~\ref{tab:tb4}). The
+full-rank measurements land within 10\% of the synthetic prediction. All
+low-rank measurements fall below it in the same direction, but the cell ratios
+range from $0.43$ to $0.67$ rather than forming an exact constant; their
+geometric mean is 0.53. At $N{=}30$ the cross-rank ranges overlap; no
+inferential test is claimed. Increasing $N$ moves every arm by roughly the square-root scale,
+and at $N{=}240$ the unpaired rank-1 arm has $1.36\times$ the alignment of
+mirrored rank 1, close to the synthetic ordering.
+
+Two held-out probes test whether the remaining correction is portable.
+Repeating the full-rank and rank-1 cells on a freshly drawn frozen prompt batch
+reproduces their ratios to two decimals ($0.94\times$ and $0.52\times$ on
+either batch). On Qwen2.5-1.5B, with predictions frozen before the run, the
+within-arm $N$-scaling is $2.80\times$ and $2.94\times$ against
+$\sqrt{8}=2.83$, and the raw full-rank prediction remains within 5--8\%.
+Multiplying the rank-1 fit by the 0.53 correction measured at 0.5B predicts
+the 1.5B cells within 23--26\%; the observed correction itself moves to about
+0.40, so it is useful across this scale step but not scale-invariant
+(Table~\ref{tab:tb6}). Within these models, this objective, and the measured
+populations and ranks, perturbation rank does not dominate alignment at equal
+$N$. That is consistent with---but does not by itself explain---the task-level
+parity tested next.
 
 \input{generated/tb4}
 \input{generated/tb6}
 
+\subsection{Decoded-reward task validation}
 \paragraph{The task, and what was fixed in advance.} The campaign that
-tests the prediction is specified in Table~\ref{tab:e2e}: both algorithm
+tests its task-level implication is specified in Table~\ref{tab:e2e}: both algorithm
 families train on the same puzzle pool with the published core
 hyperparameters of \citet{qiu2025} (one disclosed budget difference:
 8 puzzles per update against their protocol's 200 training samples), are
@@ -158,14 +131,13 @@ hardware & one A100-SXM4-80GB; the campaign is $\sim$13\,h \\
     held-out reward against training sample evaluations, mean over three
     seeds,
     min--max band. The four ES perturbation ranks lie on top of each
-    other; freezing the embedding shows no detectable difference in this
-    three-seed experiment; the GRPO reference with its published settings
-    is seed-unstable: two seeds plateau at 4.9\% of held-out puzzles
-    solved and one never solves any, though none falls below the
-    base-model floor. The two labeled base-model floors are the same
-    weights under the JAX and HuggingFace decoders, apart by a bfloat16
-    padding artifact, which bounds how small a cross-family gap can
-    honestly be read from this figure.}
+    other, and freezing the embedding shows no detectable difference in this
+    three-seed experiment. GRPO is shown only as same-budget context, not as a
+    controlled algorithm comparison: it runs in a different implementation
+    and its three seeds vary from no solved held-out puzzles to a 4.9\%
+    plateau. The labeled floors show the base weights under the two decoders;
+    their bfloat16 padding difference bounds interpretation of small
+    cross-family gaps.}
   \label{fig:f7}
 \end{figure*}
 
@@ -173,11 +145,11 @@ hardware & one A100-SXM4-80GB; the campaign is $\sim$13\,h \\
 performance shows no detectable difference across full-rank and
 rank-\{1,4,16\} perturbations in this three-seed experiment
 (Figure~\ref{fig:f7}); no inferential test is claimed at $n{=}3$. The
-outcome is the one the estimator study's fitted curves predicted, which
-put all ranks near parity at this
-population-to-effective-dimension ratio, closer than a three-seed
-campaign resolves; a non-difference is consistent
-with the estimator mechanism, not proof of it.
+outcome agrees with the alignment study's pre-campaign prediction that the
+ranks would be closer than a three-seed experiment could resolve. Because the
+training objective is decoded reward rather than NLL, this non-difference is
+consistent with the alignment result, not a direct test or proof of its
+mechanism.
 
 % F7b -- experiments/countdown/figures/f7b-e13-wallclock.png (plot_e13.py)
 \begin{figure*}[t]
@@ -203,40 +175,23 @@ Figure~\ref{fig:f7b} prices the same curves in accelerator time. A
 steady-state full-rank update costs 4.29\,s against 2.41\,s for rank 1,
 means over the 498 steady-state updates each run observed (the
 regeneration compute the cost surfaces of Section~\ref{sec:results}
-price at microbenchmark scale, here on the real model): a $1.78\times$
-per-update advantage, an estimated 2147\,s against 1205\,s for a
+price at microbenchmark scale, here on the real model): 44\% less time per
+update, equivalent to a $1.78\times$ update-throughput advantage, and an
+estimated 2147\,s against 1205\,s for a
 500-update run. Time to first reach the shared plateau (held-out reward
 0.15) is 419--1069\,s for full rank against 236--483\,s for rank 1
 across seeds; the ranges overlap between 419 and 483\,s, so three seeds
 do not resolve a strict time-to-threshold ordering, and the per-update
-ratio is the clean claim. This is where the systems and quality halves
-meet: the cheap perturbation costs $1.78\times$ less per update while
-Figure~\ref{fig:f7} shows it needed no more samples.
+ratio is the clean claim. This is where the systems and quality halves meet:
+the cheap perturbation uses 44\% less time per update, while the experiment
+resolves no additional sample requirement.
 
-\paragraph{The reference baseline, honestly.} GRPO
-\citep{deepseekmath2024} with the published hyperparameters of
-\citet{qiu2025}, untuned in either direction: two of three seeds plateau
-early at 4.9\% of held-out puzzles solved, and one never solves a
-held-out puzzle, flat at format-only reward from step 50. None falls
-below its decoder's base-model floor, so none meets the pre-specified
-collapse definition of the appendix stress test; the word collapse is
-reserved for runs that do. We report this as seed variance in the
-reference, not as a
-victory for ES; the figure's role is that both algorithm families run end
-to end in comparable budgets, not a leaderboard.
-
-\paragraph{An exploratory robustness stress test.} The folk belief that
-ES does not need RL's stabilizers is a question about comparative
-optimizer robustness, separate from this paper's systems argument, so
-its full treatment lives in Appendix~\ref{sec:stability}. The scoped
-summary: with metrics and falsification criteria fixed in a committed
-protocol before the data, this GRPO recipe at $8\times$ its published
-learning rate collapsed to zero reward on all three seeds while ES
-collapsed at neither tested endpoint of the same 64-fold interval; our
-own criteria caught the part of the belief that was wrong, since
-removing the recipe's individual stabilizers at published settings
-changed little; and the surviving ES runs drifted far from the
-pretrained weights, a retention cost reported beside the robustness. The
-multipliers are per-family and the interval interior was not explored,
-so this is a stress test's evidence at one task, one horizon, and three
-seeds, not a stability margin.
+\paragraph{GRPO context.} The GRPO arm \citep{deepseekmath2024} uses the
+published settings of \citet{qiu2025}, without tuning. Its variance across
+three seeds and its decoder-specific floor preclude a controlled quality
+comparison with ES; it is retained in Figure~\ref{fig:f7} only to show the
+reference recipe at the same training-sample budget. A separate,
+exploratory stress test of the folk belief that ES needs none of this
+recipe's stabilizers, with its criteria fixed before the data and its scope
+stated, is reported in Appendix~\ref{sec:stability}; it is comparative
+optimizer robustness, not part of the systems argument.

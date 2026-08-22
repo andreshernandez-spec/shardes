@@ -28,9 +28,9 @@ The trade is compute against communication, so it predicts a crossover in
 record committed before measurement contained two claims. The quantitative
 claim was a byte count: $4N$ bytes of scalars for A and $4P$ bytes for B
 ($P$ parameters, float32). Table~\ref{tab:tb2} corrected an omitted
-collective. A actually moves $8N$, two $4N$-byte gathers because the sharded
-evaluation gathers member ids alongside the shaped fitnesses; B moves
-$4P{+}4N$, its model-sized all-reduce plus the fitness gather. The refined
+operand. A actually moves $8N$ in two $4N$-byte gathers, the raw fitnesses
+for shaping and the shaped weights for the contraction; B moves $4P{+}4N$,
+its model-sized all-reduce plus the fitness gather. The refined
 model matches every measured payload to the byte. The correction changes no
 conclusion---2\,KB against 100\,MB at $d{=}2048$---and is reported rather
 than silently folded into the prediction.
@@ -39,7 +39,7 @@ The directional claim followed from what each placement buys with those
 bytes. B does $1/D$ of A's contraction work, so it should win when
 per-candidate contraction is expensive (dense or regenerated perturbations,
 larger populations) and the model-sized transfer amortizes. A should return
-when that work is already cheap (the low-rank family) and the transfer is
+when that work is already small (the low-rank family) and the transfer is
 pure overhead. No quantitative time model was committed before the runs, and
 none is retroactively presented as a prediction. Section~\ref{sec:results}
 tests the byte count and this directional claim on both platforms
