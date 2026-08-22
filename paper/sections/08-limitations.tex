@@ -16,8 +16,10 @@
     a production transformer. The simplifications change arithmetic
     intensity and memory in ways that favor clean attribution over
     realism; absolute ratios, the low-rank advantage included, should be
-    read as properties of this workload. The one real-model anchor is
-    Section~\ref{sec:endtoend}.
+    read as properties of this workload. Two real-model anchors bound
+    the risk: the accuracy chain of Section~\ref{sec:endtoend}, and the
+    contraction crossover re-measured on the production model with both
+    signs intact (Table~\ref{tab:tb5}).
   \item \textbf{Models must adopt the library's seams.} Perturbation as
     substitution requires routing parameterized matmuls and embedding
     lookups through \texttt{shardes.nn}; an existing model does not run
@@ -41,10 +43,11 @@
   \item \textbf{Barrier numbers are ceilings.} The shaping-barrier
     measurement times the barrier in isolation; a real generation may
     overlap part of that latency behind compute.
-  \item \textbf{Task validation is one task, one model size.} Countdown
-    with a 0.5B-parameter model, three seeds; the flat-rank result is
-    predicted and measured at $N{=}30$ and says nothing about larger
-    populations.
+  \item \textbf{Task validation is one task, one training model size.}
+    Countdown with a 0.5B-parameter model, three seeds; the flat-rank
+    result is predicted and measured at $N{=}30$ and says nothing about
+    larger populations. The estimator accuracy chain now spans two model
+    sizes (0.5B and 1.5B), but no training run does.
   \item \textbf{The stability experiment is one task, one horizon, one RL
     recipe.} The stability experiment perturbs published settings on a
     rule-based verifier for
