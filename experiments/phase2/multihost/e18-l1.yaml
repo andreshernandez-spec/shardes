@@ -1,0 +1,12 @@
+# L1 config: the rehearsal shapes on a 2-GPU pod, two processes x 1 GPU.
+# Proves NCCL init, the psum ladder and the alpha/beta fit (docs/10 L1).
+arms: [seed_regenerated, mirrored_lr1]
+hows: [A, B]
+cells:
+  - {d: 64, N: 16}
+batch: 4
+seq: 8
+warmup: 1
+repeats: 3
+matmul_precision: highest
+results_dir: results-e18-l1
