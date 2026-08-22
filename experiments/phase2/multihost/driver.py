@@ -87,7 +87,10 @@ def main(argv=None) -> int:
     if PID == 0:
         out.mkdir(parents=True, exist_ok=True)
 
-    if not args.skip_preflight_check:
+    if not args.skip_preflight_check and PID == 0:
+        # PID 0 only: the marker lives on node 0's disk. If PID 0 refuses
+        # here, the other node's process hangs at its first collective and
+        # launch.sh's timeout reaps it; that is the intended failure shape.
         marker = out / f"preflight-{TOPOLOGY}.json"
         if not marker.exists():
             log(f"REFUSING to run: no preflight pass marker {marker.name}. "
