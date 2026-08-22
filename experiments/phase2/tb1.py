@@ -93,7 +93,9 @@ def latex() -> str:
             "tokens = population $\\times$ batch $\\times$ sequence. "
             "OOM: the arm does not fit the device at this shape.", "tb1"),
         (8, "Eight devices: what sharding adds. The references have no "
-            "sharding path and idle seven devices; these rows are context, "
+            "sharding path and idle seven devices: on the v5e they were run "
+            "at $D{=}8$ anyway and reproduce their $D{=}1$ rows, on the A100 "
+            "they were not rerun (dashes). These rows are context, "
             "not a like-for-like ratio.", "tb1b"),
     ):
         # Short arm names as headers (the caption carries the full protocol);

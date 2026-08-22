@@ -39,7 +39,9 @@ unaware of prior work measuring:
 The two beliefs are systems questions; the second carries the quality
 requirement just stated. That fixes the paper's shape. We price the beliefs on a
 controlled microbenchmark (Sections~\ref{sec:contraction}
-and~\ref{sec:results}) whose principal costs can be attributed. Those prices
+and~\ref{sec:results}) whose bytes are attributed to the byte and whose
+times are end-to-end: the collectives are not timed in isolation, and
+Section~\ref{sec:limitations} says what that leaves open. Those prices
 then need a validity chain before they are worth acting on, and
 Section~\ref{sec:endtoend} supplies it on a real model with the same
 instrument: update--gradient alignment against differentiable losses, followed
@@ -75,7 +77,8 @@ validity chain just described, closed by a three-seed quality check.
   \item \textbf{The scalar folk claim is true but incomplete.} Strategy
     A does move only scalars (measured: twice the naive byte count,
     Table~\ref{tab:tb2}); strategy B moves a model-sized buffer every update
-    and \emph{wins} every dense and seed-regenerated cell anyway, while the
+    and, on a single host with a fat interconnect (one NVLink node, one v5e
+    host), \emph{wins} every dense and seed-regenerated cell anyway, while the
     low-rank timings are consistent with that transfer returning cells to A
     once contraction work becomes small. Where
     each wins forms a

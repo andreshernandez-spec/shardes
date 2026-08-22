@@ -41,7 +41,9 @@ crossover whose platform dependence Figure~\ref{fig:f2} summarizes.
   \caption{Strong scaling, all cells, TPU v5e-8. The dense arm has no
     $D{=}1$ point at $d{=}2048$, $N{=}256$ (out of memory on one 16\,GB
     chip), so its efficiency there is normalized to its smallest measured
-    device count, $D{=}2$.}
+    device count, $D{=}2$. The efficiencies above one at $d{=}512$ are real:
+    the single-chip point is memory-bound at those populations, and
+    Section~\ref{sec:results} reads them.}
   \label{fig:m1-tpu}
 \end{figure*}
 \begin{figure*}[p]

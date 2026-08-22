@@ -14,7 +14,9 @@
     count, so the dashed ideal is 1.0 for every series. The dense
     baseline (\texttt{iid\_gaussian}) is missing the B placement's
     one-device point on the TPU strong panel, which does not fit one
-    16\,GB chip at this size (the A placement fits). No series is superlinear. What separates the weak panel is the
+    16\,GB chip at this size (the A placement fits). No series in these
+    $d{=}2048$ cells is superlinear; the $d{=}512$ v5e cells of the
+    appendix grids are, for the reason the text gives. What separates the weak panel is the
     contraction placement, not the perturbation strategy: the A placement
     of the dense and seed-regenerated arms pays its replicated
     contraction ever more dearly as devices are added, while the same
@@ -27,7 +29,18 @@
 Figure~\ref{fig:f1} shows both scaling modes at the largest cell both
 platforms ran, with the weak panel as parallel efficiency per (strategy,
 contraction) pair, each series against its own smallest measured device
-count. No pair scales superlinearly. The low-rank arms hold
+count. No pair in this figure scales superlinearly. The full grids do
+hold efficiencies above one, all on the v5e at $d{=}512$
+(Appendix~\ref{sec:grids}): mirrored rank 1 at $N{=}1024$ reaches $1.22$
+at $D{=}2$ and $1.09$ at $D{=}8$, and that cell is also the $8.9\times$
+between Tables~\ref{tab:tb1} and~\ref{tab:tb1b}. There the single-chip
+point is the slow one: per-member throughput at $N{=}1024$ sits below
+that at $N{=}256$ on one 16\,GB chip, so splitting the population relieves
+a memory-bound baseline rather than beating a well-used one. The A100
+has no such cell, and Table~\ref{tab:tb1b}'s $3.2\times$ for the same arm
+at $d{=}512$ on the A100 is strong scaling of a small cell under the
+reference-comparison protocol, not the weak-scaling efficiency quoted
+next, which is at $d{=}2048$. The low-rank arms hold
 $0.86$--$0.93$ efficiency at eight devices on the A100 and
 $0.71$--$0.91$ on the v5e. What degrades is a placement, not a
 perturbation strategy: under contraction A the dense and seed-regenerated
@@ -83,7 +96,11 @@ end-to-end: the model-sized all-reduce did not prevent B from winning
 every dense and seed-regenerated cell. The low-rank timings are consistent
 with its overhead returning cells to A where the contraction work B avoids is too
 small to pay for the transfer. Communication does not decide the dense
-side of the grid; it sets the low-rank side of the crossover.
+side of the grid; it sets the low-rank side of the crossover. Both
+statements are about one host with a fat fabric: an NVLink node and a v5e
+host are where a 100\,MB all-reduce is cheapest, and the commodity
+clusters the scalar folk claim was made for \citep{salimans2017} are not
+measured here (Section~\ref{sec:limitations}).
 
 \input{generated/tb2}
 
@@ -136,7 +153,10 @@ accommodate its smaller memory. The same figure prices Qiu's bet
 $5$--$6\times$ the materializing baseline per device on the TPU against
 $1.3$--$3\times$ on the GPU, and its family (mirrored or not) is the
 only one that never runs out of memory on either platform, which is
-precisely the storage-for-compute trade it advertises.
+precisely the storage-for-compute trade it advertises. Whether that
+$5$--$6\times$ is random-number throughput or the loss of the shared base
+multiply the materializing arm keeps is not diagnosed here; the
+measurement is end-to-end.
 
 \subsection{Reference implementation comparison}
 \input{generated/tb1}
