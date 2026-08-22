@@ -1,0 +1,11 @@
+# L0 rehearsal config: tiny shapes, same structure as e18.yaml.
+arms: [seed_regenerated, mirrored_lr1]
+hows: [A, B]
+cells:
+  - {d: 64, N: 16}
+batch: 4
+seq: 8
+warmup: 1
+repeats: 2
+matmul_precision: highest
+results_dir: results-e18-rehearsal
