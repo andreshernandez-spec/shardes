@@ -42,13 +42,29 @@
 \maketitle
 
 \begin{abstract}
-%% TODO(andres): write last, from the contributions list in section 1.
-%% Ingredients, one sentence each: the two papers and their opposite bets; the
-%% unmeasured claims between them; the crossover result (F2); the non-inversion
-%% (F4); the barrier and stability results (E10, E14); the instrument in one
-%% clause (open-source, expresses both bets, cited); every number reproducible
-%% from a committed script.
-\todo{abstract}
+Two 2025 papers made evolution strategies work at LLM scale with opposite
+structural bets: full-rank perturbations regenerated from seeds, and
+rank-$r$ factored perturbations that are never materialized. Between them
+sits a set of widely repeated but unmeasured beliefs: that ES is cheap to
+distribute because only scalars cross the wire, that the low-rank rewrite
+pays because GPUs are bad at dense noise, and that ES does not need
+reinforcement learning's stabilizers. We measure all three, on an
+8$\times$A100 node and a TPU v5e-8, with an open-source instrument that
+expresses both bets in one system. The scalar claim is true and beside
+the point: the update placement that all-reduces a model-sized buffer
+wins much of the measured grid anyway, and where each placement wins
+moves with the accelerator. The low-rank motivation strengthens on TPU
+rather than inverting. The only synchronization point is a scalar
+gather; the barrier above it is a replicated local sort. On a
+0.5B-parameter task the cheap perturbation family matches full-rank
+quality at equal samples in $1.7\times$ less accelerator time, the
+outcome fitted estimator-quality curves predicted, and the fit itself is
+validated against true gradients on the real model. The stability
+folklore narrows to the learning-rate margin, with a measured
+parameter-drift cost reported beside it. Every number regenerates from a
+committed script in the released repository.
+%% TODO(andres): your voice; written from the contributions list, one
+%% sentence per result, no number the sections do not carry.
 \end{abstract}
 
 \input{sections/01-introduction}

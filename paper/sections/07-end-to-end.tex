@@ -71,15 +71,25 @@ full against $2.7$--$2.8\times10^{-4}$ for ranks 1 and 4). The
 extrapolation is far and is stated as one: one to three decades below the
 smallest measured $N/d_{\mathrm{eff}}$, from a synthetic block to a real
 model, with rank 16 riding on the rank-1/rank-4 trend because the
-estimator study never measured it. The mechanism's reading: in the LLM-ES
+estimator study never measured it. That extrapolation is now measured
+rather than trusted. On Qwen2.5-0.5B itself, the cosine between one
+production update and the true gradient of the same teacher-forced loss
+(five seeds per cell, Table~\ref{tab:tb4}) lands within 10\% of the
+fitted prediction for full rank, and uniformly at about half of it for
+the low-rank family (ratios $0.43$--$0.67\times$ across ranks and
+populations): the real transformer's loss surface charges roughly twice
+what the synthetic block did for the low-rank projection, as one
+systematic factor. Because the shortfall is uniform, everything relative
+transfers to the real model: the cross-rank tie at $N{=}30$, the
+square-root scaling in $N$ inside every arm, and the unpaired scheme's
+per-sample advantage, predicted at $1.34\times$ and measured at
+$1.36\times$. The mechanism's reading: in the LLM-ES
 regimes studied here and in the source papers, the population is
 minuscule against the parameter count, and in that regime the rank of the
 perturbation is not what limits estimation quality. That, arguably, is
 \emph{why} the low-rank bet can work at all.
-%% TODO(andres): E15 (in flight) closes the synthetic-to-real link by
-%% measuring the same cosines against the true gradient of the NLL on
-%% Qwen-0.5B itself; wire its numbers into this paragraph when the results
-%% directory lands, replacing this comment.
+
+\input{generated/tb4}
 
 \paragraph{The task, and what was fixed in advance.} The campaign that
 tests the prediction is specified in Table~\ref{tab:e2e}: both algorithm
