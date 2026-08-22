@@ -1,2 +1,3 @@
-results-e18*/
+# Rehearsal output is for debugging the driver, never for a figure (docs/03).
+results-e18-rehearsal/
 e18-invariance-ref.npz
