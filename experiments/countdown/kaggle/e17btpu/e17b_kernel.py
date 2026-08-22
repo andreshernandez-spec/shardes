@@ -3,10 +3,10 @@
 Same shape as e17tpu (which ran E17's 31 cells in one session): upgrade jax,
 assert 8 chips in a fresh interpreter, clone at the pinned SHA, run the
 collective ladder and the regeneration decomposition (phase2/, a few
-minutes), then the driver
-under a 7 h internal budget, and bring results-ladder and results-e17b home. Exit code: 0
-when the driver finished the grid, 2 on a budget stop (resume by committing
-the results and pushing again at a SHA that contains them), 1 otherwise.
+minutes), then the driver under a 7 h internal budget, and bring
+results-ladder, results-regen and results-e17b home. Exit code: 0 when the
+driver finished the grid, 2 on a budget stop (resume by committing the
+results and pushing again at a SHA that contains them), 1 otherwise.
 """
 import subprocess
 import sys
