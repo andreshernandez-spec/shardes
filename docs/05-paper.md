@@ -317,6 +317,25 @@ Free rehearsal before any granted hour: the whole driver multi-process on CPU
 (`jax.distributed.initialize`, several local processes, forced host devices), gated
 on the device-count invariance test.
 
+**GPU variant (added 2026-08-22, possible follow-up, needs no grant).** The
+host-boundary half of the question does not need TPU at all, and GPUs are the
+sharper instrument for it: NVLink inside a node (600 GB/s class) against
+InfiniBand or Ethernet between nodes (roughly 12-50 GB/s) is a one-to-two
+order-of-magnitude cliff exactly at the boundary, where a v5e slice is one ICI
+torus end to end. Two nodes of 8xA100 (D=16, one boundary) suffice for the
+core question: does B's advantage survive the model-sized all-reduce paying
+inter-node prices while A's scalar gather stays negligible. Same design as
+above (interleaved A/B, both bracketing perturbations, pre-selected cells,
+component timings doubling as alpha-beta calibration, predictions committed
+before the held-out cells), with two GPU-specific rules: measure and report
+the actual inter-node link first (rented fabrics vary from IB to plain
+Ethernet, and the decision rule must be stated in terms of measured link
+parameters to be portable), and the same CPU multi-process rehearsal covers
+this backend too (NCCL under jax.distributed, mesh code unchanged). Cost
+ballpark $50-150 for a disciplined calibrate-predict-measure session, so this
+half can run before any TRC grant; the TPU half then adds depth in D on one
+fabric, and the calibrated model is what unifies the two.
+
 **E8 needs matched shapes across platforms**, not matched memory. v5e has 16 GB/chip
 against A100's 80 GB, so per-device population must be matched deliberately rather than
 "whatever fits." State the matching rule in the paper.
