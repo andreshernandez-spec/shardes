@@ -196,8 +196,11 @@ Four sub-claims, each falsifiable and each a finding whichever way it lands:
 
 - **C6a, cost at matched quality. MEASURED, and rank matches.** Twelve runs (four
   arms, three seeds) land in 0.149-0.162 held-out reward with within-arm seed
-  spread covering the between-arm spread; rank 1 runs 2.0 s/generation steady
-  against full rank's 4.5. That is Qiu's result at less than half the wall clock
+  spread covering the between-arm spread; rank 1 runs 2.41 s/update steady
+  against full rank's 4.29, a 1.78x per-update advantage (steady state means
+  generations 0 AND 1 excluded, both compilation-scale; the 2026-08-22 review
+  caught gen 1 riding in the old cumulative totals, plot_e13.py has the
+  corrected accounting). That is Qiu's result at 1.8x lower update cost
   with EGGROLL's trick, in a regime EGGROLL never tested, on a held-out metric.
   The results directory README carries the campaign detail and the decode caveats.
 - **C6b, F5 predictivity. MEASURED, and F5 called the tie.** The naive reading of

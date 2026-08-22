@@ -71,6 +71,27 @@ crossover whose platform dependence Figure~\ref{fig:f2} summarizes.
   \label{fig:m3-tpu}
 \end{figure*}
 
+\section{Reference implementation boundaries}
+\label{sec:refimpl}
+Two implementation-level differences from the reference code, moved here
+because they are boundary conditions rather than results. The reference's
+rank-1 path does not compile on a 16\,GB TPU chip at $d{=}512$,
+$N{=}16384$: the compiler allocates 24.1\,GiB of temporaries,
+reproducible with no TPU via the compile-only probe in the repository,
+the same pathology this instrument diagnosed and works around; the same
+cell runs here at 245\,ms. And the reference declines embedding tables
+outright, while the instrument carries that seam
+(Section~\ref{sec:design}). Both are properties of the released
+implementations, not of the algorithms.
+
+\section{Validation checklist}
+\input{generated/tb3b}
+Table~\ref{tab:tb3b} collects the checks behind the systems claims that
+are not themselves timing results: held-out task quality by rank, the
+estimator-quality study's coverage, the sub-float32 fitness guard, and
+device-count invariance. Each row names the committed artifact that
+carries it.
+
 \section{Reproduction}
 Every figure and generated table regenerates from a committed script against
 a committed results directory, and every reported result traces to a script,
@@ -84,12 +105,14 @@ incident). The figure and table map: F1, F2 and F2b from
 Tables~\ref{tab:tb1}, \ref{tab:tb2}, and~\ref{tab:tb3} from
 \texttt{tb1.py}, \texttt{tb2.py}, and \texttt{tb3.py};
 Table~\ref{tab:tb4} from
-\texttt{analysis\_e15.py}; and Table~\ref{tab:tb5} from
-\texttt{tb5\_e17.py}. Each table
+\texttt{analysis\_e15.py}; Table~\ref{tab:tb5} from
+\texttt{tb5\_e17.py}; and Table~\ref{tab:tb6} from
+\texttt{tb6\_e16.py}. Each table
 script accepts \texttt{--latex} and writes the exact file this document
-inputs. The E16 ratios in the prose are the recorded medians divided by the
-predictions frozen in \texttt{e16-gate.yaml} and
-\texttt{e16-stage2.yaml}; their result READMEs show the arithmetic. The test
+inputs. Table~\ref{tab:tb6}'s predicted columns are the committed E1 fit
+and the 0.53 correction, both frozen (rounded) in \texttt{e16-gate.yaml}
+and \texttt{e16-stage2.yaml} before the runs; nothing in them is fit to
+E16's measurements. The test
 suite runs on CPU with no network; the multi-device logic is exercised on
 eight simulated devices, so correctness properties (including the
 device-count invariance test) are checkable without any accelerator, and the

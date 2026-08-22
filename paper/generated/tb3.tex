@@ -2,7 +2,7 @@
 \begin{table*}
 \centering
 \small
-\caption{Ablations, assembled from committed results; ratios are geometric means over the grid cells where both sides were measured (n = cell count); held-out rewards are means over seeds with [min, max].}
+\caption{Systems ablations, assembled from committed results; ratios are geometric means over the grid cells where both sides were measured (n = cell count).}
 \label{tab:tb3}
 \begin{tabular}{p{0.30\linewidth}p{0.22\linewidth}p{0.40\linewidth}}
 \toprule
@@ -26,13 +26,6 @@ cost, highest vs default & TPU v5e, mirrored\_lr16 & 1.64x (n=6) \\
 cost, highest vs default & TPU v5e, mirrored\_lr4 & 1.76x (n=6) \\
 cost, highest vs default & TPU v5e, mirrored\_seed & 1.02x (n=6) \\
 cost, highest vs default & TPU v5e, seed\_regenerated & 1.02x (n=6) \\
-held-out reward, full rank & Countdown, 3 seeds & 0.157 [0.154, 0.162] \\
-held-out reward, rank 1 & Countdown, 3 seeds & 0.155 [0.152, 0.158] \\
-held-out reward, rank 4 & Countdown, 3 seeds & 0.155 [0.149, 0.160] \\
-held-out reward, rank 16 & Countdown, 3 seeds & 0.153 [0.151, 0.156] \\
-estimator quality vs rank, $\sigma$, N & phase 0 & E1 / F5: experiments/phase0/ (measured, committed) \\
-sub-f32 fitness & guard & refused by tell; measured collapse 256 losses $\to$ 2 in bf16 (docs/proposal-bf16-policy.md) \\
-device-count invariance & tests & tests/: D=1 vs D=8 within rtol 1e-5 bf16 / 1e-12 f32; C6d multi-GPU run \\
 \bottomrule
 \end{tabular}
 \end{table*}
