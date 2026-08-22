@@ -83,7 +83,20 @@ systematic factor. Because the shortfall is uniform, everything relative
 transfers to the real model: the cross-rank tie at $N{=}30$, the
 square-root scaling in $N$ inside every arm, and the unpaired scheme's
 per-sample advantage, predicted at $1.34\times$ and measured at
-$1.36\times$. The mechanism's reading: in the LLM-ES
+$1.36\times$. Two further probes pin the correction down. Rerunning the
+two bracketing arms on a freshly drawn frozen prompt batch reproduces
+both ratios to two decimals (full rank $0.93\times$ against $0.94\times$;
+rank 1 $0.51\times$ against $0.52\times$), so the factor belongs to the
+model and estimator, not to the prompts
+(\texttt{results-e16-gate}). And on Qwen2.5-1.5B, with both predictions
+frozen before the run, the scaling law transfers unrefitted (within-arm
+$N$-scaling $2.80\times$ and $2.94\times$ against $\sqrt{8}=2.83$),
+full rank stays on its raw prediction ($0.92$--$0.95\times$) at
+$3.1\times$ the parameters, and the 0.5B-calibrated low-rank prediction
+lands within $22$--$26\%$ where the raw fit misses by $2.4$--$2.6\times$;
+the effective correction drifts from $0.53$ to about $0.40$ across the
+scale step, so one constant carries most of the transfer without being
+scale-invariant (\texttt{results-e16-stage2}). The mechanism's reading: in the LLM-ES
 regimes studied here and in the source papers, the population is
 minuscule against the parameter count, and in that regime the rank of the
 perturbation is not what limits estimation quality. That, arguably, is
@@ -191,6 +204,23 @@ same quality. This is where the systems and quality halves meet: the
 cheap perturbation reaches matched quality in $1.7\times$ less training
 time precisely because Figure~\ref{fig:f7} shows it needed no more
 samples.
+
+\paragraph{The crossover, re-measured on the real model.} The
+contraction question of Section~\ref{sec:contraction} was priced on the
+simplified block; Table~\ref{tab:tb5} re-measures it on Qwen2.5-0.5B
+itself, one production update per cell on the fixed prompt batch, with
+both directional predictions frozen before the run. Both transfer with
+their signs intact and widening in device count: the seed-regenerated
+arm's B advantage grows monotonically to $\log_{10}(t_B/t_A) = -0.164$
+at $D{=}8$, and rank 1 flips to A everywhere it fits, growing to
+$+0.212$, stronger than the block showed at its largest model size. The
+memory column doubles as a finding: rank 1 on the real model does not
+fit one 16\,GB chip even at $N{=}32$ while the seed arm runs at every
+cell, the storage-for-compute trade at production scale. The one absent
+cell died in compilation with its A sibling already over memory at the
+same shape, infeasible either way.
+
+\input{generated/tb5}
 
 \paragraph{The reference baseline, honestly.} GRPO
 \citep{deepseekmath2024} with the published hyperparameters of
