@@ -84,6 +84,80 @@ outright, while the instrument carries that seam
 (Section~\ref{sec:design}). Both are properties of the released
 implementations, not of the algorithms.
 
+\section{Stability exploration}
+\label{sec:stability}
+This experiment is a stress test, not a characterization: one task, one
+150-step horizon, one RL recipe, three seeds per point, and only the
+endpoints of each perturbation interval. It lives in the appendix
+because its question (comparative optimizer robustness) is separate from
+the paper's systems argument; its metrics and falsification criteria
+were nevertheless fixed in a committed protocol before the data.
+
+% F8 -- experiments/countdown/figures/f8-robustness.png (plot_e14.py);
+% verdicts: analyze_e14.py; design and pre-specified criteria: docs/08.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.8\textwidth]{f8-robustness.png}
+  \caption{Stability under hyperparameter perturbation. Each
+    algorithm's own published settings are multiplied by the x-axis factor;
+    y is held-out reward at a 150-step horizon, three seeds per point, red
+    crosses mark collapse below the base model. GRPO at $8\times$ its
+    published learning rate collapses to zero reward on every seed; ES
+    shows no collapse at either tested endpoint of the same 64-fold
+    learning-rate interval, and its one failure mode (noise scale
+    $4\times$) is a freeze at the base model, not a loss of it. The
+    purple markers are single-stabilizer ablations that trained fine,
+    reported with the same prominence as the collapses.}
+  \label{fig:f8}
+\end{figure*}
+
+The stabilization machinery of deep RL exists for stated reasons, and the
+recipe tested here carries two pieces of it: a clipped surrogate objective
+against provable step-size limits \citep{kakade2002,schulman2015trpo,schulman2017ppo}
+and a reference-model KL penalty anchoring the policy \citep{ouyang2022};
+the value-based lineage's stabilizers are neither part of this recipe nor
+tested (Section~\ref{sec:related}). ES carries none of that
+machinery, so we asked whether its absence is load-bearing. The answer
+has two halves (Figure~\ref{fig:f8}).
+
+First, the half we expected: multiplying the learning rate by 8 destroys
+GRPO on every
+seed (reward 0.000, below even format compliance, policy entropy zero)
+while the same multiplier leaves every ES seed at or above its
+published-settings reference; neither algorithm collapses at $1/8\times$,
+so the finding is about the aggressive endpoint of the tested 64-fold
+interval, whose interior was not explored, and it is not a stability
+margin. The comparison is per-family by construction: each knob is
+multiplied relative to its own published setting, and equal multipliers
+do not correspond to comparable parameter-update magnitudes across ES
+and GRPO. Descriptively, and not as a
+matched rate (the twelve perturbed runs per algorithm perturb different
+knobs per family): zero ES collapses against three GRPO collapses, and
+the one ES failure (noise scale $4\times$) is a freeze at the base-model
+floor.
+
+Second, the half our own falsification criteria caught: removing GRPO's KL
+anchor entirely, or widening its clip until it never binds, changed little
+at this horizon on this rule-based verifier. At this one setting the
+single stabilizers are not individually load-bearing; interactions
+between stabilizers, and other settings, were not tested, so this
+localizes the observed fragility at the learning rate rather than
+establishing that fragility lives nowhere else. It is consistent with
+prior reports that clipping is not
+what makes PPO work \citep{engstrom2020,andrychowicz2020} and that
+critic-based PPO trains without a KL penalty \citep{orz2025}.
+
+Stability is also not retention. The drift row of the same experiment shows the
+$8\times$-learning-rate ES runs ending roughly $50$ units of parameter
+$\ell_2$ from the pretrained weights, against $0.3$--$2$ for healthy GRPO
+runs. The experiment separates update robustness from parameter
+retention; it does not establish that drift causes the robustness. The same
+large-drift regime is where ES-induced forgetting has been reported
+\citep{abdi2026forgetting}, though later work finds that degradation to
+be largely recoverable drift rather than permanent forgetting, and not
+specific to ES \citep{schweighofer2026awd}; the stress test's numbers
+should be read beside both.
+
 \section{Validation checklist}
 \input{generated/tb3b}
 Table~\ref{tab:tb3b} collects the checks behind the systems claims that
