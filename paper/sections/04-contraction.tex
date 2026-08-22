@@ -4,7 +4,9 @@
 \section{The contraction question}
 \label{sec:contraction}
 
-After evaluation, every device holds fitnesses for its share of the
+With the population sharded over $D$ devices (each holds the full weights and
+evaluates $N/D$ members; Section~\ref{sec:design}), after evaluation every
+device holds fitnesses for its share of the
 population, and the update $\sum_i w_i \epsilon_i$ must be assembled (the
 contraction). There are two natural placements:
 
@@ -26,14 +28,11 @@ contraction). There are two natural placements:
 The trade is compute against communication, so it predicts a crossover in
 (population $N$, model size $d$) space rather than one universal winner. The
 record committed before measurement contained two claims. The quantitative
-claim was a byte count: $4N$ bytes of scalars for A and $4P$ bytes for B
-($P$ parameters, float32). Table~\ref{tab:tb2} corrected an omitted
-operand. A actually moves $8N$ in two $4N$-byte gathers, the raw fitnesses
-for shaping and the shaped weights for the contraction; B moves $4P{+}4N$,
-its model-sized all-reduce plus the fitness gather. The refined
-model matches every measured payload to the byte. The correction changes no
-conclusion---2\,KB against 100\,MB at $d{=}2048$---and is reported rather
-than silently folded into the prediction.
+one was a byte count, $4N$ for A and $4P$ for B ($P$ parameters, float32);
+Table~\ref{tab:tb2} corrects it to $8N$ (two $4N$-byte gathers, the raw
+fitnesses for shaping and the shaped weights for the contraction) and
+$4P{+}4N$, matches every measured payload to the byte, and changes no
+conclusion: 2\,KB against 100\,MB at $d{=}2048$.
 
 The directional claim followed from what each placement buys with those
 bytes. B does $1/D$ of A's contraction work, so it should win when
@@ -44,3 +43,15 @@ pure overhead. No quantitative time model was committed before the runs, and
 none is retroactively presented as a prediction. Section~\ref{sec:results}
 tests the byte count and this directional claim on both platforms
 (Figure~\ref{fig:f2}).
+
+A and B are two points in a larger space this paper does not measure. A
+reduce-scatter followed by an all-gather, with the update applied sharded
+(the ZeRO arrangement, \citealp{rajbhandari2020zero}), halves B's bytes;
+reduced-precision or compressed collectives shrink them further; a
+hierarchical contraction replicates within a host and all-reduces across
+hosts; and overlapping B's all-reduce with the next generation's
+evaluation, the standard engineering answer to exactly this trade, could
+hide the transfer entirely. If it can, the low-rank side of the crossover
+belongs to the unoverlapped implementation rather than to the placement.
+What is measured is therefore the two simplest placements as implemented,
+on one host with a fat fabric.

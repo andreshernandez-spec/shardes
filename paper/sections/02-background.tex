@@ -24,7 +24,11 @@ rank-$r$ perturbation of an $m\times n$ matrix it contributes $r(m+n)$, while
 non-matrix leaves contribute their full size. Section~\ref{sec:endtoend}
 measures alignment against $N/d_{\mathrm{samp}}$; cross-rank comparisons are
 also reported at equal $N$, because $d_{\mathrm{samp}}$ is a property of the
-sampler rather than the dimension of the model gradient.
+sampler rather than the dimension of the model gradient. It counts
+independent draws; it does not measure how a rank-$r$ perturbation's support
+overlaps a full-rank gradient, and Section~\ref{sec:endtoend} meets that
+difference as an empirical correction factor rather than deriving the
+variable that would absorb it.
 
 \paragraph{The two recent algorithms.}
 \citet{qiu2025} keep the perturbation exact and make its \emph{storage} free:
