@@ -1,13 +1,14 @@
 % CLAIM: the systems claims are about an algorithm that demonstrably trains.
 % Evidence: experiments/countdown/results/*/README.md, plot_e13.py (F7),
 % and the C6a-d sub-claims.
-\section{End-to-end validation}
+\section{Accuracy and task validation}
 \label{sec:endtoend}
 
-% ORDER (revised 2026-08-21, second review): determinism, then the synthetic
+% ORDER (revised 2026-08-23, fifth review): determinism, then the synthetic
 % estimator result, then the task prediction and its outcome, then the GRPO
-% baseline, then stability. The argument is prediction-before-campaign, so the
-% prediction's evidence now comes before the campaign's.
+% baseline, then a short pointer to the appendix stress test. The argument is
+% prediction-before-campaign, so the prediction's evidence comes before the
+% campaign's; stability moved to the appendix as exploratory.
 This section is the validity chain the introduction promised, centered on a
 real model (Qwen2.5-0.5B on the Countdown task) with a true-gradient
 replication at 1.5B, all through the same instrument, in
@@ -16,9 +17,9 @@ reproducibility: the systems prices of Section~\ref{sec:results} are
 worth acting on only if what was measured is the algorithm, so the
 determinism boundary is stated exactly. Second, quality: the estimator
 study's prediction, then the campaign that tests it, closing the
-unmeasured half of the low-rank belief. Third, stability: the one folk
-claim that cannot exist on a microbenchmark, measured last because its
-verdicts lean on both of the claims before it.
+unmeasured half of the low-rank belief. An exploratory stress test of
+the stability folklore, a separate question, closes the section by
+pointer; it lives in Appendix~\ref{sec:stability}.
 
 \paragraph{Determinism and invariance on real hardware.} Two independent
 20-generation runs of the same $D{=}8$ program agree byte for byte in every
@@ -217,67 +218,25 @@ Figure~\ref{fig:f7} shows it needed no more samples.
 \citet{qiu2025}, untuned in either direction: two of three seeds plateau
 early at 4.9\% of held-out puzzles solved, and one never solves a
 held-out puzzle, flat at format-only reward from step 50. None falls
-below its decoder's base-model floor, so none meets the collapse
-definition the stability section uses; the word collapse is reserved for
-runs that do. We report this as seed variance in the reference, not as a
+below its decoder's base-model floor, so none meets the pre-specified
+collapse definition of the appendix stress test; the word collapse is
+reserved for runs that do. We report this as seed variance in the
+reference, not as a
 victory for ES; the figure's role is that both algorithm families run end
 to end in comparable budgets, not a leaderboard.
 
-% F8 -- experiments/countdown/figures/f8-robustness.png (plot_e14.py);
-% verdicts: analyze_e14.py; design and pre-specified criteria: docs/08.
-\begin{figure*}[t]
-  \centering
-  \includegraphics[width=0.8\textwidth]{f8-robustness.png}
-  \caption{Stability under hyperparameter perturbation. Each
-    algorithm's own published settings are multiplied by the x-axis factor;
-    y is held-out reward at a 150-step horizon, three seeds per point, red
-    crosses mark collapse below the base model. GRPO at $8\times$ its
-    published learning rate collapses to zero reward on every seed; ES
-    shows no collapse at either tested endpoint of the same 64-fold
-    learning-rate interval, and its one failure mode (noise scale
-    $4\times$) is a freeze at the base model, not a loss of it. The
-    purple markers are single-stabilizer ablations that trained fine,
-    reported with the same prominence as the collapses.}
-  \label{fig:f8}
-\end{figure*}
-
-\subsection{Stability under perturbation}
-The stabilization machinery of deep RL exists for stated reasons, and the
-recipe tested here carries two pieces of it: a clipped surrogate objective
-against provable step-size limits \citep{kakade2002,schulman2015trpo,schulman2017ppo}
-and a reference-model KL penalty anchoring the policy \citep{ouyang2022};
-the value-based lineage's stabilizers are neither part of this recipe nor
-tested (Section~\ref{sec:related}). ES carries none of that
-machinery, so we asked whether its absence is load-bearing, with metrics
-and falsification criteria fixed before the data. The answer has two
-halves (Figure~\ref{fig:f8}).
-
-First, the half we expected, and the one matched comparison in the
-experiment: multiplying the learning rate by 8 destroys GRPO on every
-seed (reward 0.000, below even format compliance, policy entropy zero)
-while the same multiplier leaves every ES seed at or above its
-published-settings reference; neither algorithm collapses at $1/8\times$,
-so the finding is about the aggressive endpoint of the tested 64-fold
-interval, whose interior was not explored. Descriptively, and not as a
-matched rate (the twelve perturbed runs per algorithm perturb different
-knobs per family): zero ES collapses against three GRPO collapses, and
-the one ES failure (noise scale $4\times$) is a freeze at the base-model
-floor.
-
-Second, the half our own falsification criteria caught: removing GRPO's KL
-anchor entirely, or widening its clip until it never binds, changed little
-at this horizon on this rule-based verifier. The single stabilizers are not
-individually load-bearing here; the fragility is concentrated in the
-learning rate. That is consistent with prior reports that clipping is not
-what makes PPO work \citep{engstrom2020,andrychowicz2020} and that
-critic-based PPO trains without a KL penalty \citep{orz2025},
-and it narrows our claim to what the data supports.
-
-Stability is also not retention. The drift row of the same experiment shows the
-$8\times$-learning-rate ES runs ending roughly $50$ units of parameter
-$\ell_2$ from the pretrained weights, against $0.3$--$2$ for healthy GRPO
-runs. The experiment therefore separates update robustness from parameter
-retention; it does not establish that drift causes the robustness. The same
-large-drift regime is where ES-induced forgetting has been reported
-\citep{abdi2026forgetting}, so the stability numbers should be read beside
-that row.
+\paragraph{An exploratory robustness stress test.} The folk belief that
+ES does not need RL's stabilizers is a question about comparative
+optimizer robustness, separate from this paper's systems argument, so
+its full treatment lives in Appendix~\ref{sec:stability}. The scoped
+summary: with metrics and falsification criteria fixed in a committed
+protocol before the data, this GRPO recipe at $8\times$ its published
+learning rate collapsed to zero reward on all three seeds while ES
+collapsed at neither tested endpoint of the same 64-fold interval; our
+own criteria caught the part of the belief that was wrong, since
+removing the recipe's individual stabilizers at published settings
+changed little; and the surviving ES runs drifted far from the
+pretrained weights, a retention cost reported beside the robustness. The
+multipliers are per-family and the interval interior was not explored,
+so this is a stress test's evidence at one task, one horizon, and three
+seeds, not a stability margin.
