@@ -28,8 +28,10 @@ as 30. EGGROLL \citep{eggroll2025} instead makes the perturbation cheap: each
 weight matrix's noise is the product of two thin factors, so per-candidate
 storage and compute shrink by the rank ratio, at the price of the noise no
 longer being full-rank; it reports roughly $100\times$ throughput gains and
-populations in the tens of thousands. The two prices are paid in different
-currencies (compute against exactness), which is why neither paper subsumes
+populations in the tens of thousands. Both samplers draw exactly from
+their own distributions; the prices are paid in different currencies
+(regeneration compute against the perturbation's full-dimensional
+support), which is why neither paper subsumes
 the other and why measuring them in one system is informative at all.
 
 \paragraph{Why flattening forecloses structure.} A rank-$r$

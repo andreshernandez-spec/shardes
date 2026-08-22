@@ -100,11 +100,15 @@ def wallclock() -> None:
     """F7b: the same held-out curves against cumulative steady-state accelerator time.
 
     ES arms only: GRPO runs in a different framework with a different decoder, so
-    its wall clock is not commensurate and is deliberately absent. Generation 0 is
-    excluded from the cumulative time because it contains compilation (335--581 s
-    against steady-state 2.4--4.3 s per generation); held-out evaluation decode is
-    excluded on both axes as measurement overhead. x per eval point is the mean
-    cumulative time over the three seeds; the band is min--max of reward.
+    its wall clock is not commensurate and is deliberately absent. Generations 0
+    AND 1 are both excluded from the cumulative time: both are compilation-scale
+    events in every arm and seed (335--671 s against steady-state 2.4--4.3 s
+    per generation).
+    Held-out evaluation decode is excluded on both axes as measurement overhead.
+    The eval at generation g runs BEFORE update g (run_es.py evaluates at the
+    top of the loop), so its x is the cumulative time of updates strictly
+    before g. x per eval point is the mean cumulative time over the three
+    seeds; the band is min--max of reward.
     """
     fig, ax = plt.subplots(figsize=(7.0, 4.4))
     for stem, (color, label) in ARM_STYLE.items():
@@ -117,13 +121,14 @@ def wallclock() -> None:
                     (RESULTS / f"{stem}-s{s}-log.jsonl").open()]
             cum, c = {}, 0.0
             for r in logs:
-                if r["generation"] == 0:
-                    continue  # compilation lives here; see docstring
-                c += r["seconds"]
+                if r["generation"] <= 1:
+                    continue  # compilation lives in g0 and g1; see docstring
+                # eval at g precedes update g: charge it the time BEFORE g.
                 cum[r["generation"]] = c
+                c += r["seconds"]
             for e in map(json.loads, (RESULTS / f"{stem}-s{s}-eval.jsonl").open()):
                 g = e["generation"]
-                if g == 0:
+                if g <= 1:
                     continue
                 # the final eval runs after the last update, at a generation
                 # one past the last logged one; it lands at the total time

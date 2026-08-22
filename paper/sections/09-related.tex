@@ -11,7 +11,12 @@ models by attacking opposite costs: \citet{qiu2025} regenerate exact noise and
 fine-tune billion-parameter models with populations as small as 30, while
 EGGROLL \citep{eggroll2025} factors the noise and reports roughly
 $100\times$ throughput gains with populations in the tens of thousands.
-Neither work measures the update-placement crossover or places both
+\citet{cho2026reward} argue the population sizes these systems need are
+largely set by reward design and normalization rather than dimension, a
+complementary axis to the representation and placement questions here
+(and adjacent to the shaping-degeneracy guard of
+Section~\ref{sec:setup}).
+Neither 2025 work measures the update-placement crossover or places both
 perturbation families in one implementation across GPUs and TPUs.
 
 \paragraph{Zeroth-order optimization for language models.} MeZO

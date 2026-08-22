@@ -11,12 +11,12 @@
     scaling and cost grids benchmark one synthetic transformer block
     (square matrices, $d_{\mathrm{ff}}{=}d$, single head, no learned
     norms, MSE loss, batch 8, sequence 32; Section~\ref{sec:setup}), not
-    a production transformer. The simplifications change arithmetic
+    a real transformer. The simplifications change arithmetic
     intensity and memory in ways that favor clean attribution over
     realism; absolute ratios, the low-rank advantage included, should be
     read as properties of this workload. Two real-model anchors bound
     the risk: the accuracy chain of Section~\ref{sec:endtoend}, and the
-    contraction crossover re-measured on the production model with both
+    contraction crossover re-measured on the real model with both
     signs intact (Table~\ref{tab:tb5}).
   \item \textbf{Models must adopt the library's seams.} Perturbation as
     substitution requires routing parameterized matmuls and embedding
@@ -34,10 +34,9 @@
     mechanisms are argued to transfer; the scaling behaviour itself has
     been shown only at the scales measured here.
   \item \textbf{One compiler workaround ships in the library.} Rank-1
-    factors are padded with a zero column so the TPU compiler keeps them in
-    a fused matrix multiply; the pad is measured bitwise-invisible in
-    bfloat16 and within 1--2 ulp in float32, and a regression check
-    compiles the once-failing cell with no TPU required.
+    factors carry a zero-column pad so the TPU compiler keeps them in a
+    fused matrix multiply; its measured numerical footprint and its
+    regression check are documented in the repository.
   \item \textbf{Barrier numbers are ceilings.} The shaping-barrier
     measurement times the barrier in isolation; a real generation may
     overlap part of that latency behind compute.
