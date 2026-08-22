@@ -54,7 +54,10 @@ def rng_seconds(n: int, p: int, warmup: int, repeats: int) -> float:
     def draw_all(k):
         def body(acc, i):
             z = jax.random.normal(jax.random.fold_in(k, i), (p,), jnp.float32)
-            return acc + z[0] + z[-1], None  # touch the draw; never keep it
+            # Reduce the whole draw so XLA cannot slice the generation down to
+            # the elements it needs: touching z[0] + z[-1] let the A100 report
+            # 6.4e9 normals in 4.5 ms at d=2048, eleven times the d=512 rate.
+            return acc + z.sum(), None
         acc, _ = jax.lax.scan(body, jnp.float32(0), jnp.arange(n))
         return acc
 
