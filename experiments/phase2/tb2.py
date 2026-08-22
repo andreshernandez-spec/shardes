@@ -11,9 +11,12 @@ before the measurement, docs/03 M5). The table reports D=8 rows per
 
 The two systematic deviations ARE the table's content, not noise to hide:
 
-- Strategy A measures 2x its naive prediction: the sharding fix made two f32[N]
-  gathers real (fitness in, weights out), so the folk claim "ES only
-  communicates scalars" holds in order of magnitude with a constant of 2.
+- Strategy A measures 2x its naive prediction: two separate f32 all-gathers
+  of N scalars each, the raw fitnesses for shaping and the shaped weights for
+  the contraction (verified in the compiled HLO; member ids are 0..N-1 and
+  fold to a local iota, nothing integer-valued crosses the wire), so the folk
+  claim "ES only communicates scalars" holds in order of magnitude with a
+  constant of 2.
 - Strategy B measures its model-sized all-reduce plus 4N: the same fitness
   gather rides along. The all-reduce dominates by three orders of magnitude.
 - At D=1 the compiler emits no collectives at all, so measured is 0 where the
@@ -76,8 +79,9 @@ def latex() -> str:
            "\\caption{Bytes moved per update at $D{=}8$: the cost model's "
            "prediction (written before the measurement) against the payload of "
            "every collective in the compiled update. Strategy A's factor of two "
-           "is the pair of $4N$-byte gathers the sharded evaluation makes real; "
-           "strategy B's excess is that same gather riding beside its "
+           "is two $4N$-byte gathers, the raw fitnesses for shaping and the "
+           "shaped weights for the contraction; strategy B's excess is the fitness gather "
+           "riding beside its "
            "model-sized all-reduce.}",
            "\\label{tab:tb2}",
            "\\begin{tabular}{llrrrr}", "\\toprule",

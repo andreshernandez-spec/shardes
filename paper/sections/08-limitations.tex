@@ -4,55 +4,36 @@
 
 \begin{itemize}
   \item \textbf{Eight devices, one host.} The GPU results are a single
-    NVLink node and the TPU results a single v5e host. Scaling past the host
-    boundary (multi-host, 32--64 chips) is designed for and untested;
-    it is the natural follow-up.
-  \item \textbf{The systems workload is a simplified block.} The
-    scaling and cost grids benchmark one synthetic transformer block
-    (square matrices, $d_{\mathrm{ff}}{=}d$, single head, no learned
-    norms, MSE loss, batch 8, sequence 32; Section~\ref{sec:setup}), not
-    a real transformer. The simplifications change arithmetic
-    intensity and memory in ways that favor clean attribution over
-    realism; absolute ratios, the low-rank advantage included, should be
-    read as properties of this workload. Two real-model anchors bound
-    the risk: the accuracy chain of Section~\ref{sec:endtoend}, and the
-    contraction crossover re-measured on the real model with both
-    signs intact (Table~\ref{tab:tb5}).
-  \item \textbf{Models must adopt the library's seams.} Perturbation as
-    substitution requires routing parameterized matmuls and embedding
-    lookups through \texttt{shardes.nn}; an existing model does not run
-    unmodified, and layer types without a seam (convolutions, for one)
-    are unsupported until one is written. This is the API cost of never
-    materializing the low-rank noise (Section~\ref{sec:design}).
-  \item \textbf{Crossover at sweep resolution.} The (N, d) grid behind
-    Figure~\ref{fig:f2} is $3\times2$ per platform with holes at the memory
-    ceiling; the contour's position is bracketed, not traced.
-  \item \textbf{Absolute numbers are per-platform.} A v5e chip has 16\,GB
-    against the A100's 80; population ceilings therefore differ by design,
-    and no absolute throughput here matches EGGROLL's H100 figures
-    \citep{eggroll2025}. The
-    mechanisms are argued to transfer; the scaling behaviour itself has
-    been shown only at the scales measured here.
-  \item \textbf{One compiler workaround ships in the library.} Rank-1
-    factors carry a zero-column pad so the TPU compiler keeps them in a
-    fused matrix multiply; its measured numerical footprint and its
-    regression check are documented in the repository.
-  \item \textbf{Barrier numbers are ceilings.} The shaping-barrier
-    measurement times the barrier in isolation; a real generation may
-    overlap part of that latency behind compute.
-  \item \textbf{Task validation is one task, one training model size.}
-    Countdown with a 0.5B-parameter model, three seeds; the flat-rank
-    result is predicted and measured at $N{=}30$ and says nothing about
-    larger populations. The estimator accuracy chain now spans two model
-    sizes (0.5B and 1.5B), but no training run does.
-  \item \textbf{The stability stress test (Appendix~\ref{sec:stability})
-    is exploratory.} One task, one 150-step horizon, one RL recipe, three
-    seeds, interval endpoints only, and per-family multipliers that do
-    not equate update magnitudes across algorithms. Its ablation arms
-    show the KL anchor and clip are not
-    individually load-bearing \emph{there}, which says nothing about
-    interactions, learned or hackable rewards, longer horizons, or
-    critic-based methods.
-    The drift cost of ES's tolerance is measured and reported in the same
-    table.
+    NVLink node and the TPU results a single v5e host. Scaling past a host
+    boundary is untested and may move the contraction crossover substantially.
+  \item \textbf{The systems workload is a simplified block.} The scaling and
+    cost grids use square matrices, $d_{\mathrm{ff}}{=}d$, one head, no
+    learned norms, MSE loss, batch 8, and sequence length 32. These choices
+    favor attribution over realism, so absolute ratios should be read as
+    properties of this workload. The crossover recurs on a real model with
+    both signs intact (Table~\ref{tab:tb5}), but that is a narrower anchor than
+    the grid.
+  \item \textbf{Models must adopt the library's seams.} Parameterized matmuls
+    and embedding lookups must route through \texttt{shardes.nn}; an existing
+    model does not run unmodified, and unsupported layer types require a new
+    seam. This is the API cost of never materializing low-rank noise.
+  \item \textbf{The crossover is bracketed at sweep resolution.} The $(N,d)$
+    grid behind Figure~\ref{fig:f2} is $3\times2$ per platform, with holes at
+    the memory ceiling. It establishes regions and sign changes, not a precise
+    contour.
+  \item \textbf{Absolute numbers are platform-specific.} The v5e has 16\,GB
+    per chip versus the A100's 80\,GB, and no throughput number here should be
+    transferred to another accelerator or interconnect without measurement.
+    The real-model crossover was measured only on the v5e; cross-accelerator
+    comparisons use the controlled block workload.
+  \item \textbf{Task validation is one task and one training model size.}
+    Countdown with a 0.5B-parameter model, three seeds, and $N{=}30$ cannot
+    establish rank parity on other tasks, populations, or scales. The
+    alignment chain spans 0.5B and 1.5B models, but no 1.5B training run was
+    performed.
+  \item \textbf{NLL alignment is a proxy, not the task objective.} The exact
+    gradients in Tables~\ref{tab:tb4} and~\ref{tab:tb6} are for
+    teacher-forced NLL, whereas the campaign optimizes a nondifferentiable
+    reward from decoded answers. The task outcome is consistent with the
+    alignment prediction but cannot establish the same mechanism.
 \end{itemize}

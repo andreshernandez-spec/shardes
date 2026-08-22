@@ -5,7 +5,8 @@
 \label{sec:setup}
 
 \paragraph{Platforms.} One 8$\times$A100-SXM4-80GB node (NVLink), and a TPU
-v5e-8 (8 chips, 16\,GB high-bandwidth memory each, 2D-torus interconnect).
+v5e-8 (8 chips, 16\,GB high-bandwidth memory each, 2D-torus interconnect)
+\citep{nvidiaA100,tpuv5e}.
 The two differ in the ways that matter to ES: the A100 has $5\times$ the
 per-device memory; the v5e's matrix unit multiplies in bfloat16 by default.
 
@@ -19,8 +20,8 @@ block: six square $d\times d$ matrices (attention q, k, v, o and a
 two-matrix MLP), a single head, no learned normalization parameters,
 $d_{\mathrm{ff}}{=}d$ where a real transformer uses roughly $4d$,
 synthetic inputs and targets, mean-squared-error loss. Every matrix being
-square keeps the effective sampling dimension a single number per rank,
-which is what the estimator study needs; the simplifications move
+square keeps the sampling dimension a single number per rank,
+which is what the alignment study needs; the simplifications move
 arithmetic intensity and memory, and are stated in
 Section~\ref{sec:limitations}. Parameter count is $P{=}6d^2$, so
 $d{=}2048$ means 25.2M parameters and a 100.7\,MB float32 update. Every
@@ -41,11 +42,12 @@ fit the smaller device would erase the comparison
 (Figure~\ref{fig:f4}).
 
 \paragraph{Protocol.} Per cell: 3 warm-up generations discarded (the first
-compiles), 5 timed repeats, median and interquartile range reported, every
+compiles), 5 timed repeats (7 in the shaping-barrier experiment), median and
+interquartile range reported, every
 timed call fenced (\texttt{block\_until\_ready}). Matrix-multiply precision
 is pinned per experiment and recorded in every result record, because a
 throughput number without its precision is not a number: scaling sweeps time
-at \texttt{highest} so trajectories are comparable across device counts;
+at \texttt{highest} so matmul precision is held constant across device counts;
 cost surfaces time at \texttt{default}, the precision a practitioner runs
 (Table~\ref{tab:tb3} prices the difference).
 
@@ -55,11 +57,26 @@ real population's losses collapse to a handful of distinct values (measured:
 The library refuses rather than casts. The model forward may still run
 bfloat16; the loss reduction is where float32 begins.
 
-\paragraph{Provenance.} Every result record stamps its commit hash, library
-versions and device; benchmark configurations are committed before runs and
-cited by hash; every figure and table in this paper regenerates from a
-committed script in the released repository
+\paragraph{Real-hardware invariance.} Two independent 20-generation runs of
+the same $D{=}8$ Qwen2.5-0.5B program agree byte for byte in every logged
+reward and exactly in all 494M final parameters. With the fitness vector held
+fixed, updates compiled for $D{=}1$ and $D{=}8$ agree to
+$6.3\times10^{-6}$ norm-relative error. The guarantee stops at separately
+compiled training programs: XLA fusion and autotuning can flip near-tied
+greedy tokens, after which sampled trajectories diverge. Thus the systems
+measurements test a device-count-invariant algorithm, but the paper does not
+promise trajectory identity across compiled programs.
+
+\paragraph{Provenance.} Result records stamp a commit hash, library versions,
+and device; benchmark configurations and their commit hashes are archived with
+the records; every figure and table in this paper regenerates from a script in
+the released repository
 (\url{https://github.com/andreshernandez-spec/shardes}); the submitted
 version of this manuscript will pin the frozen tag it was built from.
+The E13 task-training logs mark their worktree dirty. Their scripts,
+configurations, outputs, and recorded commit are archived, but we therefore do
+not claim that campaign was executed from an exactly clean checkout. The
+systems sweeps and alignment experiments are unaffected by that provenance
+qualification.
 %% TODO(andres): archived artifact DOI + the frozen version tag at
 %% submission; until the tag exists the sentence above is a promise.
