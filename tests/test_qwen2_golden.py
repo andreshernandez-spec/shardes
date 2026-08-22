@@ -28,7 +28,12 @@ import jax.numpy as jnp  # noqa: E402
 
 from shardes.problems import qwen2  # noqa: E402
 
-REPO = "Qwen/Qwen2.5-0.5B-Instruct"
+#: (repo, config constructor). The 1.5B row skips unless fetch.py has cached it;
+#: same acceptance bar for every port the experiments rely on.
+CHECKPOINTS = [
+    ("Qwen/Qwen2.5-0.5B-Instruct", "qwen25_05b"),
+    ("Qwen/Qwen2.5-1.5B-Instruct", "qwen25_15b"),
+]
 
 PROMPTS = [
     "The capital of France is",
@@ -36,7 +41,7 @@ PROMPTS = [
 ]
 
 
-def _checkpoint_dir():
+def _checkpoint_dir(repo):
     from huggingface_hub import snapshot_download  # noqa: PLC0415
 
     try:
@@ -44,26 +49,27 @@ def _checkpoint_dir():
         # and the allow_patterns must match its filter or this demands files that were
         # deliberately never fetched and skips despite a perfectly good cache.
         return snapshot_download(
-            REPO, local_files_only=True,
+            repo, local_files_only=True,
             allow_patterns=["*.safetensors", "*.json", "*.txt", "tokenizer*"],
         )
     except Exception:
-        pytest.skip(f"{REPO} not in the local HF cache; run experiments/countdown/fetch.py")
+        pytest.skip(f"{repo} not in the local HF cache; run experiments/countdown/fetch.py")
 
 
-@pytest.fixture(scope="module")
-def stack():
-    ckpt = _checkpoint_dir()
+@pytest.fixture(scope="module", params=CHECKPOINTS, ids=lambda c: c[0].split("/")[-1])
+def stack(request):
+    repo, ctor = request.param
+    ckpt = _checkpoint_dir(repo)
     tok = transformers.AutoTokenizer.from_pretrained(ckpt)
     ref = transformers.AutoModelForCausalLM.from_pretrained(ckpt, torch_dtype=torch.float32)
     ref.eval()
-    cfg = qwen2.Config.qwen25_05b()
+    cfg = getattr(qwen2.Config, ctor)()
     params = qwen2.load(ckpt, cfg, dtype=jnp.float32)
     return tok, ref, cfg, params
 
 
 def test_the_config_matches_the_checkpoint(stack):
-    """qwen25_05b() is a transcription of their config.json; verify, don't trust."""
+    """Each constructor is a transcription of its config.json; verify, don't trust."""
     _, ref, cfg, _ = stack
     hf = ref.config
     assert (hf.vocab_size, hf.hidden_size, hf.num_hidden_layers) == (

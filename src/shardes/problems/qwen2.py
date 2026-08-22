@@ -55,6 +55,12 @@ class Config(NamedTuple):
                    d_ff=4864, rope_theta=1e6, rms_eps=1e-6)
 
     @classmethod
+    def qwen25_15b(cls) -> "Config":
+        """Qwen/Qwen2.5-1.5B(-Instruct) config.json; tied embeddings like the 0.5B."""
+        return cls(vocab=151936, d_model=1536, n_layers=28, n_heads=12, n_kv_heads=2,
+                   d_ff=8960, rope_theta=1e6, rms_eps=1e-6)
+
+    @classmethod
     def tiny(cls) -> "Config":
         """For CPU tests: same wiring, 300k parameters."""
         return cls(vocab=128, d_model=32, n_layers=2, n_heads=4, n_kv_heads=2,
