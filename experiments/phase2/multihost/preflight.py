@@ -154,7 +154,12 @@ def main() -> int:
         if PID == 0:
             np.savez(ref_path, **fingerprints)
         log("invariance reference written (1x8)")
-    else:
+    elif PID == 0:
+        # PID 0 only: on a real cluster the reference lives on node 0's
+        # disk and node 1 cannot see it. Every process COMPUTES the
+        # fingerprints (the generation's collectives need all of them);
+        # only the coordinator compares. Caught while answering whether
+        # the cluster needs shared storage: it does not, and must not.
         assert ref_path.exists(), "run the 1x8 preflight first"
         ref = np.load(ref_path)
         for k, v in fingerprints.items():
