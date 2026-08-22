@@ -18,7 +18,9 @@ start from base models, and docs/05 E13 says so.
 
 from huggingface_hub import snapshot_download
 
-REPO = "Qwen/Qwen2.5-0.5B-Instruct"
+import sys
+
+REPO = sys.argv[1] if len(sys.argv) > 1 else "Qwen/Qwen2.5-0.5B-Instruct"
 
 if __name__ == "__main__":
     path = snapshot_download(
