@@ -45,9 +45,12 @@ networks address value-learning divergence
 whereas trust regions, clipping, and reference-model penalties constrain
 policy updates \citep{kakade2002,schulman2015trpo,schulman2017ppo,ouyang2022}.
 Large empirical studies question which ingredients are load-bearing
-\citep{engstrom2020,andrychowicz2020,orz2025}, while ES-side reports of
+\citep{engstrom2020,andrychowicz2020,orz2025}. On the ES side, reports of
 drift-induced forgetting supply a cost to apparent robustness
-\citep{abdi2026forgetting}. Section~\ref{sec:endtoend} tests only the latter
+\citep{abdi2026forgetting}, and later work finds that degradation to be
+largely recoverable drift, present under RL fine-tuning as well, and
+treatable with anchored regularization \citep{schweighofer2026awd}. The
+exploratory stress test of Appendix~\ref{sec:stability} tests only the
 policy-optimization recipe and reports collapse and drift together.
 
 \paragraph{Distributed systems.} JAX transformations and GSPMD provide the
