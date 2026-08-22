@@ -74,17 +74,33 @@ point: A moves only scalars, but B all-reduces a model-sized buffer and still
 wins whenever the contraction it avoids costs more than those bytes.
 Strategy A's scalar payload is exactly twice the naive count
 (Table~\ref{tab:tb2}: the sharded evaluation makes two $4N$-byte gathers
-real). As a payload-rate sanity check, B's most
-demanding measured cell's collective payload over generation time is
-7.9\,GB/s against the A100's 600\,GB/s peak NVLink figure, roughly
-$75\times$ of payload-to-peak headroom. (Payload over time is not network
-utilization: the collective's topology moves more bytes than its payload
-and peak figures are not achieved bandwidth, so this ratio bounds nothing
-by itself; the timing columns, not this ratio, are the evidence that
-communication does not bind at the measured cells.) The claim guarded
-against a cost that did not bind anywhere we measured.
+real). The timing experiment does not measure network time separately
+from compute, so what the crossover establishes about communication is
+end-to-end: the model-sized all-reduce did not prevent B from winning
+every dense and seed-regenerated cell, and its overhead is what returns
+the low-rank cells to A, where the contraction work B avoids is too
+small to pay for the transfer. Communication does not decide the dense
+side of the grid; it sets the low-rank side of the crossover.
 
 \input{generated/tb2}
+
+\paragraph{The crossover on the real model.} The same question,
+re-measured outside the simplified block: Table~\ref{tab:tb5} times one
+full ES update per cell of Qwen2.5-0.5B on a TPU v5e, on the frozen
+prompt batch of Section~\ref{sec:endtoend} (which specifies the model,
+task, and update), with both directional predictions frozen before the
+run. Both transfer with their signs intact and widening in device
+count: the seed-regenerated arm's B advantage grows monotonically to
+$\log_{10}(t_B/t_A) = -0.164$ at $D{=}8$, and rank 1 flips to A
+everywhere it fits, growing to $+0.212$, stronger than the block showed
+at its largest model size. The memory column doubles as a finding: rank
+1 on the real model does not fit one 16\,GB chip even at $N{=}32$ while
+the seed arm runs at every cell, the storage-for-compute trade at real
+scale. The one absent B cell was killed during compilation; its A
+sibling exceeded memory at the same shape, so no feasible placement was
+demonstrated for that cell.
+
+\input{generated/tb5}
 
 % F4 -- experiments/phase2/figures/f4-cost-bfloat16.png (plot_cost.py)
 \begin{figure*}[t]
@@ -96,7 +112,7 @@ against a cost that did not bind anywhere we measured.
     strongest form of the structured strategies paying off. The TPU row
     answers the inversion question: the low-rank rewrite pays \emph{more}
     on the v5e (down to $0.05\times$ dense) than on the A100, and the
-    16\,GB ceiling moves the infeasible region exactly as capacity
+    16\,GB ceiling moves the infeasible region in the direction capacity
     predicts.}
   \label{fig:f4}
 \end{figure*}
@@ -109,7 +125,8 @@ narrow the gap or invert it. Figure~\ref{fig:f4} answers: the rewrite pays
 $0.05$--$0.18\times$ dense against $0.13$--$0.42\times$ on the A100) and
 in feasibility (the 16\,GB chip renders the dense baseline infeasible over
 most of the grid, drawn as wins because feasibility is the strongest form
-of paying off). The platforms move the constants, never the ordering. The
+of paying off). The platforms move the constants, never the ordering, at
+the matched cells of the measured grid. The
 comparison is shape-for-shape: no v5e workload was reduced to
 accommodate its smaller memory. The same figure prices Qiu's bet
 \citep{qiu2025} honestly: seed regeneration costs
@@ -126,7 +143,7 @@ step-equivalence between implementations. The arms differ in antithetic
 pairing, shaping and normalization details by design, and the honest unit of
 comparison is throughput at the same shapes, which is how both papers report \citep{qiu2025,eggroll2025}.
 
-Beyond parity, the measurements locate four concrete reasons to prefer the
+Beyond parity, the measurements locate two reasons to prefer the
 instrument over the reference implementations, stated with their caveats.
 First, none of the references shards: at eight devices the instrument reaches
 $6\times$ the reference's single-chip ceiling (Table~\ref{tab:tb1b}), which
@@ -139,21 +156,19 @@ about $1.34\times$ better per sample at matched population in the large-$N$
 regime its own paper targets (the fitted estimator-quality curves behind
 Figure~\ref{fig:f5}, and measured on the real model at $1.36\times$,
 Table~\ref{tab:tb4}); the pairing halves factor storage in exchange, and at
-small $N$ the difference is within noise, so this is a choice to expose, not
-a defect. Third, the reference's rank-1 path does not compile on a 16\,GB
-TPU chip at $d{=}512$, $N{=}16384$ (24.1\,GiB of compiler temporaries,
-reproducible with no TPU via the compile-only probe in the repository), the
-same pathology this instrument diagnosed and works around; the same cell
-runs here at 245\,ms. Finally, their reference declines embedding tables
-outright, while the instrument carries that seam. These are properties of
-the released implementations, not evidence that the underlying algorithms
-require the same restrictions.
+small $N$ the difference is inside the replicate spread, so this is a choice to expose, not
+a defect. Two further implementation-level differences (a TPU compile
+failure in the reference's rank-1 path, and its declining embedding
+tables) are documented in Appendix~\ref{sec:refimpl}; they are
+properties of the released implementations, not evidence that the
+underlying algorithms require the same restrictions.
 
 Three rows carry the table's weight. Single-device, the instrument runs
 within 3\% of EGGROLL's own implementation on the A100
 ($0.97$--$1.02\times$ across the shapes) and at $0.68$--$0.85\times$ on
-the v5e; the gap is the honest cost of a general API against a
-specialized one, and it is platform-shaped rather than uniform. At eight
+the v5e; that is an observed implementation gap between a general API and
+a specialized kernel, platform-shaped rather than uniform, and the
+experiment does not isolate its cause. At eight
 devices it reaches $6\times$ their single-chip ceiling, because no
 reference shards and the rows say so rather than hiding it. And evosax, the
 incumbent, runs out of memory at $d{=}2048$ on a 16\,GB chip at every
@@ -170,10 +185,12 @@ about 3\,$\mu$s dearer at $D{=}8$ than at $D{=}1$. The cost that grows is
 the sort, and it is local compute paid redundantly rather than
 communication: 12.1\,ms at $N{=}2^{18}$, identical to within $0.3\%$
 between one device and eight, because every chip sorts the same
-replicated array, about 46\,ns per member on this chip. At the
-populations the source papers actually run, 30 to a few thousand, the
+replicated array, about 46\,ns per member on this chip. At populations
+from the tens \citet{qiu2025} run to a few thousand, the
 whole barrier is under 60\,$\mu$s against generation times in the
-milliseconds. It becomes a leading term only where $N$ reaches the
+milliseconds; at the tens of thousands EGGROLL targets, the sort's
+linear growth puts it near a millisecond. It becomes a leading term
+only where $N$ reaches the
 rank-$r$ regime's extremes and the per-member work is cheap; at
 $N{=}2^{18}$ a 12\,ms sort would rival a low-rank generation itself, and
 a psum-based shaping or a sharded sort would remove it at the design

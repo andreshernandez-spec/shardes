@@ -49,15 +49,17 @@ expresses both bets in one system. The scalar claim is true and beside
 the point: the update placement that all-reduces a model-sized buffer
 wins much of the measured grid anyway, and where each placement wins
 moves with the accelerator. The low-rank motivation strengthens on TPU
-rather than inverting. The only synchronization point is a scalar
-gather; the barrier above it is a replicated local sort. On a
-0.5B-parameter task the cheap perturbation family matches full-rank
-quality at equal samples with a $1.7\times$ accelerator-time advantage, as
-the fitted estimator-quality curves predicted. Against true gradients on
+rather than inverting. The only synchronization shared by both
+placements is a scalar gather; the shaping barrier above it is a
+replicated local sort. On a 0.5B-parameter task the cheap perturbation
+family shows no detectable quality loss against full rank at equal
+samples over three seeds, at $1.8\times$ lower
+steady-state cost per update, as the fitted estimator-quality curves
+predicted. Against true gradients on
 real models at two sizes, the fit predicts full-rank cosine
 within 10\%, its square-root population scaling transfers unrefitted, and a
 correction calibrated at 0.5B predicts 1.5B low-rank cosine within 26\%.
-The contraction crossover also reappears on the production model with
+The contraction crossover also reappears on the real model with
 both signs intact. The stability folklore narrows to the learning-rate
 margin, with a measured
 parameter-drift cost reported beside it. Every result traces to a committed

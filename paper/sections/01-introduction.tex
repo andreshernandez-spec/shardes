@@ -6,7 +6,9 @@
 Evolution strategies train a neural network without computing gradients: perturb
 the weights with random noise, evaluate each perturbed copy, and move the weights
 toward the copies that scored well (a zeroth-order, or gradient-free, method).
-For years this was considered too sample-hungry for large models. In 2025, two
+Its sample efficiency was long reported as several times worse than
+gradient-based training \citep{salimans2017,such2017}, which kept it away
+from large models. In 2025, two
 papers changed that assessment, and they did it with opposite structural bets.
 \citet{qiu2025} perturb every weight independently and avoid storing the noise by
 regenerating it from random seeds (full-rank perturbations with seed
@@ -15,8 +17,8 @@ all: it perturbs each weight matrix with the product of two thin matrices (a
 rank-$r$, or low-rank, factorization), which turns the expensive per-copy work
 into a small correction on top of one shared matrix multiply.
 
-Between and beneath those two papers sits a set of beliefs that, as far as we
-can find, nobody has measured:
+Between and beneath those two papers sits a set of beliefs that we are
+unaware of prior work measuring:
 
 \begin{itemize}
   \item \emph{``ES is cheap to distribute because only scalars cross the
@@ -84,11 +86,9 @@ scoped robustness comparison.
   \item \textbf{The scalar folk claim is true and beside the point.} Strategy
     A does move only scalars (measured: twice the naive byte count,
     Table~\ref{tab:tb2}); strategy B moves a model-sized buffer every update
-    and \emph{wins} over much of the measured grid anyway: as a payload-rate
-    sanity check (collective payload over generation time, not a
-    network-utilization measurement), even its most demanding cell amounts
-    to 7.9\,GB/s against the A100's 600\,GB/s peak NVLink figure
-    (12.2\,GB/s on the v5e). Where each wins forms a
+    and \emph{wins} every dense and seed-regenerated cell anyway, while the
+    cost of that transfer is what returns the low-rank cells to A. Where
+    each wins forms a
     crossover in (population, model size) space that moves between an
     8$\times$A100 node and a TPU v5e-8 (Section~\ref{sec:results},
     Figure~\ref{fig:f2}), in the direction predicted before the
@@ -101,12 +101,14 @@ scoped robustness comparison.
     $0.05$--$0.18\times$ the dense baseline on the v5e against
     $0.13$--$0.42\times$ on the A100, and the dense baseline is infeasible
     over most of the 16\,GB grid besides (Figure~\ref{fig:f4}).
-  \item \textbf{The only synchronization point is the fitness
-    gather, and the expensive part of the barrier above it is not
-    communication.} The gather costs 2.4--6\,$\mu$s at every measured
-    population and device count; the sort behind centered-rank shaping (a
-    property of the shaping, not of ES) costs 12\,ms at $N{=}2^{18}$ and
-    is identical on 1 and 8 devices: replicated local compute.
+  \item \textbf{The only synchronization shared by both contraction
+    placements is the fitness gather, and the expensive part of the
+    barrier above it is not communication.} The gather costs
+    2.4--6\,$\mu$s at every measured population and device count; the
+    sort behind centered-rank shaping (a property of the shaping, not of
+    ES) costs 12\,ms at $N{=}2^{18}$ and is identical on 1 and 8
+    devices: replicated local compute. Strategy B adds the one
+    synchronization beyond these, its model-sized all-reduce.
   \item \textbf{Stability, measured with criteria pre-specified in a
     committed protocol}: the RL
     baseline collapses to zero on every seed at $8\times$ its published

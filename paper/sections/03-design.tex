@@ -40,9 +40,11 @@ dense layers apply $x(W + \tfrac{\sigma}{\sqrt r}AB^\top)^\top$ as
 $xW^\top + ((xB)A^\top)\tfrac{\sigma}{\sqrt r}$, so the full $m\times n$ noise
 matrix never exists in memory. The library treats a profile showing an
 $(N, m, n)$ allocation under the low-rank path as a bug, and
-Section~\ref{sec:results} shows what honoring that invariant buys: the dense
-baseline runs out of memory over half of the measured grid while the
-structured strategies keep running. The honest cost of this generality is
+Section~\ref{sec:results} shows what honoring that invariant buys: on the
+16\,GB chip the dense baseline runs out of memory over most of the
+measured grid, the low-rank family extends the feasible region well past
+it (failing only at the largest cells), and the seed-regenerated family
+covers every cell. The honest cost of this generality is
 an API constraint: a model must route its parameterized matrix multiplies
 and embedding lookups through the library's seams (\texttt{shardes.nn}),
 because a structured weight substituted into the parameter tree raises on
