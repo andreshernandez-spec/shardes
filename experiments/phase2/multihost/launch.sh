@@ -1,0 +1,65 @@
+#!/bin/bash
+# E18 cluster session orchestration. Run ON NODE 0 of the rented cluster,
+# with node 1 reachable over ssh as $NODE1 (and the repo cloned at the same
+# SHA on both nodes at the same path). Every phase can abort cheaply; the
+# order enforces docs/10 section 4 L2-L3.
+#
+#   NODE1=<host-or-ip> SHA=<commit> bash launch.sh
+#
+# Timeouts: the distributed init is the classic first-contact hang, so both
+# preflight and driver invocations are wrapped in `timeout`. If preflight
+# 2x8 times out, check the coordinator port (12377) is reachable from node 1
+# and NCCL_SOCKET_IFNAME; those two cover most first failures.
+set -e
+cd "$(dirname "$0")"
+COORD_PORT=12377
+ME=$(hostname -I | awk '{print $1}')
+: "${NODE1:?set NODE1 to node 1's address}"
+
+run_node1() {  # mirror a command on node 1, same directory
+  ssh -o StrictHostKeyChecking=no "$NODE1" "cd $(pwd) && $*"
+}
+
+phase() { echo; echo "==== $1 ===="; }
+
+phase "preflight 1x8 (node 0 alone: the anchor, writes the invariance ref)"
+E18_TOPOLOGY=1x8 E18_EXPECT_DEVICES=8 timeout 900 python preflight.py
+
+phase "preflight 2x8 (both nodes, 8 GPUs each)"
+run_node1 "E18_TOPOLOGY=2x8 E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=1 \
+  E18_EXPECT_DEVICES=16 timeout 900 python preflight.py" &
+E18_TOPOLOGY=2x8 E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=0 \
+  E18_EXPECT_DEVICES=16 timeout 900 python preflight.py
+wait
+
+phase "preflight 2x4 (4 GPUs per node: H1's controlled topology)"
+run_node1 "CUDA_VISIBLE_DEVICES=0,1,2,3 E18_TOPOLOGY=2x4 \
+  E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=1 E18_EXPECT_DEVICES=8 \
+  timeout 900 python preflight.py" &
+CUDA_VISIBLE_DEVICES=0,1,2,3 E18_TOPOLOGY=2x4 E18_COORD=$ME:$COORD_PORT \
+  E18_NPROC=2 E18_PID=0 E18_EXPECT_DEVICES=8 timeout 900 python preflight.py
+wait
+
+phase "predictions (H4): MUST precede any 2x8 campaign cell"
+python predict.py
+
+phase "campaign 1x8"
+E18_TOPOLOGY=1x8 timeout 3600 python driver.py --config e18.yaml
+
+phase "campaign 2x4"
+run_node1 "CUDA_VISIBLE_DEVICES=0,1,2,3 E18_TOPOLOGY=2x4 \
+  E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=1 \
+  timeout 3600 python driver.py --config e18.yaml" &
+CUDA_VISIBLE_DEVICES=0,1,2,3 E18_TOPOLOGY=2x4 E18_COORD=$ME:$COORD_PORT \
+  E18_NPROC=2 E18_PID=0 timeout 3600 python driver.py --config e18.yaml
+wait
+
+phase "campaign 2x8"
+run_node1 "E18_TOPOLOGY=2x8 E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=1 \
+  timeout 3600 python driver.py --config e18.yaml" &
+E18_TOPOLOGY=2x8 E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=0 \
+  timeout 3600 python driver.py --config e18.yaml
+wait
+
+phase "DONE"
+echo "E18_SESSION_DONE"
