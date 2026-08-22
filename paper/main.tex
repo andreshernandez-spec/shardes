@@ -44,11 +44,11 @@ place the population-weighted update contraction. We compare gathering
 fitnesses and repeating the contraction on every device with contracting local
 population shards and all-reducing model-sized partial updates. In a common
 implementation of seed-regenerated full-rank and never-materialized low-rank
-perturbations, we measure this crossover on an 8$\times$A100 node and a TPU
+perturbations, we measure where each placement wins on an 8$\times$A100 node and a TPU
 v5e-8, one host each, the fattest interconnects available. On those fabrics
 all-reduce wins every measured dense and seed-regenerated cell, whereas
 repeated contraction wins when low-rank structure makes the local work small.
-The hardware-dependent crossover recurs with both signs on Qwen2.5-0.5B.
+The hardware-dependent outcome recurs with both signs on Qwen2.5-0.5B.
 
 We separately test whether the faster perturbations preserve useful update
 directions. Synthetic measurements yield an approximately square-root law for

@@ -6,7 +6,7 @@ and TPU grids, one host each on a fat fabric, locally contracting
 population shards and all-reducing a
 model-sized update wins every dense and seed-regenerated cell. Repeating the
 contraction after a scalar gather returns as the better placement when
-low-rank perturbations make the avoided work small. The crossover moves with
+low-rank perturbations make the avoided work small. The sign map moves with
 the accelerator and recurs, with both signs intact, on Qwen2.5-0.5B. The
 low-rank rewrite's GPU-shaped motivation also strengthens rather than inverts
 on the TPU. Centered-rank shaping adds one shared fitness gather followed by a
