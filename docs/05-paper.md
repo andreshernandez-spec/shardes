@@ -270,6 +270,7 @@ slices (free), **T4** GCP paid GPU, **T5** neocloud spot GPU (cheap reruns).
 | **E12** | End-to-end task validation, ≥3 seeds | C2 | T3 | ~15 | ~$8 |
 | **E13** | Countdown, Qwen2.5-0.5B: rank sweep + GRPO reference | **C6** | T2→T5 | ~30 | ~$30-80 |
 | **E14** | Stability under hyperparameter perturbation: lr x{1/8,8}, sigma x{1/4,4}, kl_beta + clip ablations, 3 seeds | **C7** | T5 | **done** (`countdown/results/e14-a100-2026-08-20`; ES 0 collapses, GRPO 3; both ablations trained fine, reported) | ~$32 |
+| **E15** | Estimator accuracy on the real model: production update vs true NLL gradient, 5 strategies x N in {30,240}, 5 seeds | C6 | T5 | **done** (`countdown/results-e15`; full rank 0.91-0.94x of fit, low-rank uniformly ~0.5x, unpaired 1.36x vs mirrored against 1.34x predicted; Table 4) | ~$19 |
 
 Roughly **150 free accelerator-hours** and **one paid 6-hour GPU session**.
 

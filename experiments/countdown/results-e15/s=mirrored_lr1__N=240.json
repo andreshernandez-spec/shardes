@@ -1,0 +1,35 @@
+{
+ "config": {
+  "strategy": "mirrored_lr1",
+  "population": 240,
+  "sigma": 0.001,
+  "n_prompts": 8,
+  "member_chunk": 30,
+  "objective": "teacher-forced NLL",
+  "smoke": false
+ },
+ "cosines": [
+  0.0004223487921990454,
+  0.00040632771560922265,
+  0.0003760245454031974,
+  0.00038628923357464373,
+  0.0003908836515620351
+ ],
+ "cosine_median": 0.0003908836515620351,
+ "env": {
+  "commit": "5cb1b648916427ac81075e4e219251cdb45f9fd8",
+  "dirty_worktree": false,
+  "jax": "0.11.1",
+  "jaxlib": "0.11.1",
+  "numpy": "2.5.2",
+  "scipy": "1.18.0",
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+  "hostname": "8eabb4bb8f12",
+  "device_count": 1,
+  "device_kind": "NVIDIA A100-SXM4-80GB",
+  "device_platform": "gpu",
+  "xla_flags": "",
+  "jax_platforms": ""
+ }
+}
