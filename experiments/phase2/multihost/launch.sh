@@ -13,11 +13,15 @@
 set -e
 cd "$(dirname "$0")"
 COORD_PORT=12377
-ME=$(hostname -I | awk '{print $1}')
-: "${NODE1:?set NODE1 to node 1's address}"
+# The coordinator address node 1 dials. On an Instant Cluster pass the
+# overlay ip (E18_NODE0_IP); hostname -I's first address is the fallback.
+ME=${E18_NODE0_IP:-$(hostname -I | awk '{print $1}')}
+: "${NODE1:?set NODE1 to the address of node 1}"
+echo "node 0 coordinator $ME:$COORD_PORT, node 1 $NODE1, $(date -u +%FT%TZ)"
 
-run_node1() {  # mirror a command on node 1, same directory
-  ssh -o StrictHostKeyChecking=no "$NODE1" "cd $(pwd) && $*"
+run_node1() {  # mirror a command on node 1, same directory and venv
+  ssh -o StrictHostKeyChecking=no -o BatchMode=yes "$NODE1" \
+    "cd $(pwd) && . /root/shardes/.venv/bin/activate && $*"
 }
 
 phase() { echo; echo "==== $1 ===="; }
