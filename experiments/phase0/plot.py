@@ -9,15 +9,17 @@ slice the task prediction and the E15 bridge use; running the bare command
 reproduces the committed figure. Changing either flag plots a different slice
 and must not be committed over f5-estimator-quality.png.
 
-F5: log-log, x = N/d_eff, y = cos(g_hat, grad). Three panels (full rank,
+F5: log-log, x = N/d_samp, y = cos(g_hat, grad). Three panels (full rank,
 rank 1, rank 4), one curve per scheme with an IQR band, and a vertical line
-at N/d_eff = 1.
+at N/d_samp = 1. The result records retain the historical field name d_eff;
+the paper calls this quantity the sampling dimension.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -59,10 +61,8 @@ FULL_RANK = "full"
 # construction and `centered` would over-correct. Same role, different name, which is exactly
 # what the conditional axis is saying.
 #
-# This is the headline slice because it is the one where g_hat is actually estimating grad f,
-# and so where coupling has any right to show an effect. `centered_ranks` exists on both sides
-# and is the supporting comparison: docs/00 obstacle 2 predicts rank shaping erodes QMC's
-# advantage, so leading with it would bias the figure toward a null.
+# This role-based baseline is available for diagnostics. The paper defaults to
+# `centered_ranks`, matching the update used by E13, E15, and E16.
 BASELINE = {"iid": "centered", "mirrored": "none"}
 
 
@@ -116,11 +116,11 @@ def main(argv=None) -> int:
     synthetic = any(r.get("SYNTHETIC") for r in records)
     truncated = sum(bool(r.get("truncated")) for r in records)
 
-    # (rank, scheme) -> list of (N/d_eff, median, q1, q3)
+    # (rank, scheme) -> list of (N/d_samp, median, q1, q3)
     #
-    # d_eff is read from the record, not recomputed. The driver knows the model's actual
+    # The legacy d_eff field is read from the record, not recomputed. The driver knows the model's actual
     # shape; reconstructing it here is how the x-axis drifts the first time the block
-    # changes. Note the two panels' d_eff measure different things on purpose: see
+    # changes. Note the panels' sampling dimensions differ by perturbation rank: see
     # src/shardes/dimensions.py, and say so in the caption.
     series: dict = defaultdict(list)
     for rec in records:
@@ -147,6 +147,13 @@ def main(argv=None) -> int:
             colour, marker, label = SCHEME_STYLE.get(scheme, ("#000000", "x", scheme))
             points.sort()
             x = [ratio for ratio, *_ in points]
+            # Log-log slope on the medians; the F5 caption quotes the range.
+            lx = [math.log(v) for v in x]
+            ly = [math.log(m) for _, m, _, _ in points]
+            mx, my = sum(lx) / len(lx), sum(ly) / len(ly)
+            slope = (sum((a - mx) * (b - my) for a, b in zip(lx, ly))
+                     / sum((a - mx) ** 2 for a in lx))
+            print(f"slope rank={rank} scheme={scheme}: {slope:.3f}")
             f = (lambda v: 1 - v) if args.y == "one-minus-cos" else (lambda v: v)
             ax.plot(x, [f(m) for _, m, _, _ in points], marker=marker, color=colour,
                     label=label, lw=1.6, ms=5)
@@ -159,7 +166,7 @@ def main(argv=None) -> int:
         ax.axvline(1.0, color="k", ls=":", lw=1)
         ax.set_xscale("log")
         ax.set_yscale("log")
-        ax.set_xlabel(r"$N / d_{\mathrm{eff}}$")
+        ax.set_xlabel(r"$N / d_{\mathrm{samp}}$")
         ax.set_title("full rank" if rank == FULL_RANK else f"rank {rank}")
         ax.grid(alpha=0.25, which="both")
 

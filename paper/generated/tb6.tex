@@ -2,11 +2,12 @@
 \begin{table*}[t]
 \centering
 \small
-\caption{The bridge held out of sample. Cosine against the true
-  NLL gradient ($\times 10^{-4}$; median [min, max] over 5 seeds)
+\caption{The bridge held out of sample. Centered-rank-update cosine
+  against the true teacher-forced-NLL gradient ($\times 10^{-4}$;
+  median [min, max] over 5 seeds)
   on a freshly drawn prompt batch at 0.5B and on Qwen2.5-1.5B,
   against predictions committed before each run: the raw E1 fit at
-  each cell's $N/d_{\mathrm{eff}}$, and for rank 1 at 1.5B the fit
+  each cell's $N/d_{\mathrm{samp}}$, and for rank 1 at 1.5B the fit
   times the 0.53 correction measured at 0.5B. Nothing in the
   predicted columns is fit to these measurements.}
 \label{tab:tb6}

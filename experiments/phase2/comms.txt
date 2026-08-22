@@ -160,3 +160,8 @@ B: 6,292,480 to 100,664,320 bytes
 shaping barrier contributes bytes in 0/96 configurations
 
 every configuration is within 4x of the docs/02 prediction
+
+# NOTE 2026-08-23: re-read of the compiled HLO (three strategies, D=8) shows the two A
+# all-gathers are f32[N] raw fitnesses (shaping) and f32[N] shaped weights (contraction).
+# Member ids are 0..N-1 and fold to a local iota; the "ids and weights" wording above is
+# imprecise, the 8N byte total is unchanged.

@@ -6,18 +6,19 @@
 sending scalar returns rather than gradients and reusing one set of
 hyperparameters across tasks; ARS \citep{mania2018} and deep neuroevolution
 \citep{such2017,conti2017,chrabaszcz2018} belong to the same
-simplicity-first lineage. The two 2025 systems push that lineage to language
+simplicity-first lineage. Two recent systems push that lineage to language
 models by attacking opposite costs: \citet{qiu2025} regenerate exact noise and
 fine-tune billion-parameter models with populations as small as 30, while
 EGGROLL \citep{eggroll2025} factors the noise and reports roughly
 $100\times$ throughput gains with populations in the tens of thousands.
-\citet{cho2026reward} argue the population sizes these systems need are
-largely set by reward design and normalization rather than dimension, a
-complementary axis to the representation and placement questions here
+\citet{cho2026reward} show that reward design and normalization can strongly
+change population requirements in the capable-model regime, a complementary
+axis to the representation and placement questions here
 (and adjacent to the shaping-degeneracy guard of
 Section~\ref{sec:setup}).
-Neither 2025 work measures the update-placement crossover or places both
-perturbation families in one implementation across GPUs and TPUs.
+Neither \citet{qiu2025} nor EGGROLL measures the update-placement crossover
+or places both perturbation families in one implementation across GPUs and
+TPUs.
 
 \paragraph{Zeroth-order optimization for language models.} MeZO
 \citep{malladi2023} also obtains gradients from forward evaluations, but its
@@ -39,25 +40,14 @@ null result for orthogonal Hadamard and scrambled Sobol sampling is scoped to
 the high-dimensional, low-sample, rank-shaped regime measured here; it does
 not claim that coupling or quasi-Monte Carlo is ineffective in general.
 
-\paragraph{RL stability.} The machinery ES omits has distinct lineages: target
-networks address value-learning divergence
-\citep{baird1995,tsitsiklis1997,mnih2015,vanhasselt2018,zhang2021target},
-whereas trust regions, clipping, and reference-model penalties constrain
-policy updates \citep{kakade2002,schulman2015trpo,schulman2017ppo,ouyang2022}.
-Large empirical studies question which ingredients are load-bearing
-\citep{engstrom2020,andrychowicz2020,orz2025}. On the ES side, reports of
-drift-induced forgetting supply a cost to apparent robustness
-\citep{abdi2026forgetting}, and later work finds that degradation to be
-largely recoverable drift, present under RL fine-tuning as well, and
-treatable with anchored regularization \citep{schweighofer2026awd}. The
-exploratory stress test of Appendix~\ref{sec:stability} tests only the
-policy-optimization recipe and reports collapse and drift together.
-
 \paragraph{Distributed systems.} JAX transformations and GSPMD provide the
 compiler and sharding substrate \citep{jax2018,gspmd2021}. Evosax
 \citep{lange2022evosax} is the incumbent JAX ES library; rather than infer the
 effect of its flattened-population interface from source alone,
 Table~\ref{tab:tb1} records the resulting memory ceiling as a failure row.
+\citet{sheng2022tpu} distribute ES on TPUs for meta-learning; their framework
+establishes that TPU-based distributed ES is practical, but does not compare
+the two contraction placements or the GPU/TPU crossover studied here.
 The missing piece across these threads is a common, structured-perturbation
 harness in which algorithm, placement, and accelerator can be varied
 independently.
