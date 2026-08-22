@@ -1,0 +1,42 @@
+# E16 stage 2: does the 0.5B-calibrated correction predict 1.5B? Committed
+# before the run, cited by SHA. Gated by results-e16-gate (PASS, 2026-08-22).
+#
+# Model changes, prompts do not: Qwen2.5-1.5B-Instruct on E15's original
+# frozen batch (puzzle_seed 7). Two arms, five seeds, N in {30, 240}.
+#
+# TWO predictions frozen here before any run, computed from the committed E1
+# fit (sigma 1e-3, centered ranks) at 1.5B's effective dimensions
+# (d_eff full = 1,543,714,304; d_eff rank-1 = 1,452,416):
+#
+#              N=30                N=240
+#   full raw   8.7e-5              2.5e-4
+#   r1 raw     2.0e-4              5.5e-4
+#   r1 x0.53   1.0e-4              2.9e-4     (the E15 geometric-mean correction)
+#
+# Primary checks, in order: (1) within-arm N=240/N=30 stays near sqrt(8)=2.83;
+# (2) the CALIBRATED rank-1 prediction transfers where the raw one is ~2x
+# high; (3) full rank stays near its raw prediction, extending E15's 0.91-0.94x
+# to 1.5B. A positive result: one constant calibrated at 0.5B prospectively
+# predicts estimator accuracy at 1.5B while the N/d_eff law transfers
+# unrefitted.
+#
+# member_chunk 10, not 30: the 1.5B f32 master + gradient hold ~12.4 GB more
+# than the 0.5B run that peaked ~61 GB at chunk 30; 10 divides both N values,
+# is a whole number of antithetic pairs, and bounds the logits well clear of
+# 80 GB. The golden-logit test (tests/test_qwen2_golden.py, 1.5B row) must
+# pass before this config is run on rented hardware.
+
+model: Qwen/Qwen2.5-1.5B-Instruct
+model_config: qwen25_15b
+puzzle_seed: 7
+n_prompts: 8
+pad_to: 128
+sigma: 0.001
+eval_chunk: 1
+member_chunk: 10
+
+strategies: [mirrored_seed, mirrored_lr1]
+populations: [30, 240]
+replicates: 5
+
+results_dir: results-e16-stage2
