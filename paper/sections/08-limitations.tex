@@ -24,11 +24,6 @@
     never timed apart from the generation that carries it, and the
     regeneration-versus-evaluation split is measured on the A100 and pending
     on the v5e.
-  \item \textbf{The placement space is larger than A and B.} Reduce-scatter
-    with sharded update application, compressed collectives, hierarchical
-    contraction, and overlapping the all-reduce with the next evaluation are
-    all unmeasured (Section~\ref{sec:contraction}); overlap in particular
-    could remove the low-rank side of the crossover.
   \item \textbf{The systems workload is a simplified block.} The scaling and
     cost grids use square matrices, $d_{\mathrm{ff}}{=}d$, one head, no
     learned norms, MSE loss, batch 8, and sequence length 32. These choices
