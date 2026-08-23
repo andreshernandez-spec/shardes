@@ -182,7 +182,21 @@ specific to ES \citep{schweighofer2026awd}; the stress test's numbers
 should be read beside both.
 
 \section{Validation checklist}
+\label{sec:validation}
 \input{generated/tb3b}
+% F7c -- experiments/countdown/figures/f7c-e19-positive-control.png (plot_e19.py)
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{f7c-e19-positive-control.png}
+  \caption{The positive control for the task null. Held-out reward against
+    training samples for full rank and rank 1 at population 30 (the
+    Section~\ref{sec:endtoend} arms) and at population 16 on the same
+    120{,}000-sample budget, three seeds each, mean with min--max band. The
+    square-root law predicts 27\% lower alignment per update at 16; the
+    curves do not separate, so the task's plateau, not the perturbation
+    family, sets what the null can resolve.}
+  \label{fig:f7c}
+\end{figure}
 Table~\ref{tab:tb3b} collects the checks behind the systems claims that
 are not themselves timing results: held-out task quality by rank, the
 update--gradient-alignment study's coverage, the sub-float32 fitness guard, and
