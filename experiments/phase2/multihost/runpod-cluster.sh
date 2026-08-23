@@ -108,7 +108,12 @@ for p in json.load(sys.stdin)["pods"]:
   arm)
     sha=${1:?commit sha for the session}; every=${2:-300}
     dir=$(cd "$(dirname "$0")" && pwd); mkdir -p "$dir/results-e18"
-    chain="id=\$(bash '$dir/runpod-cluster.sh' wait $every) && bash '$dir/cluster-session.sh' \$id $sha"
+    # Loop: acquire a cluster, run a session; a session that ABORTS (bad host,
+    # launch died, cap) exits 3, so acquire another. Stop when one COMPLETES
+    # (exit 0) or after E18_MAX_ATTEMPTS tries. Each cluster is torn down by
+    # cluster-session.sh before the next acquisition.
+    max=${E18_MAX_ATTEMPTS:-8}
+    chain="for a in \$(seq 1 $max); do echo \"\$(date -u +%FT%TZ) attempt \$a/$max\"; id=\$(bash '$dir/runpod-cluster.sh' wait $every) || break; bash '$dir/cluster-session.sh' \$id $sha && break; done"
     # A transient systemd user unit outlives the shell that started it; a
     # setsid'd process from a tool shell was killed twice (2026-08-23).
     if command -v systemd-run >/dev/null; then
