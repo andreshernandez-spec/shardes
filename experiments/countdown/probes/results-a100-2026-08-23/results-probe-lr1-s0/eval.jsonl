@@ -1,0 +1,2 @@
+{"generation": 0, "eval_reward": 0.054600007832050323, "eval_solved": 0.0125, "eval_format": 0.4335, "eval_seconds": 30.49739010259509, "param_l2_from_init": 0.0}
+{"generation": 30, "eval_reward": 0.11510000377893448, "eval_solved": 0.0185, "eval_format": 0.9845, "eval_seconds": 23.482938837260008, "param_l2_from_init": 3.653257131576538}

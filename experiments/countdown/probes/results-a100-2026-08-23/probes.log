@@ -1,0 +1,118 @@
+6d56af5 e13 probes: same-host timing of seed, rank 1, and rank 1 without the r=1 pad
+==== probe-seed (2026-08-23T00:49:38Z) ====
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[0] EVAL reward 0.055 solved 0.013 format 0.43 31s
+[0] reward 0.028 max 1.0 format 0.17 solved 0.01 577.6s
+[1] reward 0.017 max 0.1 format 0.17 solved 0.00 629.2s
+[2] reward 0.031 max 0.1 format 0.31 solved 0.00 4.4s
+[3] reward 0.040 max 1.0 format 0.28 solved 0.01 4.3s
+[4] reward 0.043 max 1.0 format 0.31 solved 0.01 4.3s
+[5] reward 0.030 max 0.1 format 0.30 solved 0.00 4.3s
+[6] reward 0.054 max 1.0 format 0.43 solved 0.01 4.3s
+[7] reward 0.069 max 1.0 format 0.39 solved 0.03 4.3s
+[8] reward 0.038 max 0.1 format 0.38 solved 0.00 4.3s
+[9] reward 0.050 max 1.0 format 0.38 solved 0.01 4.3s
+[10] reward 0.059 max 1.0 format 0.33 solved 0.03 4.3s
+[11] reward 0.054 max 1.0 format 0.46 solved 0.01 4.3s
+[12] reward 0.049 max 1.0 format 0.42 solved 0.01 4.3s
+[13] reward 0.054 max 1.0 format 0.46 solved 0.01 4.3s
+[14] reward 0.072 max 1.0 format 0.53 solved 0.02 4.3s
+[15] reward 0.046 max 0.1 format 0.46 solved 0.00 4.3s
+[16] reward 0.058 max 1.0 format 0.55 solved 0.00 4.3s
+[17] reward 0.078 max 1.0 format 0.67 solved 0.01 4.3s
+[18] reward 0.086 max 1.0 format 0.75 solved 0.01 4.3s
+[19] reward 0.081 max 1.0 format 0.55 solved 0.03 4.3s
+[20] reward 0.077 max 1.0 format 0.66 solved 0.01 4.3s
+[21] reward 0.091 max 1.0 format 0.72 solved 0.02 4.3s
+[22] reward 0.103 max 1.0 format 0.69 solved 0.04 4.3s
+[23] reward 0.104 max 1.0 format 0.78 solved 0.03 4.3s
+[24] reward 0.080 max 1.0 format 0.72 solved 0.01 4.3s
+[25] reward 0.087 max 1.0 format 0.69 solved 0.02 4.3s
+[26] reward 0.107 max 1.0 format 0.69 solved 0.04 4.3s
+[27] reward 0.087 max 1.0 format 0.76 solved 0.01 4.3s
+[28] reward 0.077 max 1.0 format 0.73 solved 0.00 4.4s
+[29] reward 0.112 max 1.0 format 0.85 solved 0.03 4.3s
+[30] EVAL reward 0.132 solved 0.041 format 0.95 29s
+done
+==== probe-lr1 (2026-08-23T01:14:08Z) ====
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[0] EVAL reward 0.055 solved 0.013 format 0.43 30s
+[0] reward 0.024 max 1.0 format 0.20 solved 0.00 341.0s
+[1] reward 0.033 max 1.0 format 0.25 solved 0.01 361.2s
+[2] reward 0.028 max 0.1 format 0.28 solved 0.00 3.0s
+[3] reward 0.031 max 0.1 format 0.31 solved 0.00 2.9s
+[4] reward 0.037 max 1.0 format 0.29 solved 0.01 2.9s
+[5] reward 0.040 max 1.0 format 0.37 solved 0.00 2.9s
+[6] reward 0.060 max 1.0 format 0.45 solved 0.02 2.9s
+[7] reward 0.054 max 1.0 format 0.35 solved 0.02 2.9s
+[8] reward 0.052 max 0.1 format 0.52 solved 0.00 2.9s
+[9] reward 0.063 max 1.0 format 0.48 solved 0.02 2.9s
+[10] reward 0.085 max 1.0 format 0.47 solved 0.04 2.9s
+[11] reward 0.062 max 1.0 format 0.51 solved 0.01 2.9s
+[12] reward 0.076 max 1.0 format 0.65 solved 0.01 2.9s
+[13] reward 0.057 max 1.0 format 0.53 solved 0.00 2.9s
+[14] reward 0.067 max 1.0 format 0.56 solved 0.01 2.9s
+[15] reward 0.062 max 1.0 format 0.58 solved 0.00 2.9s
+[16] reward 0.070 max 0.1 format 0.70 solved 0.00 2.9s
+[17] reward 0.071 max 1.0 format 0.63 solved 0.01 2.9s
+[18] reward 0.088 max 1.0 format 0.81 solved 0.01 2.9s
+[19] reward 0.085 max 1.0 format 0.62 solved 0.03 2.9s
+[20] reward 0.082 max 1.0 format 0.75 solved 0.01 2.9s
+[21] reward 0.085 max 1.0 format 0.78 solved 0.01 2.9s
+[22] reward 0.096 max 1.0 format 0.73 solved 0.03 2.9s
+[23] reward 0.098 max 1.0 format 0.76 solved 0.03 2.9s
+[24] reward 0.078 max 0.1 format 0.78 solved 0.00 2.9s
+[25] reward 0.111 max 1.0 format 0.74 solved 0.04 2.9s
+[26] reward 0.117 max 1.0 format 0.83 solved 0.04 2.9s
+[27] reward 0.107 max 1.0 format 0.81 solved 0.03 2.9s
+[28] reward 0.094 max 1.0 format 0.87 solved 0.01 2.9s
+[29] reward 0.098 max 1.0 format 0.76 solved 0.03 2.9s
+[30] EVAL reward 0.115 solved 0.018 format 0.98 23s
+done
+==== probe-lr1-unpadded (2026-08-23T01:29:22Z) ====
+ src/shardes/strategies/lowrank.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[0] EVAL reward 0.055 solved 0.013 format 0.43 31s
+[0] reward 0.027 max 1.0 format 0.20 solved 0.01 351.8s
+[1] reward 0.029 max 1.0 format 0.25 solved 0.00 410.7s
+[2] reward 0.029 max 0.1 format 0.29 solved 0.00 2.6s
+[3] reward 0.029 max 0.1 format 0.29 solved 0.00 2.5s
+[4] reward 0.038 max 1.0 format 0.30 solved 0.01 2.5s
+[5] reward 0.042 max 0.1 format 0.42 solved 0.00 2.5s
+[6] reward 0.058 max 1.0 format 0.47 solved 0.01 2.5s
+[7] reward 0.052 max 1.0 format 0.37 solved 0.02 2.8s
+[8] reward 0.053 max 0.1 format 0.53 solved 0.00 2.5s
+[9] reward 0.058 max 1.0 format 0.47 solved 0.01 2.5s
+[10] reward 0.086 max 1.0 format 0.48 solved 0.04 2.5s
+[11] reward 0.071 max 1.0 format 0.53 solved 0.02 2.5s
+[12] reward 0.076 max 1.0 format 0.65 solved 0.01 2.5s
+[13] reward 0.063 max 1.0 format 0.56 solved 0.01 2.5s
+[14] reward 0.065 max 1.0 format 0.53 solved 0.01 2.5s
+[15] reward 0.073 max 1.0 format 0.61 solved 0.01 2.5s
+[16] reward 0.070 max 0.1 format 0.70 solved 0.00 2.5s
+[17] reward 0.071 max 1.0 format 0.68 solved 0.00 2.5s
+[18] reward 0.091 max 1.0 format 0.80 solved 0.01 2.5s
+[19] reward 0.083 max 1.0 format 0.60 solved 0.03 2.5s
+[20] reward 0.076 max 1.0 format 0.72 solved 0.00 2.5s
+[21] reward 0.098 max 1.0 format 0.76 solved 0.03 2.5s
+[22] reward 0.096 max 1.0 format 0.70 solved 0.03 2.5s
+[23] reward 0.087 max 1.0 format 0.72 solved 0.02 2.5s
+[24] reward 0.076 max 0.1 format 0.76 solved 0.00 2.5s
+[25] reward 0.109 max 1.0 format 0.75 solved 0.04 2.5s
+[26] reward 0.108 max 1.0 format 0.81 solved 0.03 2.5s
+[27] reward 0.110 max 1.0 format 0.84 solved 0.03 2.5s
+[28] reward 0.093 max 1.0 format 0.85 solved 0.01 2.5s
+[29] reward 0.107 max 1.0 format 0.81 solved 0.03 2.5s
+[30] EVAL reward 0.111 solved 0.013 format 0.99 24s
+done
+?? results-es-lr1-frozen-embed-s0/
+?? results-es-lr1-frozen-embed-s1/
+?? results-es-lr1-frozen-embed-s2/
+?? results-es-mirrored-lr1-s0/
+?? results-es-mirrored-lr1-s1/
+?? results-es-mirrored-lr1-s2/
+?? results-probe-lr1-s0/
+?? results-probe-lr1-unpadded-s0/
+?? results-probe-seed-s0/
+PROBE_DONE

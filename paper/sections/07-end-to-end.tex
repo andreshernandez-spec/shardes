@@ -158,7 +158,7 @@ mechanism.
   \caption{The curves of Figure~\ref{fig:f7}, ES arms only, against
     cumulative accelerator time in steady state: generations 0 and 1 are
     both excluded because both are compilation-scale events in every arm
-    and seed (335--671\,s against steady-state 2.4--4.3\,s per update),
+    and seed (322--635\,s against steady-state 2.8--4.5\,s per update),
     and held-out evaluation decode is excluded on both axes as
     measurement overhead. The evaluation at generation $g$ runs before
     update $g$, so its x is the cumulative time of updates strictly
@@ -172,19 +172,24 @@ mechanism.
 \paragraph{Equal samples, unequal seconds.} Figure~\ref{fig:f7}
 resolves no rank-dependent quality difference over three seeds;
 Figure~\ref{fig:f7b} prices the same curves in accelerator time. A
-steady-state full-rank update costs 4.29\,s against 2.41\,s for rank 1,
+steady-state full-rank update costs 4.44\,s against 2.99\,s for rank 1,
 means over the 498 steady-state updates each run observed (the
 regeneration compute the cost surfaces of Section~\ref{sec:results}
-price at microbenchmark scale, here on the real model): 44\% less time per
-update, equivalent to a $1.78\times$ update-throughput advantage, and an
-estimated 2147\,s against 1205\,s for a
+price at microbenchmark scale, here on the real model): 33\% less time per
+update, equivalent to a $1.50\times$ update-throughput advantage, and an
+estimated 2211\,s against 1490\,s for a
 500-update run. Time to first reach the shared plateau (held-out reward
-0.15) is 419--1069\,s for full rank against 236--483\,s for rank 1
-across seeds; the ranges overlap between 419 and 483\,s, so three seeds
+0.15) is 432--1103\,s for full rank against 299--592\,s for rank 1
+across seeds; the ranges overlap between 432 and 592\,s, so three seeds
 do not resolve a strict time-to-threshold ordering, and the per-update
-ratio is the clean claim. This is where the systems and quality halves meet:
-the cheap perturbation uses 44\% less time per update, while the experiment
-resolves no additional sample requirement.
+ratio is the clean claim. The rank-1 figure is for the program as released,
+which pads the rank-1 factors to a rank-2 contraction so the TPU keeps
+them fused; on the A100 that pad costs rank 1 16\% per update (a same-host
+probe puts the unpadded program at 2.49\,s against 2.89\,s, archived with
+the campaign), so a platform-specific build would widen the gap to 42\%.
+This is where the systems and quality halves meet: the cheap perturbation
+uses a third less time per update, while the experiment resolves no
+additional sample requirement.
 
 \paragraph{GRPO context.} The GRPO arm \citep{deepseekmath2024} uses the
 published settings of \citet{qiu2025}, without tuning. Its variance across
