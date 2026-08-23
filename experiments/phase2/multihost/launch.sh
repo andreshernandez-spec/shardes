@@ -70,5 +70,10 @@ E18_TOPOLOGY=2x8 E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=0 \
   timeout 3600 python driver.py --config e18.yaml
 wait
 
+if [ "${E18B:-0}" = 1 ]; then
+  phase "E18b: fabric throttle sweep (same cluster, after the baseline)"
+  NODE1=$NODE1 E18_NODE0_IP=$ME bash launch-e18b.sh
+fi
+
 phase "DONE"
 echo "E18_SESSION_DONE"

@@ -1,3 +1,9 @@
 # Rehearsal output is for debugging the driver, never for a figure (docs/03).
 results-e18-rehearsal/
 e18-invariance-ref.npz
+# Operational session logs (poller, launch, pids): noise, not results. The
+# cell JSONs, preflight-*.json, predictions*.json and README.md still commit.
+results-e18*/arm*.log
+results-e18*/e18.log
+results-e18*/session.log
+results-e18*/e18.pid
