@@ -53,14 +53,21 @@ flip near-tied greedy tokens and the sampled trajectories diverge from there (th
 manuscript's real-hardware invariance paragraph). Held-out reward is unmoved,
 0.156 [0.155, 0.157] against the padded 0.157 [0.154, 0.160].
 
-`probes/` settles the pad's cost on one host, one SHA, one jax, 30 generations each
-(`probes/results-a100-2026-08-23/`, diagnosis only):
+`probes/` settles the pad's cost on one host, one SHA, one jax, 30 generations each,
+twice: once under the build that padded everywhere (`results-a100-pad-everywhere/`,
+6d56af5, which is what motivated the change) and once under the released build
+(`results-a100-pad-tpu-only/`, 030732d). Diagnosis only, one seed, nothing cited from
+here:
 
-| probe | s/update |
-|---|---|
-| full rank | 4.32 |
-| rank 1, pad off (what the A100 now runs) | 2.49 |
-| rank 1, pad on (what the TPU runs) | 2.89 |
+| probe | pad everywhere | pad TPU-only |
+|---|---|---|
+| full rank | 4.32 | 4.37 |
+| rank 1, as the platform runs it | 2.89 (padded) | 2.56 (unpadded) |
+| rank 1, the other build, forced | 2.49 (pad off by hand) | 2.95 (pad forced on) |
+
+The pad costs the A100 15-16% per update in both sets. On one host the released build
+puts rank 1 41% below full rank (2.56 against 4.37, 1.71x), which is the campaign's
+41% and 1.69x measured across hosts.
 
 Scope of the pad change, audited over every committed result record: of 1081 A100
 timing records only four stamp a commit at or after a671dc6, and none of them is a
@@ -76,5 +83,7 @@ launch of all three pods died in generation 0 on `apply_chat_template requires j
 (a transformers 5.15.1 dependency the bootstrap did not install); jinja2 was added and
 the campaigns relaunched from scratch, so no run here was resumed.
 
-Costs: three pods, 20:19 to 00:05 / 00:50 / 01:45 UTC including the failed launch and
-the probes, about 13.7 pod-hours, $19.
+Costs: the first campaign ran on three pods, 20:19 to 00:05 / 00:50 / 01:45 UTC
+including the failed launch and the first probe set, about 13.7 pod-hours, $19. The
+rank-1 rerun ran on two more, 06:59 to 09:35 and 10:20 UTC with the second probe set,
+about 5.5 pod-hours, $8.
