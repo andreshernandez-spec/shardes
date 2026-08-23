@@ -45,9 +45,31 @@ compute, split D ways under B and replicated under A.
 
 ## TPU v5e-8 (Kaggle), D=8
 
-Pending: the first v5e session (kernel `kaggle/t7ladder`, commit 8d06d64) reduced a
-(D, n/D) array, so every labelled payload was an eighth of what B moves, and its
-numbers are not kept. The corrected script runs at the head of the `kaggle/e17btpu`
-kernel; its JSON and table land here when that session returns. For orientation only,
-the mislabelled run put the one-op floor at 0.61 ms and the 12.5 MiB reduction at
-0.95 ms.
+`ladder-tpu-v5-lite-D8.json`, commit 41b04b9, clean worktree, jax 0.11.1, from the
+head of the `kaggle/e17btpu` kernel's first session. (A first session of
+`kaggle/t7ladder` at 8d06d64 reduced a (D, n/D) array, so every labelled payload was an
+eighth of what B moves; its numbers are not kept.)
+
+| payload | what | call (us) | step (us) |
+|---|---|---|---|
+| 8 B | latency point | 599 | 6 |
+| 1 KiB | | 617 | 12 |
+| 1 MiB | | 624 | 27 |
+| 6 MiB | d=512 block, 1.57M float32 | 774 | 123 |
+| 96 MiB | d=2048 block, 25.2M float32 | 2668 | 2006 |
+| 100 MiB | bandwidth point | 2733 | 2105 |
+| all-gather 1 KiB | N=256 fitnesses | 590 | 4 |
+| all-gather 4 KiB | N=1024 | 591 | 5 |
+| all-gather 1 MiB | N=2^18 | 635 | 20 |
+
+Fit: alpha 6 us, beta 46 GiB/s of payload; one-op floor 0.60 ms, a hundred times the
+in-program latency. The small-payload `nocomm` slopes are within noise of zero, so the
+8 B to 1 MiB steps are latency and should be read as 5-30 us, not to the microsecond.
+
+Against the A100 node: the v5e all-reduce starts five times sooner (6 against 27 us)
+and finishes the 96 MiB block in twice the time (2.0 against 0.93 ms), so ICI has lower
+latency and about half the bandwidth of NVLink for this collective. Against the v5e
+cost surface (`results-cost-tpu-v5e8/`, one chip): the d=2048 block's generation is
+377 ms at N=256, so B's 2 ms all-reduce is 0.5% of it, and at d=512 the 0.12 ms sits
+against 23 ms. The conclusion is the same on both fabrics: the placement sign map is
+set by where the contraction compute runs, not by the bytes either placement moves.
