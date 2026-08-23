@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Regenerate F7 and F7b from results/e13-a100-2026-08-17. No hand-edited numbers.
+"""Regenerate F7 and F7b from results/e13-a100-2026-08-22-clean. No hand-edited numbers.
 
     python plot_e13.py        # figures/f7-e13-heldout.png, f7b-e13-wallclock.png
 
@@ -33,7 +33,14 @@ matplotlib.use("Agg")  # headless: this has to work over ssh and in a notebook d
 import matplotlib.pyplot as plt  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-RESULTS = HERE / "results" / "e13-a100-2026-08-17"
+RESULTS = HERE / "results" / "e13-a100-2026-08-22-clean"
+# The GRPO baseline was not part of the clean ES rerun; its evals stay with the
+# 08-17 campaign (results/grpo-a100-2026-08-17 holds the trainer state).
+GRPO = HERE / "results" / "e13-a100-2026-08-17"
+
+
+def where(stem):
+    return GRPO if stem == "grpo" else RESULTS
 FIGURES = HERE / "figures"
 
 EVALS_PER_UNIT = 240  # per ES generation and per GRPO step alike; see module docstring
@@ -54,7 +61,7 @@ def curves(stem: str, xkey: str):
     """[(x_evals, [reward per seed]) ...] over the arm's three seed files."""
     by_x = {}
     for s in (0, 1, 2):
-        for row in map(json.loads, (RESULTS / f"{stem}-s{s}-eval.jsonl").open()):
+        for row in map(json.loads, (where(stem) / f"{stem}-s{s}-eval.jsonl").open()):
             by_x.setdefault(row[xkey] * EVALS_PER_UNIT, []).append(row["eval_reward"])
     return sorted(by_x.items())
 
@@ -69,7 +76,7 @@ def main() -> None:
     # the gap between them as a training effect.
     for stem, label in (("es-mirrored-seed", "base model (JAX decoder)"),
                         ("grpo", "base model (HF decoder)")):
-        floor = json.loads((RESULTS / f"{stem}-s0-eval.jsonl")
+        floor = json.loads((where(stem) / f"{stem}-s0-eval.jsonl")
                            .open().readline())["eval_reward"]
         ax.axhline(floor, color="#888888", lw=1.0, ls="--", zorder=1)
         ax.annotate(label, (0.35, floor), xycoords=("axes fraction", "data"),
@@ -118,7 +125,7 @@ def wallclock() -> None:
         rew_by_gen: dict = {}
         for s in (0, 1, 2):
             logs = [json.loads(l) for l in
-                    (RESULTS / f"{stem}-s{s}-log.jsonl").open()]
+                    (where(stem) / f"{stem}-s{s}-log.jsonl").open()]
             cum, c = {}, 0.0
             for r in logs:
                 if r["generation"] <= 1:
@@ -126,7 +133,7 @@ def wallclock() -> None:
                 # eval at g precedes update g: charge it the time BEFORE g.
                 cum[r["generation"]] = c
                 c += r["seconds"]
-            for e in map(json.loads, (RESULTS / f"{stem}-s{s}-eval.jsonl").open()):
+            for e in map(json.loads, (where(stem) / f"{stem}-s{s}-eval.jsonl").open()):
                 g = e["generation"]
                 if g <= 1:
                     continue
