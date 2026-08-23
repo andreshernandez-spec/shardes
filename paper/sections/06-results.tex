@@ -67,7 +67,11 @@ ahead at $d{=}2048$ by 4--15\% on the A100 and 17--46\% on the v5e. Both
 halves match the prediction: B's
 advantage grows with per-candidate work, and A returns where that work
 becomes small; its trajectory in device count is monotone
-(Figure~\ref{fig:f2b}). The folk claim resolves as true but incomplete:
+(Figure~\ref{fig:f2b}). The grid is $3\times2$ per platform with holes at the
+memory ceiling, which resolves regions and the sign changes between them
+rather than a contour: read a crossover here as the cell where the sign
+turns, not as a value of $N$ or $d$. The folk claim resolves as true but
+incomplete:
 A moves only scalars, but B all-reduces a model-sized buffer and still
 wins whenever the contraction it avoids costs more than those bytes.
 Strategy A's scalar payload is exactly twice the naive count
@@ -107,10 +111,14 @@ $N{=}128$. A collective issued inside a generation holding a model's worth of
 live buffers is not the collective the ladder times in an otherwise empty
 program, and the contraction itself has never been timed apart from the
 generation that carries it. Which of the two owns the shortfall is settled by
-neither harness here (Section~\ref{sec:limitations}). Every number in this paragraph is also one
-host with a fat fabric: an NVLink node and a v5e host are where a 100\,MB
-all-reduce is cheapest, and the commodity clusters the scalar folk claim was
-made for \citep{salimans2017} are not measured here.
+neither harness here. Every number in this paragraph is also one host with a
+fat fabric: an NVLink node and a v5e host are where a 100\,MB all-reduce is
+cheapest, the dense-side result is therefore B's easy case, and the commodity
+clusters of hundreds of workers the scalar folk claim was made for
+\citep{salimans2017} are where it may well hold. Nothing here crosses a host
+boundary, and the boundary is where the fabric term grows by one to two orders
+of magnitude, so it is the one change that could move the crossover
+substantially rather than shift it.
 
 \input{generated/tb7}
 
@@ -128,7 +136,12 @@ at its largest model size. The memory column doubles as a finding: rank
 the seed arm runs at every cell, the storage-for-compute trade at real
 scale. The one absent B cell was killed during compilation; its A
 sibling exceeded memory at the same shape, so no feasible placement was
-demonstrated for that cell.
+demonstrated for that cell. This anchor is one accelerator: the real-model
+crossover was measured on the v5e only, so it confirms that the block's signs
+survive a real model and not that they survive on both platforms. Every
+cross-accelerator statement in this section rests on the controlled block
+instead, where the 16\,GB and 80\,GB ceilings sit at different cells and
+matched shapes are what make the two comparable.
 
 \input{generated/tb5}
 

@@ -22,9 +22,11 @@ two-matrix MLP), a single head, no learned normalization parameters,
 $d_{\mathrm{ff}}{=}d$ where a real transformer uses roughly $4d$,
 synthetic inputs and targets, mean-squared-error loss. Every matrix being
 square keeps the sampling dimension a single number per rank,
-which is what the alignment study needs; the simplifications move
-arithmetic intensity and memory, and are stated in
-Section~\ref{sec:limitations}. Parameter count is $P{=}6d^2$, so
+which is what the alignment study needs. The simplifications move
+arithmetic intensity and memory, so every absolute ratio from these grids is
+a property of this workload rather than of transformers in general; what
+should carry is the sign of a comparison and how it moves with $N$, $d$ and
+$D$. Parameter count is $P{=}6d^2$, so
 $d{=}2048$ means 25.2M parameters and a 100.7\,MB float32 update. Every
 generation evaluates the whole population on one shared batch of 8
 sequences of length 32. The scaling grid is $d\in\{512, 2048\}$ with
