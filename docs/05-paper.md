@@ -416,7 +416,11 @@ F2 is the figure to design first and work backwards from.
 5. **Experimental setup** — platforms, shape-matching rule, measurement protocol.
 6. **Results** — F1–F4, TB1–TB3.
 7. **Coupled sampling** (conditional) — F5, F6, or the negative result.
-8. **Limitations** — write this honestly and early; see below.
+8. **No limitations section.** Decided 2026-08-23: a caveat goes with the claim it
+   qualifies, in the same paragraph, or it goes nowhere. A separate section invites
+   generic entries nobody expected otherwise ("not every configuration was measured")
+   and lets a real caveat sit four pages from the number it bounds. The list below is
+   the audit trail of where each one landed, not a section to write.
 9. **Related work** — ES at scale, ZO optimization for LLMs (P-GAP, LOREN, GRZO), coupling
    and QMC for ES, sharding in JAX.
 
@@ -426,7 +430,7 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 
 ---
 
-## Limitations to state, not bury
+## Caveats, and the claim each one travels with
 
 - Single-node for the GPU results, if that's what the budget buys.
 - **The cost model closes the dense side of the crossover and not the low-rank side.**
