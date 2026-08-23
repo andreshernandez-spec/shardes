@@ -159,14 +159,20 @@ rank-\{1,4,16\} perturbations in this three-seed experiment
 facts bound what that null can mean. The setup does resolve a known-worse
 arm: the $4\times$ noise-scale ES arm of the appendix stress test stays at
 the base-model floor for its whole 150-step horizon
-(Appendix~\ref{sec:stability}). But every arm here saturates by about
-update 100 (24{,}000 of the 120{,}000 samples), freezing 27\% of the
-parameters changes nothing, and no arm expected to be modestly worse at
-this population (a halved $N$, say) was run as a control; the null is no
-detectable difference in a setup that resolves a freeze and may not
-resolve a modest loss. The
+(Appendix~\ref{sec:stability}). It does not resolve a modestly worse one.
+As a positive control, the full-rank and rank-1 recipes were rerun at
+population 16 on the same 120{,}000-sample budget, an arm the square-root
+law predicts to align 27\% worse per update (prediction frozen in the
+configuration before the run); it reaches the same plateau, inside seed
+noise (Figure~\ref{fig:f7c}, Appendix~\ref{sec:validation}). Every arm
+saturates by 24{,}000--36{,}000 samples and freezing 27\% of the
+parameters changes nothing either. The null is therefore no detectable
+difference in a setup whose ceiling is set by the task: it resolves a
+freeze and does not resolve a 27\% alignment change, so it cannot rank
+the perturbation families more finely than that. The
 outcome agrees with the alignment study's pre-campaign prediction that the
-ranks would be closer than a three-seed experiment could resolve. Because the
+ranks would be closer than a three-seed experiment could resolve, and says
+nothing stronger. Because the
 training objective is decoded reward rather than NLL, this non-difference is
 consistent with the alignment result, not a direct test or proof of its
 mechanism.

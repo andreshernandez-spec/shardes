@@ -41,11 +41,12 @@
     The real-model crossover was measured only on the v5e; cross-accelerator
     comparisons use the controlled block workload.
   \item \textbf{Task validation is one task and one training model size,
-    with a weak positive control.} Countdown with a 0.5B-parameter model,
-    three seeds, and $N{=}30$ cannot
+    with a positive control that did not separate.} Countdown with a
+    0.5B-parameter model, three seeds, and $N{=}30$ cannot
     establish rank parity on other tasks, populations, or scales; the
-    setup saturates early and resolves a frozen arm but was not shown to
-    resolve a modestly worse one. The
+    setup saturates early, resolves a frozen arm, and does not resolve a
+    population the alignment law predicts to be 27\% worse, so the rank
+    null is bounded by the task ceiling. The
     alignment chain spans 0.5B and 1.5B models, but no 1.5B training run was
     performed.
   \item \textbf{The low-rank correction is empirical.} The 0.53 factor has a
