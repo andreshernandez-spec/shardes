@@ -44,6 +44,18 @@ none is retroactively presented as a prediction. Section~\ref{sec:results}
 tests the byte count and this directional claim on both platforms
 (Figure~\ref{fig:f2}).
 
+Bytes are what the placement determines and time is what decides a cell, and
+the two are not the same statement: a payload reaches a duration through a
+rate that depends on the payload's own size and on the fabric, so identical
+byte counts can and do give different crossovers on different hardware. The
+byte count is therefore the part worth committing in advance, because it is
+the part that transfers. What it costs is a separate measurement, one per
+fabric, reported in Section~\ref{sec:results} (Table~\ref{tab:tb7}). That
+conversion is calibrated on the same platforms it explains, so it is an
+account of the crossover rather than a second prediction; the prediction it
+supports is the one made for a slower fabric, where it has not yet been
+tested.
+
 A and B are two points in a larger space this paper does not measure. A
 reduce-scatter followed by an all-gather, with the update applied sharded
 (the ZeRO arrangement, \citealp{rajbhandari2020zero}), halves B's bytes;
