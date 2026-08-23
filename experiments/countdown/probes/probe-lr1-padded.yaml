@@ -15,7 +15,7 @@ pad_to: 128                      # prompt budget; measured max for this template
 max_new: 96
 generations: 30
 checkpoint_every: 1000
-results_dir: results-probe-lr1-unpadded
+results_dir: results-probe-lr1-padded
 eval_seed: 1007
 eval_puzzles: 2000
 eval_every: 1000
