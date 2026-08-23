@@ -36,31 +36,35 @@ teardown() {
 
 # -- 1. both pods RUNNING with a direct endpoint and an overlay ip --------
 say "waiting for 2 pods of $CLUSTER"
+# Only the primary gets a public ssh endpoint; node 1 is reached through
+# node 0 over the overlay with a ProxyJump (the key stays on this machine).
 for i in $(seq 1 60); do
   P=$(pods) || true
-  if [ "$(grep -c ' RUNNING$' <<<"$P")" = 2 ] && ! grep -q 'None' <<<"$P"; then break; fi
+  if [ "$(grep -c ' RUNNING$' <<<"$P")" = 2 ] && ! grep '^0 ' <<<"$P" | grep -q None \
+     && ! grep '^1 ' <<<"$P" | awk '{print $4}' | grep -q None; then break; fi
   sleep 20
 done
 echo "$P"
 read -r _ H0 P0 IP0 _ < <(grep '^0 ' <<<"$P")
 read -r _ H1 P1 IP1 _ < <(grep '^1 ' <<<"$P")
-if [ -z "${H0:-}" ] || [ -z "${H1:-}" ] || [ "$IP0" = None ] || [ "$IP1" = None ]; then
+if [ -z "${H0:-}" ] || [ "$H0" = None ] || [ "${IP0:-None}" = None ] || [ "${IP1:-None}" = None ]; then
   say "pods never became reachable; tearing down"; teardown; exit 1
 fi
-N0="root@$H0"; N1="root@$H1"
+N0="root@$H0"
 ssh0() { ssh $SSHOPT -p "$P0" "$N0" "$@"; }
-ssh1() { ssh $SSHOPT -p "$P1" "$N1" "$@"; }
+ssh1() { ssh $SSHOPT -J "$N0:$P0" "root@$IP1" "$@"; }
+IFNAME=${E18_IFNAME:-ens1}
 for i in $(seq 1 30); do ssh0 true 2>/dev/null && ssh1 true 2>/dev/null && break; sleep 15; done
 ssh0 true && ssh1 true || { say "ssh never came up; tearing down"; teardown; exit 1; }
 
 # -- 2. bootstrap both nodes, in parallel --------------------------------
 BRANCH=${E18_BRANCH:-e18-runpod-cluster}
-BOOT="set -e; cd /root && git clone -q --depth 50 --branch $BRANCH https://github.com/andreshernandez-spec/shardes.git \
+BOOT="set -e; cd /root && rm -rf shardes && git clone -q --depth 50 --branch $BRANCH https://github.com/andreshernandez-spec/shardes.git \
   && cd shardes && git checkout -q $SHA \
   && python3 -m venv .venv && . .venv/bin/activate && pip install -q -e . --no-deps \
   && pip install -q 'jax[cuda12]>=0.11' numpy scipy pyyaml 2>&1 | grep -iv warning | tail -2; \
   python -c 'import jax,socket; print(socket.gethostname(), jax.__version__, len(jax.devices()), jax.devices()[0].device_kind)'"
-say "bootstrapping node 0 ($H0:$P0, overlay $IP0) and node 1 ($H1:$P1, overlay $IP1) at $SHA"
+say "bootstrapping node 0 ($H0:$P0, overlay $IP0) and node 1 (via node 0, overlay $IP1) at $SHA"
 ssh0 "$BOOT" > /tmp/e18-boot0.log 2>&1 & b0=$!
 ssh1 "$BOOT" > /tmp/e18-boot1.log 2>&1 & b1=$!
 wait $b0; r0=$?; wait $b1; r1=$?
@@ -76,7 +80,7 @@ say "overlay ssh ok"
 
 # -- 4. launch, detached on node 0 ----------------------------------------
 ssh0 "cd /root/shardes/experiments/phase2/multihost && . /root/shardes/.venv/bin/activate \
-  && NODE1=$IP1 E18_NODE0_IP=$IP0 SHA=$SHA setsid bash -c 'echo \$\$ > /root/e18.pid; exec bash launch.sh' > /root/e18.log 2>&1 < /dev/null & sleep 1; echo launched pid \$(cat /root/e18.pid)"
+  && NODE1=$IP1 E18_NODE0_IP=$IP0 SHA=$SHA NCCL_SOCKET_IFNAME=$IFNAME GLOO_SOCKET_IFNAME=$IFNAME setsid bash -c 'echo \$\$ > /root/e18.pid; exec bash launch.sh' > /root/e18.log 2>&1 < /dev/null & sleep 1; echo launched pid \$(cat /root/e18.pid)"
 say "launch.sh started on node 0; log /root/e18.log"
 
 # -- 5. harvest loop until done or cap -----------------------------------
