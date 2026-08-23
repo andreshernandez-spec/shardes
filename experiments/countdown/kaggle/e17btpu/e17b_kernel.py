@@ -2,9 +2,8 @@
 
 Same shape as e17tpu (which ran E17's 31 cells in one session): upgrade jax,
 assert 8 chips in a fresh interpreter, clone at the pinned SHA, run the
-collective ladder and the regeneration decomposition (phase2/, a few
-minutes), then the driver under a 7 h internal budget, and bring
-results-ladder, results-regen and results-e17b home. Exit code: 0 when the
+regeneration decomposition (phase2/, a few minutes), then the driver
+under a 7 h internal budget, and bring results-regen and results-e17b home. Exit code: 0 when the
 driver finished the grid, 2 on a budget stop (resume by committing the
 results and pushing again at a SHA that contains them), 1 otherwise.
 """
@@ -37,14 +36,13 @@ run(["git", "checkout", "-q", SHA], cwd="shardes")
 run(["git", "log", "--oneline", "-1"], cwd="shardes")
 run([sys.executable, "-m", "pip", "install", "-q", "-e", "shardes", "--no-deps"])
 
-# The collective ladder first: a minute on 8 chips, and it rides this queue slot
-# rather than waiting hours for its own. Its failure does not block the grid.
-lad = subprocess.run([sys.executable, "shardes/experiments/phase2/allreduce_ladder.py"])
-print(f"ladder exit: {lad.returncode}", flush=True)
+# Small phase2 jobs ride this queue slot rather than waiting hours for their
+# own. Session 1 (41b04b9) ran the collective ladder, committed since; the
+# regeneration decomposition runs here under the timer fixed in 6718d82.
+# Their failure does not block the grid.
 reg = subprocess.run([sys.executable, "shardes/experiments/phase2/regen_decompose.py"])
 print(f"regen exit: {reg.returncode}", flush=True)
-subprocess.run(["bash", "-c", "cp -r shardes/experiments/phase2/results-ladder "
-               "shardes/experiments/phase2/results-regen . || true"])
+subprocess.run(["bash", "-c", "cp -r shardes/experiments/phase2/results-regen . || true"])
 
 r = subprocess.run(
     [sys.executable, "shardes/experiments/countdown/e17_systems.py",
