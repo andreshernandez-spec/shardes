@@ -14,7 +14,7 @@ CLUSTER=${1:?cluster id}; SHA=${2:?commit sha}
 CAP_SECONDS=${E18_CAP_SECONDS:-18000}        # 5 h, docs/10 section 5
 HERE=$(cd "$(dirname "$0")" && pwd)
 KEY=$HOME/.ssh/id_runpod
-SSHOPT="-i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=20"
+SSHOPT="-i $KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2"
 API=https://api.runpod.io/v2
 T0=$(date +%s)
 say() { echo "$(date -u +%FT%TZ) $*"; }
@@ -91,12 +91,18 @@ while true; do
   rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/e18.log" "$HERE/results-e18/e18.log" 2>/dev/null
   last=$(tail -n 1 "$HERE/results-e18/e18.log" 2>/dev/null)
   say "cells $(ls "$HERE/results-e18"/arm=*.json 2>/dev/null | wc -l); last: $last"
-  if grep -q 'E18_SESSION_DONE' "$HERE/results-e18/e18.log" 2>/dev/null; then say "session done"; break; fi
-  # pid file, not pgrep -f: the pattern would match the remote shell itself
-  if ! ssh0 'kill -0 $(cat /root/e18.pid) 2>/dev/null' 2>/dev/null; then say "launch.sh is no longer running (see e18.log)"; break; fi
-  if [ $(( $(date +%s) - T0 )) -ge "$CAP_SECONDS" ]; then say "HARD CAP reached"; break; fi
+  if grep -q 'E18_SESSION_DONE' "$HERE/results-e18/e18.log" 2>/dev/null; then say "session done"; rc=0; break; fi
+  # a wedged host (CUDA_ERROR_UNKNOWN, ssh hangs) is the common failure; a
+  # bounded liveness probe detects it instead of blocking the loop forever.
+  if ! timeout 40 ssh0 'kill -0 $(cat /root/e18.pid) 2>/dev/null' 2>/dev/null; then
+    if timeout 40 ssh0 true 2>/dev/null; then say "launch.sh is no longer running (see e18.log)"
+    else say "node 0 is unreachable (wedged host); aborting"; fi
+    rc=3; break
+  fi
+  if [ $(( $(date +%s) - T0 )) -ge "$CAP_SECONDS" ]; then say "HARD CAP reached"; rc=3; break; fi
 done
 rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/multihost/results-e18/" "$HERE/results-e18/" 2>/dev/null
 rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/e18.log" "$HERE/results-e18/e18.log" 2>/dev/null
 teardown
 say "uptime $(( ($(date +%s) - T0) / 60 )) min; results in $HERE/results-e18"
+exit ${rc:-3}
