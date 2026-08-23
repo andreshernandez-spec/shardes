@@ -215,14 +215,18 @@ incident). The figure and table map: F1, F2 and F2b from
 \texttt{plot\_e14.py}; the appendix grids (M1--M3, both platforms) from
 \texttt{plot.py} against each platform's results directory;
 Tables~\ref{tab:tb1} and~\ref{tab:tb1b} from \texttt{tb1.py};
-Table~\ref{tab:tb2} from \texttt{tb2.py}; Tables~\ref{tab:tb3}
+Table~\ref{tab:tb7} from \texttt{tb7.py}; Tables~\ref{tab:tb3}
 and~\ref{tab:tb3b} from \texttt{tb3.py};
 Table~\ref{tab:tb4} from
 \texttt{analysis\_e15.py}; Table~\ref{tab:tb5} from
 \texttt{tb5\_e17.py}; and Table~\ref{tab:tb6} from
 \texttt{tb6\_e16.py}. Each table
 script accepts \texttt{--latex} and writes the exact file this document
-inputs. Table~\ref{tab:tb6}'s predicted columns are the committed E1 fit
+inputs. The per-collective byte counts quoted in
+Section~\ref{sec:contraction} come from \texttt{comms.py}, which reads the
+compiled HLO, and \texttt{tb2.py} prints them for every cell; they are two
+numbers per placement across the whole grid, so the paper states them rather
+than tabling them. Table~\ref{tab:tb6}'s predicted columns are the committed E1 fit
 and the 0.53 correction, both frozen (rounded) in \texttt{e16-gate.yaml}
 and \texttt{e16-stage2.yaml} before the runs; nothing in them is fit to
 E16's measurements. The test

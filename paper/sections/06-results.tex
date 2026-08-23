@@ -74,11 +74,8 @@ turns, not as a value of $N$ or $d$. The folk claim resolves as true but
 incomplete:
 A moves only scalars, but B all-reduces a model-sized buffer and still
 wins whenever the contraction it avoids costs more than those bytes.
-Strategy A's scalar payload is exactly twice the naive count
-(Table~\ref{tab:tb2}: two $4N$-byte gathers, the raw fitnesses for
-shaping and the shaped weights for the contraction).
-
-\input{generated/tb2}
+Strategy A's scalar payload is exactly twice the naive count, two $4N$-byte
+gathers rather than one (Section~\ref{sec:contraction}).
 
 \paragraph{Bytes into time.} What decides a cell is not the payload but what
 the payload costs, and the two differ by a rate that varies with message size
