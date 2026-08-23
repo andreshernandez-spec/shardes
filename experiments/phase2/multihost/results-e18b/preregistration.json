@@ -1,0 +1,110 @@
+{
+ "alpha_inter_seconds": 0.0001,
+ "devices": 16,
+ "fabrics": {
+  "1gbit": 125000000.0,
+  "10gbit": 1250000000.0,
+  "socket 2 GB/s": 2000000000.0,
+  "25 GbE": 3125000000.0,
+  "100 GbE": 12500000000.0,
+  "200Gb IB": 25000000000.0
+ },
+ "cells": {
+  "seed_regenerated__d=512__N=1024": {
+   "delta_8_seconds": -0.025918273953720927,
+   "contraction_solved_seconds": 0.029718034116689395,
+   "contraction_used_seconds": 0.029718034116689395,
+   "contraction_clamped": false,
+   "nvlink_allreduce_seconds": 0.00011726096272468567,
+   "flip_beta_bytes_per_second": 226369082.48286703,
+   "delta_16_by_fabric": {
+    "1gbit": 0.022538735951261303,
+    "10gbit": -0.0227597472487387,
+    "socket 2 GB/s": -0.0246471840487387,
+    "25 GbE": -0.0257796461287387,
+    "100 GbE": -0.0272895955687387,
+    "200Gb IB": -0.0275412538087387
+   }
+  },
+  "seed_regenerated__d=2048__N=128": {
+   "delta_8_seconds": -0.021994899958372116,
+   "contraction_solved_seconds": 0.026160510265005436,
+   "contraction_used_seconds": 0.026160510265005436,
+   "contraction_clamped": false,
+   "nvlink_allreduce_seconds": 0.0009252243908122182,
+   "flip_beta_bytes_per_second": 4116240150.299054,
+   "delta_16_by_fabric": {
+    "1gbit": 0.7808512117592528,
+    "10gbit": 0.05607548055925283,
+    "socket 2 GB/s": 0.02587649175925283,
+    "25 GbE": 0.007757098479252829,
+    "100 GbE": -0.016402092560747174,
+    "200Gb IB": -0.020428624400747174
+   }
+  },
+  "seed_regenerated__d=2048__N=256": {
+   "delta_8_seconds": -0.05430259904824197,
+   "contraction_solved_seconds": 0.06308071371833128,
+   "contraction_used_seconds": 0.06308071371833128,
+   "contraction_clamped": false,
+   "nvlink_allreduce_seconds": 0.0009252243908122182,
+   "flip_beta_bytes_per_second": 1704125085.5393956,
+   "delta_16_by_fabric": {
+    "1gbit": 0.74623599995355,
+    "10gbit": 0.021460268753550105,
+    "socket 2 GB/s": -0.008738720046449894,
+    "25 GbE": -0.026858113326449894,
+    "100 GbE": -0.05101730436644989,
+    "200Gb IB": -0.05504383620644989
+   }
+  },
+  "mirrored_lr1__d=512__N=1024": {
+   "delta_8_seconds": 7.542897947132587e-05,
+   "contraction_solved_seconds": 1.0945050183966115e-05,
+   "contraction_used_seconds": 1.0945050183966115e-05,
+   "contraction_clamped": false,
+   "nvlink_allreduce_seconds": 0.00011726096272468567,
+   "flip_beta_bytes_per_second": null,
+   "delta_16_by_fabric": {
+    "1gbit": 0.050389131951110146,
+    "10gbit": 0.0050906487511101425,
+    "socket 2 GB/s": 0.003203211951110142,
+    "25 GbE": 0.002070749871110142,
+    "100 GbE": 0.0005608004311101423,
+    "200Gb IB": 0.0003091421911101423
+   }
+  },
+  "mirrored_lr1__d=2048__N=128": {
+   "delta_8_seconds": 0.0016317570116370916,
+   "contraction_solved_seconds": -0.000841383415005087,
+   "contraction_used_seconds": 0.0,
+   "contraction_clamped": true,
+   "nvlink_allreduce_seconds": 0.0009252243908122182,
+   "flip_beta_bytes_per_second": null,
+   "delta_16_by_fabric": {
+    "1gbit": 0.8061129006208249,
+    "10gbit": 0.08133716942082488,
+    "socket 2 GB/s": 0.051138180620824876,
+    "25 GbE": 0.033018787340824876,
+    "100 GbE": 0.008859596300824873,
+    "200Gb IB": 0.004833064460824874
+   }
+  },
+  "mirrored_lr1__d=2048__N=256": {
+   "delta_8_seconds": 0.0014039368834346533,
+   "contraction_solved_seconds": -0.0005838987750134297,
+   "contraction_used_seconds": 0.0,
+   "contraction_clamped": true,
+   "nvlink_allreduce_seconds": 0.0009252243908122182,
+   "flip_beta_bytes_per_second": null,
+   "delta_16_by_fabric": {
+    "1gbit": 0.8058850804926224,
+    "10gbit": 0.08110934929262244,
+    "socket 2 GB/s": 0.05091036049262244,
+    "25 GbE": 0.03279096721262244,
+    "100 GbE": 0.008631776172622434,
+    "200Gb IB": 0.004605244332622435
+   }
+  }
+ }
+}

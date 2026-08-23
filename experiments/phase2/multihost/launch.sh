@@ -49,6 +49,15 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 E18_TOPOLOGY=2x4 E18_COORD=$ME:$COORD_PORT \
   E18_NPROC=2 E18_PID=0 E18_EXPECT_DEVICES=8 timeout 900 python preflight.py
 wait
 
+phase "contraction isolation on the 1x8 mesh (C for H4's point prediction)"
+# Node 0 alone, single process: C is the REPLICATED contraction, the same work on every
+# device, so it needs no boundary and no second node. Non-fatal: without it predict.py
+# falls back to the coarse bracket it used before C existed, which is a worse prediction
+# and not a stopped campaign. Under 5 minutes at these cells.
+timeout 1800 python ../contraction_isolation.py \
+  --strategies seed_regenerated mirrored_lr1 || \
+  echo "WARNING: contraction isolation failed; predictions fall back to the bracket"
+
 phase "predictions (H4): MUST precede any 2x8 campaign cell"
 python predict.py
 
