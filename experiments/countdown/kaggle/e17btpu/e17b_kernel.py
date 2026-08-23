@@ -1,10 +1,11 @@
 """E17b on a TPU v5e-8: the real-model crossover grid for the figure.
 
 Same shape as e17tpu (which ran E17's 31 cells in one session): upgrade jax,
-assert 8 chips in a fresh interpreter, clone at the pinned SHA, run the
-regeneration decomposition (phase2/, a few minutes), then the driver, up to
-four times under a 1.5 h budget each (session 2 was killed mid-cell and a
-relaunch resumes over the per-cell files), and bring results-regen and
+assert 8 chips in a fresh interpreter, clone at the pinned SHA, run the two
+short phase2 jobs (the regeneration decomposition and the contraction
+isolation, both bounded), then the driver, up to four times under a 1.5 h
+budget each (session 2 was killed mid-cell and a relaunch resumes over the
+per-cell files), and bring results-regen, results-contraction and
 results-e17b home. Exit code: 0 when the driver finished the grid, 2 on a
 budget stop, 1 otherwise; either way, resume by committing the results and
 pushing again at a SHA that contains them.
@@ -42,12 +43,26 @@ run(["git", "log", "--oneline", "-1"], cwd="shardes")
 run([sys.executable, "-m", "pip", "install", "-q", "-e", "shardes", "--no-deps"])
 
 # Small phase2 jobs ride this queue slot rather than waiting hours for their
-# own. Session 1 (41b04b9) ran the collective ladder, committed since; the
-# regeneration decomposition runs here under the timer fixed in 6718d82.
-# Their failure does not block the grid.
+# own; the TPU allows one session at a time, so a separate kernel for a
+# ten-minute job would cost this grid its place in the queue. Session 1
+# (41b04b9) ran the collective ladder, committed since. Two run here:
+#
+#   regen_decompose        the v5e re-measurement under the timer fixed in
+#                          6718d82, which the sliced-timer records superseded
+#   contraction_isolation  C per cell, the open term in docs/11's cost model
+#
+# Both are budgeted and resumable per cell, and neither blocks the grid: a
+# failure or a budget stop prints and moves on. 25 min total ceiling against
+# a 9 h session, and the low-rank cells (the ones the crossover needs) run
+# first, so a short stop still lands the useful half.
 reg = subprocess.run([sys.executable, "shardes/experiments/phase2/regen_decompose.py"])
 print(f"regen exit: {reg.returncode}", flush=True)
-subprocess.run(["bash", "-c", "cp -r shardes/experiments/phase2/results-regen . || true"])
+con = subprocess.run([sys.executable,
+                      "shardes/experiments/phase2/contraction_isolation.py",
+                      "--budget", "1200"])
+print(f"contraction exit: {con.returncode} (2 = budget stop, resumable)", flush=True)
+subprocess.run(["bash", "-c", "cp -r shardes/experiments/phase2/results-regen "
+                "shardes/experiments/phase2/results-contraction . || true"])
 
 # Session 2 was killed mid-cell with no message after a run of recorded OOMs
 # (host memory, not HBM: the driver catches RESOURCE_EXHAUSTED and records it).

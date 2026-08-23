@@ -42,7 +42,11 @@ carry-derived scalar every step so the all-gather cannot be hoisted out of the l
 member-id gather is loop-invariant and is hoisted, which costs A one 4N int32 gather across
 the whole chain instead of nine (~8 us total, inside the noise).
 
-One JSON per cell under results-contraction/, stamped with the environment.
+One JSON per cell under results-contraction/, stamped with the environment. A cell whose
+file exists is skipped, so a session that dies partway resumes over what it wrote, and
+`--budget` stops cleanly between cells and exits 2 rather than being killed inside one.
+Cells run cheapest first (low rank before dense, small before large) so a short budget
+buys the crossover's own side of the grid rather than a single dense cell.
 """
 from __future__ import annotations
 
@@ -73,6 +77,9 @@ OUTPUTS = ("results-contraction",)
 #: The F2 grid: the (d, N) cells run.py swept, at the populations each model size fits.
 CELLS = {512: (256, 1024), 2048: (128, 256)}
 CHAIN = (1, 9)
+#: cheapest first: the low-rank arms are where the crossover's open term is, and they
+#: compile and run in a fraction of what a dense or regenerating cell costs.
+ORDER = ("lowrank_r1", "mirrored_lr1", "mirrored_seed", "iid_gaussian", "seed_regenerated")
 SEED = 0
 BUMP = 1e-12  # keeps the chain dependent without moving the numbers
 
@@ -185,7 +192,10 @@ def main(argv=None) -> int:
     ap.add_argument("--repeats", type=int, default=10)
     ap.add_argument("--precision", default="highest", help="matches the F2 sweep")
     ap.add_argument("--strategies", nargs="*", default=None)
+    ap.add_argument("--budget", type=float, default=None,
+                    help="seconds; stop between cells and exit 2 when spent")
     args = ap.parse_args(argv)
+    started = time.perf_counter()
 
     devs = jax.devices()
     d_count = len(devs)
@@ -196,11 +206,18 @@ def main(argv=None) -> int:
     env = harness.capture_env(HERE, OUTPUTS)
 
     cells = {64: (16,)} if args.smoke else CELLS
-    names = args.strategies or (["lowrank_r1"] if args.smoke else sorted(STRATEGIES))
+    names = args.strategies or (["lowrank_r1"] if args.smoke else list(ORDER))
+    names = [n for n in ORDER if n in names] + [n for n in names if n not in ORDER]
+    stopped = False
 
-    for d_model, pops in cells.items():
-        for n in pops:
-            for name in names:
+    for name in names:
+        for d_model, pops in sorted(cells.items()):
+            for n in sorted(pops):
+                if args.budget and time.perf_counter() - started > args.budget:
+                    print(f"STOPPED: budget {args.budget:.0f}s spent before "
+                          f"d={d_model} N={n} s={name}", flush=True)
+                    stopped = True
+                    break
                 slug = f"d={d_model}__N={n}__s={name}__{kind}__D{d_count}"
                 path = out_dir / f"{slug}.json"
                 if path.exists() and not args.smoke:
@@ -224,8 +241,12 @@ def main(argv=None) -> int:
                           f"C/D {rec['contraction_local_seconds'] * 1e3:8.3f} ms, "
                           f"allreduce {rec['allreduce_insitu_seconds'] * 1e6:8.1f} us, "
                           f"shard {rec['shard_ratio'] or float('nan'):.2f}", flush=True)
+            if stopped:
+                break
+        if stopped:
+            break
     print(f"wrote {out_dir}")
-    return 0
+    return 2 if stopped else 0
 
 
 if __name__ == "__main__":
