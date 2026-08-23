@@ -72,7 +72,9 @@ wait
 
 if [ "${E18B:-0}" = 1 ]; then
   phase "E18b: fabric throttle sweep (same cluster, after the baseline)"
-  NODE1=$NODE1 E18_NODE0_IP=$ME bash launch-e18b.sh
+  # best-effort: the baseline campaign above is already harvested, so a sweep
+  # failure must not abort the session or trigger a wasteful re-acquisition.
+  NODE1=$NODE1 E18_NODE0_IP=$ME bash launch-e18b.sh || echo "E18b phase failed; baseline stands"
 fi
 
 phase "DONE"

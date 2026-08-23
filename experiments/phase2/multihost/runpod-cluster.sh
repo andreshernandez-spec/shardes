@@ -103,6 +103,7 @@ for p in json.load(sys.stdin)["pods"]:
     unit=e18-session-$(date -u +%Y%m%dT%H%M%SZ)
     systemd-run --user --unit="$unit" --collect --same-dir \
       --setenv=RUNPOD_API_KEY="$RUNPOD_API_KEY" --setenv=HOME="$HOME" --setenv=PATH="$PATH" \
+      --setenv=E18B="${E18B:-0}" \
       bash -c "exec >> '$dir/results-e18/arm.log' 2>&1 < /dev/null; bash '$dir/cluster-session.sh' $cid $sha"
     echo "session unit $unit on $cid at $sha (systemctl --user stop $unit to abandon; the cluster stays)" ;;
   arm)
@@ -120,6 +121,7 @@ for p in json.load(sys.stdin)["pods"]:
       unit=e18-arm-$(date -u +%Y%m%dT%H%M%SZ)
       systemd-run --user --unit="$unit" --collect --same-dir \
         --setenv=RUNPOD_API_KEY="$RUNPOD_API_KEY" --setenv=HOME="$HOME" --setenv=PATH="$PATH" \
+        --setenv=E18B="${E18B:-0}" \
         bash -c "exec >> '$dir/results-e18/arm.log' 2>&1 < /dev/null; $chain"
       echo "armed: unit $unit (journalctl --user -u $unit; systemctl --user stop $unit), sha $sha, try every ${every}s, log $dir/results-e18/arm.log"
     else

@@ -80,7 +80,7 @@ say "overlay ssh ok"
 
 # -- 4. launch, detached on node 0 ----------------------------------------
 ssh0 "cd /root/shardes/experiments/phase2/multihost && . /root/shardes/.venv/bin/activate \
-  && NODE1=$IP1 E18_NODE0_IP=$IP0 SHA=$SHA NCCL_SOCKET_IFNAME=$IFNAME GLOO_SOCKET_IFNAME=$IFNAME setsid bash -c 'echo \$\$ > /root/e18.pid; exec bash launch.sh' > /root/e18.log 2>&1 < /dev/null & sleep 1; echo launched pid \$(cat /root/e18.pid)"
+  && NODE1=$IP1 E18_NODE0_IP=$IP0 SHA=$SHA E18B=${E18B:-0} NCCL_SOCKET_IFNAME=$IFNAME GLOO_SOCKET_IFNAME=$IFNAME setsid bash -c 'echo \$\$ > /root/e18.pid; exec bash launch.sh' > /root/e18.log 2>&1 < /dev/null & sleep 1; echo launched pid \$(cat /root/e18.pid)"
 say "launch.sh started on node 0; log /root/e18.log"
 
 # -- 5. harvest loop until done or cap -----------------------------------
