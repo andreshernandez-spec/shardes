@@ -72,19 +72,44 @@ A moves only scalars, but B all-reduces a model-sized buffer and still
 wins whenever the contraction it avoids costs more than those bytes.
 Strategy A's scalar payload is exactly twice the naive count
 (Table~\ref{tab:tb2}: two $4N$-byte gathers, the raw fitnesses for
-shaping and the shaped weights for the contraction). The timing experiment does not measure network time separately
-from compute, so what the crossover establishes about communication is
-end-to-end: the model-sized all-reduce did not prevent B from winning
-every dense and seed-regenerated cell. The low-rank timings are consistent
-with its overhead returning cells to A where the contraction work B avoids is too
-small to pay for the transfer. Communication does not decide the dense
-side of the grid; it sets the low-rank side of the crossover. Both
-statements are about one host with a fat fabric: an NVLink node and a v5e
-host are where a 100\,MB all-reduce is cheapest, and the commodity
-clusters the scalar folk claim was made for \citep{salimans2017} are not
-measured here (Section~\ref{sec:limitations}).
+shaping and the shaped weights for the contraction).
 
 \input{generated/tb2}
+
+\paragraph{Bytes into time.} What decides a cell is not the payload but what
+the payload costs, and the two differ by a rate that varies with message size
+and with the fabric. Table~\ref{tab:tb7} times both collectives in isolation
+on both platforms, as the marginal cost of one more collective inside a
+program that is already running rather than as a program of its own: the
+one-op floor is 0.32\,ms on the A100 and 0.60\,ms on the v5e, twelve and a
+hundred times the in-program latency, so it is the marginal number a
+generation pays. B's model-sized all-reduce costs 0.93\,ms on the A100 and
+2.01\,ms on the v5e at $d{=}2048$, and 0.12\,ms on both at $d{=}512$; the
+fitness gather both placements share stays under 10\,$\mu$s everywhere the
+grid runs, and is under 21\,$\mu$s even at $N{=}2^{18}$.
+
+Against the grid the two sides separate cleanly. In every cell B wins, its
+all-reduce is 0.7 to 3.6\% of the advantage it buys, so the model-sized
+transfer is not what decides the dense side; the contraction it avoids is.
+In every cell A wins, the same all-reduce is 57 to 155\% of B's deficit, so
+the low-rank side of the crossover is the collective and almost nothing else.
+That also accounts for the platform shift, which the byte count cannot: the
+same 96\,MiB payload costs $2.17\times$ more on the v5e, and A's low-rank
+lead grows from 4--15\% there to 17--46\%. The fabric moved, the bytes did
+not.
+
+Three of those cells go past 100\%, and that is the model's open term rather
+than a rounding artifact. B is slower in them than its local contraction plus
+the isolated all-reduce can account for, by 0.6 to 0.7\,ms. A collective
+issued inside a generation that is holding a model's worth of live buffers is
+not the collective the ladder times in an otherwise empty program, and the
+difference is measured here but not derived
+(Section~\ref{sec:limitations}). Every number in this paragraph is also one
+host with a fat fabric: an NVLink node and a v5e host are where a 100\,MB
+all-reduce is cheapest, and the commodity clusters the scalar folk claim was
+made for \citep{salimans2017} are not measured here.
+
+\input{generated/tb7}
 
 \paragraph{Placement outcomes on the real model.} The same question,
 re-measured outside the simplified block: Table~\ref{tab:tb5} times one

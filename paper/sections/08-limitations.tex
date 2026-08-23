@@ -10,11 +10,17 @@
     \citep{salimans2017}, where it may well hold; the dense-side result here
     is the easy case for B. Scaling past a host boundary is untested and may
     move the crossover substantially.
-  \item \textbf{Costs are attributed in bytes, not in time.} Every timing
-    is end-to-end wall clock; no collective is timed in isolation at $P$
-    bytes on either fabric, no achieved bandwidth is reported, and the
-    regeneration-versus-matmul-versus-collective split of a generation is
-    not profiled. The crossover is an observation, not a cost model.
+  \item \textbf{The cost model has an open term on the low-rank side.}
+    Bytes are converted to time by collectives timed in isolation on both
+    fabrics (Table~\ref{tab:tb7}), and that closes the dense side: where B
+    wins, its all-reduce is 0.7--3.6\% of the advantage. It does not close
+    the low-rank side. In three cells B is slower than its local contraction
+    plus the isolated all-reduce accounts for, by 0.6--0.7\,ms, so a
+    collective inside a full generation costs more than the same collective
+    in an empty program and the excess is not derived here. Attribution
+    within a generation is also uneven: the regeneration-versus-evaluation
+    split is measured on the A100 and pending on the v5e, and no achieved
+    bandwidth is reported for the collective at sub-payload sizes.
   \item \textbf{The placement space is larger than A and B.} Reduce-scatter
     with sharded update application, compressed collectives, hierarchical
     contraction, and overlapping the all-reduce with the next evaluation are
