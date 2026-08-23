@@ -56,14 +56,27 @@ account of the crossover rather than a second prediction; the prediction it
 supports is the one made for a slower fabric, where it has not yet been
 tested.
 
-A and B are two points in a larger space this paper does not measure. A
-reduce-scatter followed by an all-gather, with the update applied sharded
-(the ZeRO arrangement, \citealp{rajbhandari2020zero}), halves B's bytes;
-reduced-precision or compressed collectives shrink them further; a
-hierarchical contraction replicates within a host and all-reduces across
-hosts; and overlapping B's all-reduce with the next generation's
-evaluation, the standard engineering answer to exactly this trade, could
-hide the transfer entirely. If it can, the low-rank side of the crossover
-belongs to the unoverlapped implementation rather than to the placement.
-What is measured is therefore the two simplest placements as implemented,
-on one host with a fat fabric.
+A and B are the endpoints of the placement space, not two arbitrary samples
+of it, and measuring the endpoints is the economical choice. Every placement
+is a separate implementation against the library's sharding seams and a
+separate pass over the $(N,d)$ grid on rented hardware, so the family was
+never going to be measured whole; the question is which members buy the most
+per pass. These two bound it. A replicates the entire contraction and moves
+the fewest bytes any placement can, B splits the contraction as far as $D$
+devices allow and pays a model-sized transfer to do it, and every
+intermediate trades one for the other between them. A reduce-scatter
+followed by an all-gather, with the update applied sharded (the ZeRO
+arrangement, \citealp{rajbhandari2020zero}), halves B's bytes at the same
+split contraction; reduced-precision or compressed collectives shrink them
+further; a hierarchical contraction is A within a host and B across hosts.
+Each sits inside the bracket, which is what makes the bracket worth the
+machine time.
+
+One thing sits outside it, because it is not a placement at all. Overlapping
+B's all-reduce with the next generation's evaluation, the standard
+engineering answer to exactly this trade, hides the transfer instead of
+shrinking it, so it is bounded by neither endpoint. It is not implemented
+here and not measured. If overlap can hide the transfer entirely, the
+low-rank side of the crossover belongs to the unoverlapped implementation
+rather than to the placement, and that reading stands unrefuted by anything
+in this paper.
