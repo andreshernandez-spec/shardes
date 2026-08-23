@@ -2,17 +2,22 @@
 
 Same shape as e17tpu (which ran E17's 31 cells in one session): upgrade jax,
 assert 8 chips in a fresh interpreter, clone at the pinned SHA, run the
-regeneration decomposition (phase2/, a few minutes), then the driver
-under a 7 h internal budget, and bring results-regen and results-e17b home. Exit code: 0 when the
-driver finished the grid, 2 on a budget stop (resume by committing the
-results and pushing again at a SHA that contains them), 1 otherwise.
+regeneration decomposition (phase2/, a few minutes), then the driver, up to
+four times under a 1.5 h budget each (session 2 was killed mid-cell and a
+relaunch resumes over the per-cell files), and bring results-regen and
+results-e17b home. Exit code: 0 when the driver finished the grid, 2 on a
+budget stop, 1 otherwise; either way, resume by committing the results and
+pushing again at a SHA that contains them.
 """
 import subprocess
 import sys
 from pathlib import Path
 
 SHA = "PINNED_AT_PUSH"
-BUDGET_S = "25200"
+# Per invocation, not per session: the retry loop below can run the driver
+# several times, and 45 cells remain, most of them fast or immediate OOMs.
+BUDGET_S = "5400"
+ATTEMPTS = 4
 
 
 def run(cmd, **kw):
@@ -44,9 +49,23 @@ reg = subprocess.run([sys.executable, "shardes/experiments/phase2/regen_decompos
 print(f"regen exit: {reg.returncode}", flush=True)
 subprocess.run(["bash", "-c", "cp -r shardes/experiments/phase2/results-regen . || true"])
 
-r = subprocess.run(
-    [sys.executable, "shardes/experiments/countdown/e17_systems.py",
-     "--config", "shardes/experiments/countdown/e17b.yaml", "--budget", BUDGET_S])
+# Session 2 was killed mid-cell with no message after a run of recorded OOMs
+# (host memory, not HBM: the driver catches RESOURCE_EXHAUSTED and records it).
+# Every finished cell is on disk, so relaunching resumes over the skip list.
+# Stop when the grid is done, when the driver asks to stop (budget, code 2),
+# or when an entire invocation adds nothing, which is the real failure.
+CELLS = Path("shardes/experiments/countdown/results-e17b")
+prev = -1
+for attempt in range(ATTEMPTS):
+    r = subprocess.run(
+        [sys.executable, "shardes/experiments/countdown/e17_systems.py",
+         "--config", "shardes/experiments/countdown/e17b.yaml", "--budget", BUDGET_S])
+    have = len(list(CELLS.glob("*.json")))
+    print(f"attempt {attempt}: driver exit {r.returncode}, cells on disk {have}",
+          flush=True)
+    if have == 128 or r.returncode == 2 or have == prev:
+        break
+    prev = have
 
 run(["bash", "-c", "cp -r shardes/experiments/countdown/results-e17b . && ls results-e17b"])
 count = len(list(Path("results-e17b").glob("*.json")))
