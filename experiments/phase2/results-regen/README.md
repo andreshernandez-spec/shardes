@@ -35,7 +35,7 @@ inside the fused program costs a third of the standalone draw: regeneration over
 with the matmuls it feeds. The 1.3-3x of the cost surface is, on this platform, the
 price of the random numbers and not much else.
 
-## TPU v5e-8 (Kaggle, one chip), commit 8d06d64, pending re-measurement
+## TPU v5e-8 (Kaggle, one chip), commit 8d06d64, superseded, re-measurement pending
 
 | cell | t_iid | t_seed | seed/iid | t_rng | gap / 2 t_rng |
 |---|---|---|---|---|---|
@@ -44,7 +44,10 @@ price of the random numbers and not much else.
 | d=2048, N=256 | 377.2 ms | 1967.0 ms | 5.2x | 196.2 ms | 4.05 |
 | d=2048, N=1024 | OOM (36 GiB of HLO temporaries against 16 GiB) | | | | |
 
-These ran the first version of the timer, which touched two elements of each draw; on
+These records live in `sliced-timer/` rather than beside the A100 ones, because
+`regen_decompose.py` skips a cell whose output file exists and they blocked their own
+replacement: the e17b kernel's second session skipped all four rather than re-measuring
+them. They ran the first version of the timer, which touched two elements of each draw; on
 the A100 XLA sliced that generation down to the touched elements (the d=2048 draw rate
 came out eleven times the d=512 rate), which is why the timer now reduces the whole
 draw. The v5e rates under the old timer were consistent with full generation (29, 30 and
