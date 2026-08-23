@@ -61,7 +61,12 @@ from jax.sharding import AxisType, Mesh, NamedSharding, PartitionSpec  # noqa: E
 from shardes import sharding  # noqa: E402
 from shardes.core import ShardedES  # noqa: E402
 from shardes.problems import transformer_block  # noqa: E402
+from shardes.strategies import lowrank  # noqa: E402
 from shardes.strategies.lowrank import LowRank  # noqa: E402
+
+# The pad is TPU-only and keyed on the default backend, which is CPU here even though
+# the program below is lowered for a v5e; force it so the probe compiles what a TPU runs.
+lowrank.PAD_RANK1 = True
 from shardes.strategies.mirrored import Mirrored  # noqa: E402
 
 ACT = "4096,8,32,512"  # (mirrored pairs, batch, seq, d) at the halved probe shape
