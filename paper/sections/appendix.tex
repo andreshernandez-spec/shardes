@@ -86,9 +86,10 @@ rank-1 path does not compile on a 16\,GB TPU chip at $d{=}512$,
 $N{=}16384$: the compiler allocates 24.1\,GiB of temporaries,
 reproducible with no TPU via the compile-only probe in the repository,
 the same pathology this instrument diagnosed and works around. The workaround
-pads rank-1 factors with one zero column so the compiler retains a fused matrix
-multiply; its numerical footprint and regression check are archived, and the
-same cell runs here at 245\,ms. The reference also declines embedding tables
+pads rank-1 factors with one zero column on TPU so the compiler retains a fused
+matrix multiply; its numerical footprint and regression check are archived, and
+the same cell runs here at 245\,ms. The pad is TPU-only: the GPU compiler keeps
+these dots monotonic in rank, and padding there only costs time. The reference also declines embedding tables
 outright, while the instrument carries that seam
 (Section~\ref{sec:design}). Both are properties of the released
 implementations, not of the algorithms.
