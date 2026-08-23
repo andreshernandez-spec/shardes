@@ -44,6 +44,8 @@ import jax  # noqa: E402
 NPROC = int(os.environ.get("E18_NPROC", "1"))
 PID = int(os.environ.get("E18_PID", "0"))
 TOPOLOGY = os.environ.get("E18_TOPOLOGY", "unset")
+SETTING = os.environ.get("E18B_SETTING", "")   # E18b throttle tag; empty for baseline
+SUFFIX = f"__set={SETTING}" if SETTING else ""
 CAP_SECONDS = 300  # per warm cell; a compile past this is a failure
 
 if NPROC > 1:
@@ -194,7 +196,8 @@ def main() -> int:
     if PID == 0:
         results_dir = HERE / os.environ.get("E18_RESULTS_DIR", "results-e18")
         results_dir.mkdir(parents=True, exist_ok=True)
-        (results_dir / f"preflight-{TOPOLOGY}.json").write_text(
+        report["setting"] = SETTING
+        (results_dir / f"preflight-{TOPOLOGY}{SUFFIX}.json").write_text(
             json.dumps(report, indent=1))
     log(f"PREFLIGHT PASS ({TOPOLOGY})")
     return 0
