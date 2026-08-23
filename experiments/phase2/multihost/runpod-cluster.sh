@@ -99,8 +99,18 @@ for p in json.load(sys.stdin)["pods"]:
   arm)
     sha=${1:?commit sha for the session}; every=${2:-300}
     dir=$(cd "$(dirname "$0")" && pwd); mkdir -p "$dir/results-e18"
-    setsid nohup bash -c "id=\$(bash '$dir/runpod-cluster.sh' wait $every) && bash '$dir/cluster-session.sh' \$id $sha" \
-      > "$dir/results-e18/arm.log" 2>&1 < /dev/null &
-    echo "armed: pid $!, sha $sha, try every ${every}s, log $dir/results-e18/arm.log" ;;
+    chain="id=\$(bash '$dir/runpod-cluster.sh' wait $every) && bash '$dir/cluster-session.sh' \$id $sha"
+    # A transient systemd user unit outlives the shell that started it; a
+    # setsid'd process from a tool shell was killed twice (2026-08-23).
+    if command -v systemd-run >/dev/null; then
+      unit=e18-arm-$(date -u +%Y%m%dT%H%M%SZ)
+      systemd-run --user --unit="$unit" --collect --same-dir \
+        --setenv=RUNPOD_API_KEY="$RUNPOD_API_KEY" --setenv=HOME="$HOME" --setenv=PATH="$PATH" \
+        bash -c "exec >> '$dir/results-e18/arm.log' 2>&1 < /dev/null; $chain"
+      echo "armed: unit $unit (journalctl --user -u $unit; systemctl --user stop $unit), sha $sha, try every ${every}s, log $dir/results-e18/arm.log"
+    else
+      setsid nohup bash -c "$chain" >> "$dir/results-e18/arm.log" 2>&1 < /dev/null &
+      echo "armed: pid $!, sha $sha, try every ${every}s, log $dir/results-e18/arm.log"
+    fi ;;
   *) sed -n '2,30p' "$0"; exit 2 ;;
 esac
