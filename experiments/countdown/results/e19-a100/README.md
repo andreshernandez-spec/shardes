@@ -16,7 +16,7 @@ Final held-out eval, mean [min-max] over seeds, beside the E13 arms at N=30 (cle
 | arm | N=16 (E19) | N=30 (E13) |
 |---|---|---|
 | full rank | 0.157 [0.154-0.162] | 0.156 [0.151-0.162] |
-| rank 1 | 0.154 [0.152-0.157] | 0.157 [0.154-0.160] |
+| rank 1 | 0.153 [0.149-0.159] | 0.156 [0.155-0.157] |
 
 First evaluation whose seed-mean is at or above 0.15: 24,064 samples for both N=16 arms,
 36,000 and 48,000 for the N=30 arms (evaluations fall every 94 updates at N=16 and every
@@ -33,11 +33,13 @@ frozen prediction (0.73x alignment, visible as a slower or lower curve) was wron
 the curve, not about the alignment, which E19 did not measure.
 
 Timing, steady-state updates 2-939, median per seed: full rank 2.39 / 2.40 / 2.38 s,
-rank 1 2.49 / 2.57 / 2.47 s. At N=16 rank 1 is not cheaper per update. The E13
-per-update ratio (33% less at N=30) is a population-dependent number: the cost surfaces
-of Section 6 put the regeneration cost rank 1 removes in proportion to N, and at 16
-members it no longer covers whatever rank 1 adds. Which part of the update that is was
-not profiled here.
+rank 1 2.21 / 2.19 / 2.16 s, so rank 1 is 8% cheaper per update here against 41% at
+N=30 (Section 6's cost surfaces put the regeneration cost rank 1 removes in proportion
+to N, and at 16 members it barely covers what rank 1 adds). The rank-1 arm was
+re-measured at 030732d, which makes the r=1 pad TPU-only; its first measurement, at
+792a1fd with the pad on every platform, put it at 2.49 / 2.57 / 2.47 s, slower than
+full rank. See `../e13-a100-2026-08-22-clean/README.md`. The full-rank arm is
+unaffected by the pad and keeps its 792a1fd records.
 
 Compilation-scale generations 0 and 1: 325-564 s. Cost: one pod, 20:19 to 02:50 UTC
 including the jinja2 relaunch (see `../e13-a100-2026-08-22-clean/README.md`) and the
