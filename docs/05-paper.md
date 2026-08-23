@@ -432,8 +432,8 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 - **The cost model closes the dense side of the crossover and not the low-rank side.**
   Bytes reach time through the measured collectives (`docs/11-cost-model.md`, `tb7`):
   where B wins its all-reduce is 0.7-3.6% of the advantage, where A wins it is 57-155%
-  of B's deficit. Three cells go past 100%, which is B costing more than its local
-  contraction plus the isolated all-reduce allows. State the open term; do not write
+  of B's deficit. Eight of the eleven fall UNDER 100%, which is B costing more than its
+  local contraction plus the isolated all-reduce allows. State the open term; do not write
   "the crossover is an observation, not a cost model", which stopped being true once
   the ladder ran.
 - v5e-8 has 16 GB/chip, so absolute population sizes don't match EGGROLL's H100 figures.

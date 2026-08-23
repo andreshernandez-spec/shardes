@@ -98,13 +98,16 @@ same 96\,MiB payload costs $2.17\times$ more on the v5e, and A's low-rank
 lead grows from 4--15\% there to 17--46\%. The fabric moved, the bytes did
 not.
 
-Three of those cells go past 100\%, and that is the model's open term rather
-than a rounding artifact. B is slower in them than its local contraction plus
-the isolated all-reduce can account for, by 0.6 to 0.7\,ms. A collective
-issued inside a generation that is holding a model's worth of live buffers is
-not the collective the ladder times in an otherwise empty program, and the
-difference is measured here but not derived
-(Section~\ref{sec:limitations}). Every number in this paragraph is also one
+The cells that fall short of 100\% are the model's open term rather than a
+rounding artifact, and there are eight of the eleven. In each, B is slower
+than its local contraction plus the isolated all-reduce can account for,
+which a contraction cannot be: the shortfall reaches 0.71\,ms on the A100
+and 0.63\,ms on the v5e, both at \texttt{mirrored\_lr1}, $d{=}2048$,
+$N{=}128$. A collective issued inside a generation holding a model's worth of
+live buffers is not the collective the ladder times in an otherwise empty
+program, and the contraction itself has never been timed apart from the
+generation that carries it. Which of the two owns the shortfall is settled by
+neither harness here (Section~\ref{sec:limitations}). Every number in this paragraph is also one
 host with a fat fabric: an NVLink node and a v5e host are where a 100\,MB
 all-reduce is cheapest, and the commodity clusters the scalar folk claim was
 made for \citep{salimans2017} are not measured here.

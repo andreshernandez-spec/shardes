@@ -32,8 +32,9 @@ Run backwards on the committed grids (`python timemodel.py`, no records here nee
 model solves four of twenty A100 cells and four of sixteen v5e cells to a NEGATIVE
 contraction, which is not a thing. Worst is `mirrored_lr1` d=2048 N=128: B costs 0.71 ms
 (A100) and 0.63 ms (v5e) more than its local contraction plus the ladder's all-reduce can
-account for. Every one of those cells is low-rank at the largest model size, which is
-exactly where the crossover's A-favored side lives, so the deficit is not a corner case.
+account for. Every one of those cells is low-rank and six of the eight are at the largest
+model size, which is exactly where the crossover's A-favored side lives, so the deficit is
+not a corner case: it is eight of the eleven cells A wins.
 
 Three candidates, and this experiment separates them:
 

@@ -58,10 +58,11 @@ Nothing here is fitted. `ar` and `ag` come from `allreduce_ladder.py`, `C` from
 
 ## 4. What it does not explain
 
-Three cells past 100% are three cells where B is slower than `C/D + ar` allows, by 0.6 to
-0.7 ms, and a contraction cannot cost less than nothing. Run backwards, four of twenty
-A100 cells and four of sixteen v5e cells solve to a negative `C`, all of them low-rank at
-d=2048. `results-contraction/README.md` lists the three candidate causes and how the
+A cell UNDER 100% is a cell where B is slower than `C/D + ar` allows, and a contraction
+cannot cost less than nothing. Eight of the eleven A-favored cells are under it, four per
+platform, and they solve to a negative `C`. Every one is low-rank; six of the eight are at
+d=2048. The shortfall runs from 0.01 ms up to 0.71 ms on the A100 and 0.63 ms on the v5e,
+both worst at `mirrored_lr1` d=2048 N=128. `results-contraction/README.md` lists the three candidate causes and how the
 measurement separates them. Until it runs, the low-rank side of the crossover is bracketed
 rather than derived, and §8 says so in those words.
 
