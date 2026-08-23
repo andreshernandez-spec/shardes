@@ -75,8 +75,8 @@ model size, while the teacher-forced-NLL gradient check spans two. They are the 
 validity chain just described, closed by a three-seed quality check.
 \begin{itemize}
   \item \textbf{The scalar folk claim is true but incomplete.} Strategy
-    A does move only scalars (measured: twice the naive byte count,
-    Table~\ref{tab:tb2}); strategy B moves a model-sized buffer every update
+    A does move only scalars (measured: twice the naive byte count);
+    strategy B moves a model-sized buffer every update
     and, on a single host with a fat interconnect (one NVLink node, one v5e
     host), \emph{wins} every dense and seed-regenerated cell anyway, while the
     low-rank timings are consistent with that transfer returning cells to A
@@ -86,7 +86,7 @@ validity chain just described, closed by a three-seed quality check.
     8$\times$A100 node and a TPU v5e-8 (Section~\ref{sec:results},
     Figure~\ref{fig:f2}), in the direction predicted before the
     measurements; the byte model itself was corrected by them
-    (Section~\ref{sec:contraction}, Table~\ref{tab:tb2}). Both signs also
+    (Section~\ref{sec:contraction}). Both signs also
     reappear when the placement is re-measured on Qwen2.5-0.5B itself
     (Table~\ref{tab:tb5}).
   \item \textbf{The low-rank motivation does not invert on TPU; it
