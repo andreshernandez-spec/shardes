@@ -18,6 +18,7 @@
 #   body             print the create request body without sending it
 #   arm <sha> [secs] detached: wait for a cluster, then run
 #                    cluster-session.sh <id> <sha>; log results-e18/arm.log
+#   session <id> <sha>  detached: cluster-session.sh on an existing cluster
 #
 # Shape and image come from the environment, defaults are the E18 ones:
 #   E18_PODS=2 E18_GPUS_PER_POD=8 E18_GPU="NVIDIA A100-SXM4-80GB"
@@ -96,6 +97,14 @@ for p in json.load(sys.stdin)["pods"]:
   delete)  api DELETE "/clusters/${1:?id}" >/dev/null && echo "deleted ${1}" ;;
   billing) api GET /billing/clusters | python3 -m json.tool ;;
   body)    create_body | python3 -m json.tool ;;
+  session)
+    cid=${1:?cluster id}; sha=${2:?commit sha}
+    dir=$(cd "$(dirname "$0")" && pwd); mkdir -p "$dir/results-e18"
+    unit=e18-session-$(date -u +%Y%m%dT%H%M%SZ)
+    systemd-run --user --unit="$unit" --collect --same-dir \
+      --setenv=RUNPOD_API_KEY="$RUNPOD_API_KEY" --setenv=HOME="$HOME" --setenv=PATH="$PATH" \
+      bash -c "exec >> '$dir/results-e18/arm.log' 2>&1 < /dev/null; bash '$dir/cluster-session.sh' $cid $sha"
+    echo "session unit $unit on $cid at $sha (systemctl --user stop $unit to abandon; the cluster stays)" ;;
   arm)
     sha=${1:?commit sha for the session}; every=${2:-300}
     dir=$(cd "$(dirname "$0")" && pwd); mkdir -p "$dir/results-e18"

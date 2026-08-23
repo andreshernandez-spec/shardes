@@ -19,9 +19,14 @@ ME=${E18_NODE0_IP:-$(hostname -I | awk '{print $1}')}
 : "${NODE1:?set NODE1 to the address of node 1}"
 echo "node 0 coordinator $ME:$COORD_PORT, node 1 $NODE1, $(date -u +%FT%TZ)"
 
-run_node1() {  # mirror a command on node 1, same directory and venv
+# Pin the collectives to the overlay interface: on an Instant Cluster both
+# nodes also carry the same 172.18.0.2 bridge address, which NCCL must not pick.
+IFENV="NCCL_SOCKET_IFNAME=${NCCL_SOCKET_IFNAME:-} GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-}"
+export NCCL_SOCKET_IFNAME GLOO_SOCKET_IFNAME
+
+run_node1() {  # mirror a command on node 1, same directory, venv and interface pin
   ssh -o StrictHostKeyChecking=no -o BatchMode=yes "$NODE1" \
-    "cd $(pwd) && . /root/shardes/.venv/bin/activate && $*"
+    "cd $(pwd) && . /root/shardes/.venv/bin/activate && $IFENV $*"
 }
 
 phase() { echo; echo "==== $1 ===="; }
