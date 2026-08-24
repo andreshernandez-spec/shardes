@@ -46,6 +46,10 @@ import jax  # noqa: E402
 NPROC = int(os.environ.get("E18_NPROC", "1"))
 PID = int(os.environ.get("E18_PID", "0"))
 TOPOLOGY = os.environ.get("E18_TOPOLOGY", "unset")
+# E18b tags every artifact with the throttle setting; empty for baseline E18,
+# so the cell and marker names below are byte-identical when it is unset.
+SETTING = os.environ.get("E18B_SETTING", "")
+SUFFIX = f"__set={SETTING}" if SETTING else ""
 
 if NPROC > 1:
     jax.distributed.initialize(coordinator_address=os.environ["E18_COORD"],
@@ -91,7 +95,7 @@ def main(argv=None) -> int:
         # PID 0 only: the marker lives on node 0's disk. If PID 0 refuses
         # here, the other node's process hangs at its first collective and
         # launch.sh's timeout reaps it; that is the intended failure shape.
-        marker = out / f"preflight-{TOPOLOGY}.json"
+        marker = out / f"preflight-{TOPOLOGY}{SUFFIX}.json"
         if not marker.exists():
             log(f"REFUSING to run: no preflight pass marker {marker.name}. "
                 "Run preflight.py for this topology first.")
@@ -107,7 +111,7 @@ def main(argv=None) -> int:
             for cell in cfg["cells"]:
                 d_model, n = cell["d"], cell["N"]
                 name = (f"arm={arm}__how={how}__d={d_model}__N={n}"
-                        f"__topo={TOPOLOGY}.json")
+                        f"__topo={TOPOLOGY}{SUFFIX}.json")
                 outfile = out / name
                 if outfile.exists():
                     log(f"skip {name}: already measured")

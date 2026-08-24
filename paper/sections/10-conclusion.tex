@@ -22,9 +22,12 @@ so it is a patch rather than a law. On decoded-reward Countdown training, a thre
 resolves no quality difference among full rank and ranks 1, 4, and 16 at equal
 training samples, while rank 1 uses 41\% less steady-state time per update.
 That task result is consistent with the NLL alignment evidence, not a claim
-that the objectives are interchangeable. The next systems measurement is
-past the single-host boundary, where the interconnect should change the
-contraction question most sharply.
+that the objectives are interchangeable. The measurement past the single-host boundary bears this out where it was
+taken: on two A100 nodes the interconnect changes the contraction question
+sharply, flipping the seed-regenerated arm from B to A across a $9.2$\,GiB/s
+socket fabric (Section~\ref{subsec:boundary}). Whether that flip survives at
+the faster InfiniBand of a production cluster is the question the single
+socket point leaves open.
 
 \paragraph{What to do differently.} On a single host with a fat
 interconnect, contract locally and all-reduce (B) unless the perturbation

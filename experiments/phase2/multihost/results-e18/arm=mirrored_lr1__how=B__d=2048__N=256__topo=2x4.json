@@ -1,0 +1,40 @@
+{
+ "config": {
+  "arm": "mirrored_lr1",
+  "how": "B",
+  "d_model": 2048,
+  "population": 256,
+  "devices": 8,
+  "topology": "2x4",
+  "n_processes": 2,
+  "batch": 8,
+  "seq": 32,
+  "matmul_precision": "highest"
+ },
+ "seconds_all": [
+  0.12666299752891064,
+  0.12138721533119678,
+  0.12538806349039078,
+  0.13077021576464176,
+  0.1299354676157236,
+  0.13139720633625984,
+  0.12851896323263645
+ ],
+ "seconds_median": 0.12851896323263645,
+ "env": {
+  "commit": "0826d5d3222eca71befea19a70523d0b3563fef8",
+  "dirty_worktree": true,
+  "jax": "0.11.1",
+  "jaxlib": "0.11.1",
+  "numpy": "2.5.2",
+  "scipy": "1.18.1",
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.39",
+  "hostname": "node-0",
+  "device_count": 8,
+  "device_kind": "NVIDIA A100-SXM4-80GB",
+  "device_platform": "gpu",
+  "xla_flags": "",
+  "jax_platforms": ""
+ }
+}

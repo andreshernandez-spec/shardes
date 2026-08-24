@@ -79,7 +79,7 @@ gathers rather than one (Section~\ref{sec:contraction}).
 
 \paragraph{Bytes into time.} What decides a cell is not the payload but what
 the payload costs, and the two differ by a rate that varies with message size
-and with the fabric. Table~\ref{tab:tb7} times both collectives in isolation
+and with the fabric. Table~\ref{tab:tb8} times both collectives in isolation
 on both platforms, as the marginal cost of one more collective inside a
 program that is already running rather than as a program of its own: the
 one-op floor is 0.32\,ms on the A100 and 0.60\,ms on the v5e, twelve and a
@@ -112,12 +112,12 @@ neither harness here. Every number in this paragraph is also one host with a
 fat fabric: an NVLink node and a v5e host are where a 100\,MB all-reduce is
 cheapest, the dense-side result is therefore B's easy case, and the commodity
 clusters of hundreds of workers the scalar folk claim was made for
-\citep{salimans2017} are where it may well hold. Nothing here crosses a host
-boundary, and the boundary is where the fabric term grows by one to two orders
-of magnitude, so it is the one change that could move the crossover
-substantially rather than shift it.
+\citep{salimans2017} are where it may well hold. The boundary is where the
+fabric term grows by one to two orders of magnitude, so it is the one change
+that could move the crossover rather than shift it, and
+Section~\ref{subsec:boundary} crosses it.
 
-\input{generated/tb7}
+\input{generated/tb8}
 
 \paragraph{Placement outcomes on the real model.} The same question,
 re-measured outside the simplified block: Table~\ref{tab:tb5} times one
@@ -141,6 +141,52 @@ instead, where the 16\,GB and 80\,GB ceilings sit at different cells and
 matched shapes are what make the two comparable.
 
 \input{generated/tb5}
+
+\subsection{Across a real host boundary}
+\label{subsec:boundary}
+The crossovers above are one NVLink node, and the sharpest untested variable
+is the host boundary, where a model-sized all-reduce leaves NVLink for the
+cluster fabric.
+We measured it on two $8\times$A100-SXM4-80GB nodes of a rented Instant Cluster,
+same block workload, both placement predictions frozen before the run
+(\texttt{experiments/phase2/multihost}). The cluster's InfiniBand did not carry
+NCCL traffic on any host we drew, so the inter-node transport is TCP sockets
+over the overlay; the preflight ladder measures it at $9.2$\,GiB/s against
+NVLink's $515$\,GiB/s, a boundary at the slow end of the inter-node range.
+Table~\ref{tab:tb7} gives $\log_{10}(t_B/t_A)$ at three topologies: one node
+(\texttt{1x8}, $D{=}8$), the same eight devices split across the boundary
+(\texttt{2x4}), and sixteen across it (\texttt{2x8}, $D{=}16$).
+
+\input{generated/tb7}
+
+Three things follow. First, the boundary is a cliff for the placement that
+crosses it: at fixed $D{=}8$, turning it on (\texttt{1x8} to \texttt{2x4}) moves
+the seed-regenerated $d{=}2048$ cell from $-0.23$ to $+0.43$, about $108$\,ms
+added to strategy B's generation as its all-reduce drops from NVLink to
+$9.2$\,GiB/s. Second, that cliff flips the winner: the seed-regenerated arm at
+$d{=}2048$ wins as B on one node and loses to A across the boundary at both
+populations, while its $d{=}512$ cell keeps B everywhere (its all-reduce is
+cheap) and rank~1 stays A with the margin widening to $+1.44$. The decision rule
+of Section~\ref{sec:contraction} therefore carries a third variable beyond
+$(N,d)$: B's advantage for expensive perturbations holds only while the
+model-sized transfer amortizes, and a slow enough host boundary removes that
+amortization even where the contraction is expensive. Third, the frozen
+prediction caught the direction on one node but missed the flip, placing the
+seed-regenerated $d{=}2048$ cells as B at $D{=}16$ where they measure A and
+under-predicting B's boundary penalty by about $90$ to $105$\,ms. The sign that
+held for the low-rank arm and for the small model did not hold for the expensive
+arm at large $d$.
+
+This locates the flip at or below $9.2$\,GiB/s for the seed-regenerated arm,
+and no closer. The boundary measured is one bandwidth point and it is
+sockets: the cluster's InfiniBand carried no NCCL traffic on any host drawn,
+so whether the flip survives the $12$ to $50$\,GiB/s a production
+InfiniBand cluster provides is not established. The frozen model's own flip
+estimate for this cell was wrong in the direction that matters, placing it
+below the fabric that was measured, so the model cannot place the contour
+either. What the measurement establishes is that a boundary exists and which
+arms cross it, not where.
+
 
 % F4 -- experiments/phase2/figures/f4-cost-bfloat16.png (plot_cost.py)
 \begin{figure*}[t]

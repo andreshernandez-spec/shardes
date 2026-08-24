@@ -1,0 +1,6 @@
+W0822 21:29:39.549290   12340 pjrt_client.cc:1599] WatchTasksAsync failed for task 1: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:12378: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:12378: Failed to connect to remote host: Connection refused
+=== Source Location Trace: ===
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
