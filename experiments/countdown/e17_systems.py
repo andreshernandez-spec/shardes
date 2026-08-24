@@ -50,8 +50,12 @@ def main(argv=None) -> int:
     ap.add_argument("--config", type=Path, required=True)
     ap.add_argument("--smoke", action="store_true",
                     help="random tiny model on simulated devices")
+    ap.add_argument("--budget", type=float, default=None,
+                    help="seconds; stop cleanly between cells past this and "
+                         "exit 2, so a session resumes by rerunning")
     args = ap.parse_args(argv)
     cfg = yaml.safe_load(args.config.read_text())
+    t_start = time.perf_counter()
 
     if args.smoke:
         cfg.update(populations=[16, 32], n_prompts=2, pad_to=32,
@@ -101,6 +105,10 @@ def main(argv=None) -> int:
                     if outfile.exists():
                         print(f"skip {name}: already measured", flush=True)
                         continue
+                    if args.budget and time.perf_counter() - t_start > args.budget:
+                        print(f"STOPPED: budget {args.budget / 3600:.2f} h reached "
+                              f"before {name}; rerun to resume", flush=True)
+                        return 2
                     rec = {"config": {"strategy": strategy, "how": how,
                                       "population": n, "devices": d_count,
                                       "sigma": cfg["sigma"],

@@ -1,0 +1,43 @@
+# E17b: the real-model crossover as a figure. Extends e17.yaml's grid to four
+# populations and four perturbation arms so the appendix table becomes a
+# main-text figure. Committed before any run, cited by SHA. Same driver,
+# same model, same frozen prompt batch and evaluator as E15/E17.
+#
+# Predictions, frozen here before the run, from E17's 31 measured cells and
+# the committed M3 phase diagrams:
+#   mirrored_seed: B wins at every D >= 2, the advantage growing monotonically
+#     with D at every N (E17: log10(tB/tA) -0.164 at N=240, D=8). The new
+#     populations 64 and 128 should sit between the N=32 and N=240 rows.
+#   mirrored_lr1: A wins everywhere it fits and the gap grows with D (E17:
+#     +0.212 at N=32, D=8). Expected to OOM at D=1 for every N and at D<8 for
+#     N=240, as E17 recorded.
+#   mirrored_lr4, mirrored_lr16: the same sign as rank 1 (A ahead), with the
+#     gap SHRINKING as rank grows, because the per-candidate contraction work
+#     B avoids grows with r while B's all-reduce does not. Rank 16's gap at
+#     D=8 is predicted smaller than rank 1's +0.21. A sign flip to B at rank
+#     16 would not contradict the mechanism; a gap LARGER than rank 1's would.
+#   Memory: the low-rank arms store factors, so higher rank fits fewer cells;
+#     rank 16 is expected to OOM where rank 1 runs at the largest N.
+#
+# The one E17 cell killed during compilation (rank 1, B, N=240, D=8, with its
+# A sibling over HBM) is infeasible on this chip; the driver's time budget
+# and per-cell resume mean a repeat of that kill costs one cell, not the
+# session.
+
+model: Qwen/Qwen2.5-0.5B-Instruct
+puzzle_seed: 7
+n_prompts: 8
+pad_to: 128
+sigma: 0.001
+eval_chunk: 1
+
+strategies: [mirrored_seed, mirrored_lr1, mirrored_lr4, mirrored_lr16]
+hows: [A, B]
+populations: [32, 64, 128, 240]
+devices: [1, 2, 4, 8]
+
+warmup: 3
+repeats: 5
+matmul_precision: highest
+
+results_dir: results-e17b

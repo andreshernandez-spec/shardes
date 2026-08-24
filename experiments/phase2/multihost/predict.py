@@ -18,19 +18,19 @@ For each (arm, d, N) cell, with P = 6 d^2 parameters:
     comm_bump    = ar_2x8(4P) - ar_1x8(4P), the all-reduce's fabric penalty,
                    interpolated from each topology's psum ladder (alpha +
                    bytes/beta).
-    contraction  = B's contraction work halves again from D=8 to D=16 while
-                   A's replicated contraction stays constant; the gain is
-                   bounded between 0 and half of B's D=8 contraction share,
-                   which we bracket by [0, |delta(1x8)|] rather than
-                   estimate: it cannot exceed the whole measured gap.
+    contraction  = B's contraction work splits further from D=8 to D=16
+                   while A's replicated contraction stays constant. That
+                   gain is C (1/8 - 1/16), and `contraction_isolation.py`
+                   measures C. Without a record for the cell this falls back
+                   to the coarse bracket [0, |delta(1x8)|] the file used
+                   before C existed, and every prediction says which it used.
 
-    predicted delta(2x8) in [delta(1x8) + comm_bump - bracket,
-                             delta(1x8) + comm_bump]
+    predicted delta(2x8) = delta(1x8) + comm_bump - C (1/8 - 1/16)
 
-The SIGN prediction is the midpoint's sign; H2 and H3 are judged on signs,
-and the bracket is printed so a magnitude miss is visible and honest. The
-2x4 topology needs no prediction: H1 IS its prediction (t_A unchanged, t_B
-up by the same comm_bump at D=8's contraction split).
+The SIGN prediction is what H2 and H3 are judged on; the magnitude is
+recorded either way so a miss is visible and honest. The 2x4 topology needs
+no prediction: H1 IS its prediction (t_A unchanged, t_B up by the same
+comm_bump at D=8's contraction split, with no C term at all).
 
 This file must be run, and predictions.json written, before any 2x8 ES
 cell; the session log's timestamps are the witness.
@@ -41,6 +41,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+
+import costmodel
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results-e18"
@@ -69,22 +71,24 @@ def main() -> int:
             ta = json.loads(fa.read_text())["seconds_median"]
             tb = json.loads(fb.read_text())["seconds_median"]
             delta_8 = tb - ta
-            p_bytes = 4 * 6 * d * d
+            p_bytes = costmodel.params_bytes(d)
             bump = (ladder_seconds(pre_2x8, p_bytes)
                     - ladder_seconds(pre_1x8, p_bytes))
-            lo = delta_8 + bump - abs(delta_8)
-            hi = delta_8 + bump
-            mid = (lo + hi) / 2
+            c = costmodel.measured_contraction(arm, d, n)
+            pred = costmodel.predict_delta(delta_8, bump, 16, c)
             predictions[f"{arm}__d={d}__N={n}"] = {
                 "delta_1x8_measured": delta_8,
                 "comm_bump_predicted": bump,
-                "delta_2x8_bracket": [lo, hi],
-                "predicted_sign_B_minus_A": "B_wins" if mid < 0 else "A_wins",
+                "delta_2x8_bracket": pred["delta_bracket"],
+                **pred,
             }
+            lo, hi = pred["delta_bracket"]
+            span = (f"{pred['delta_predicted'] * 1e3:+.2f} ms"
+                    if pred["contraction_source"] == "measured"
+                    else f"[{lo * 1e3:+.2f}, {hi * 1e3:+.2f}] ms")
             print(f"{arm} d={d} N={n}: delta(1x8) {delta_8 * 1e3:+.2f} ms, "
-                  f"bump {bump * 1e3:+.2f} ms -> "
-                  f"[{lo * 1e3:+.2f}, {hi * 1e3:+.2f}] ms, sign: "
-                  f"{predictions[f'{arm}__d={d}__N={n}']['predicted_sign_B_minus_A']}")
+                  f"bump {bump * 1e3:+.2f} ms, C {pred['contraction_source']} "
+                  f"-> {span}, sign: {pred['predicted_sign_B_minus_A']}")
 
     out = RESULTS / "predictions.json"
     out.write_text(json.dumps(predictions, indent=1))

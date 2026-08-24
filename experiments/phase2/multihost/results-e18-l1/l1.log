@@ -1,0 +1,62 @@
+
+==== preflight 1x2 (anchor) (2026-08-22T21:23:50Z) ====
+identity ok: 2 x NVIDIA A100-SXM4-80GB, 1 process(es)
+all-reduce ~8 B: 311.7 us
+all-reduce ~1024 B: 310.6 us
+all-reduce ~1048576 B: 316.0 us
+all-reduce ~104857600 B: 695.6 us
+alpha ~312 us, beta ~254.4 GiB/s
+invariance reference written (1x2)
+invariance ok
+warm seed_regenerated_A: compile+run 8.1s
+warm seed_regenerated_B: compile+run 6.3s
+warm mirrored_lr1_A: compile+run 13.9s
+warm mirrored_lr1_B: compile+run 13.2s
+PREFLIGHT PASS (1x2)
+
+==== preflight 2x1 (two processes, one GPU each) (2026-08-22T21:25:20Z) ====
+identity ok: 2 x NVIDIA A100-SXM4-80GB, 2 process(es)
+all-reduce ~8 B: 158.0 us
+all-reduce ~1024 B: 159.0 us
+all-reduce ~1048576 B: 218.5 us
+all-reduce ~104857600 B: 596.4 us
+alpha ~158 us, beta ~222.7 GiB/s
+invariance seed_regenerated_A: rel 0.00e+00 ok
+invariance seed_regenerated_B: rel 0.00e+00 ok
+invariance mirrored_lr1_A: rel 0.00e+00 ok
+invariance mirrored_lr1_B: rel 0.00e+00 ok
+invariance ok
+warm seed_regenerated_A: compile+run 8.1s
+warm seed_regenerated_B: compile+run 6.5s
+warm mirrored_lr1_A: compile+run 12.9s
+warm mirrored_lr1_B: compile+run 13.1s
+PREFLIGHT PASS (2x1)
+W0822 21:26:47.955270    5907 pjrt_client.cc:1599] WatchTasksAsync failed for task 0: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:12377: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:12377: Failed to connect to remote host: Connection refused
+=== Source Location Trace: === 
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+
+==== driver 1x2 (2026-08-22T21:26:49Z) ====
+topology 1x2: 1 process(es), 2 global devices
+seed_regenerated how=A d=64 N=16 topo=1x2: 1.63 ms
+seed_regenerated how=B d=64 N=16 topo=1x2: 1.39 ms
+mirrored_lr1 how=A d=64 N=16 topo=1x2: 1.16 ms
+mirrored_lr1 how=B d=64 N=16 topo=1x2: 1.18 ms
+
+==== driver 2x1 (2026-08-22T21:28:14Z) ====
+topology 2x1: 2 process(es), 2 global devices
+seed_regenerated how=A d=64 N=16 topo=2x1: 1.48 ms
+seed_regenerated how=B d=64 N=16 topo=2x1: 1.19 ms
+mirrored_lr1 how=A d=64 N=16 topo=2x1: 0.68 ms
+mirrored_lr1 how=B d=64 N=16 topo=2x1: 0.83 ms
+W0822 21:29:39.549263   12219 pjrt_client.cc:1599] WatchTasksAsync failed for task 0: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:12378: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:12378: Failed to connect to remote host: Connection refused
+=== Source Location Trace: === 
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+
+==== DONE (2026-08-22T21:29:41Z) ====
+L1_DONE
