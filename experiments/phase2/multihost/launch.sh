@@ -41,24 +41,61 @@ E18_TOPOLOGY=1x8 E18_EXPECT_DEVICES=8 timeout 900 python preflight.py
 # coordinator and ssh already use. Decided once, then exported so every later
 # node-0 command and run_node1 call (via IFENV) inherits the choice. Invoked in
 # an `if` so a failed attempt does not trip set -e.
-run_2x8_preflight() {  # $1 = coordinator port
-  run_node1 "E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=1 \
-    E18_EXPECT_DEVICES=16 timeout 900 python preflight.py" &
+run_2x8_preflight() {  # $1=coordinator port  $2=extra env applied to both nodes
+  run_node1 "$2 E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=1 \
+    E18_EXPECT_DEVICES=16 timeout 420 python preflight.py" &
   local n1=$!
-  E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=0 \
-    E18_EXPECT_DEVICES=16 timeout 900 python preflight.py
+  $2 E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=0 \
+    E18_EXPECT_DEVICES=16 timeout 420 python preflight.py
   local rc=$?; wait "$n1" 2>/dev/null || true; return $rc
 }
 
-phase "preflight 2x8 (both nodes; IB, socket fallback)"
-if run_2x8_preflight "$COORD_PORT"; then
-  echo "E18_TRANSPORT=ib"
+ib_healthy() {  # both nodes still answer and their GPUs are queryable
+  timeout 25 nvidia-smi -L >/dev/null 2>&1 && run_node1 "timeout 20 nvidia-smi -L >/dev/null 2>&1"
+}
+
+ib_diag() {  # best-effort fabric snapshot to the log; never fatal
+  echo "--- IB diag node 0:"; { ibstat; echo '[gids]'; show_gids; ibv_devinfo 2>&1 | grep -iE 'hca_id|state|link_layer|GID'; } 2>&1 | head -40 || true
+  echo "--- IB diag node 1:"; run_node1 "{ ibstat; echo '[gids]'; show_gids; ibv_devinfo 2>&1 | grep -iE 'hca_id|state|link_layer|GID'; } 2>&1 | head -40" 2>&1 || true
+  return 0
+}
+
+# 2x8 preflight = the inter-node transport probe. Try IB first (the fast fabric,
+# the top inter-node point). On a clean IB failure Andres has authorised up to
+# one hour of uptime to repair it (2026-08-24): dump the fabric and walk the
+# known NCCL RETRY_EXC fixes (RoCE GID index, HCA, traffic class) before giving
+# up. A wedged host is NOT debugged, it is left to the harvest loop to retry.
+# The winning transport is exported and folded into IFENV for every later step.
+IB_COMBOS=("" "NCCL_IB_GID_INDEX=3" "NCCL_IB_GID_INDEX=1" \
+  "NCCL_IB_GID_INDEX=3 NCCL_IB_TC=106" "NCCL_IB_HCA=mlx5_0 NCCL_IB_GID_INDEX=3" \
+  "NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3")
+DEBUG_DEADLINE=$(( $(date +%s) + 3600 ))
+TRANSPORT=""; IBWIN=""; port=$COORD_PORT
+
+phase "preflight 2x8 (both nodes; IB with up-to-1h debug, then socket)"
+for i in "${!IB_COMBOS[@]}"; do
+  if [ "$i" -eq 1 ]; then
+    echo "IB default failed; entering IB debug (deadline +1h)"
+    ib_healthy || { echo "host not healthy after IB failure; skipping debug, will fall back"; break; }
+    ib_diag
+  fi
+  if [ "$i" -gt 0 ] && [ "$(date +%s)" -ge "$DEBUG_DEADLINE" ]; then
+    echo "IB debug budget (1h) spent; falling back"; break
+  fi
+  echo ">> IB attempt [$i]: ${IB_COMBOS[$i]:-default} on port $port"
+  if run_2x8_preflight "$port" "${IB_COMBOS[$i]}"; then TRANSPORT="ib"; IBWIN="${IB_COMBOS[$i]}"; break; fi
+  port=$((port + 10))
+done
+
+if [ "$TRANSPORT" = ib ]; then
+  [ -n "$IBWIN" ] && { export $IBWIN; IFENV="$IFENV $IBWIN"; }
+  echo "E18_TRANSPORT=ib${IBWIN:+ ($IBWIN)}"
 else
-  echo "2x8 IB handshake failed; falling back to socket over ${NCCL_SOCKET_IFNAME:-overlay}"
+  echo "IB unusable; falling back to socket over ${NCCL_SOCKET_IFNAME:-overlay}"
   export NCCL_IB_DISABLE=1 NCCL_NET=Socket
   IFENV="$IFENV NCCL_IB_DISABLE=1 NCCL_NET=Socket"
   sleep 5
-  run_2x8_preflight "$((COORD_PORT + 10))" || { echo "2x8 socket handshake also failed; aborting"; exit 1; }
+  run_2x8_preflight "$((port + 10))" "" || { echo "socket 2x8 also failed; aborting"; exit 1; }
   echo "E18_TRANSPORT=socket"
 fi
 
