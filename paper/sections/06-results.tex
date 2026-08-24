@@ -104,6 +104,48 @@ demonstrated for that cell.
 
 \input{generated/tb5}
 
+\subsection{Across a real host boundary}
+\label{subsec:boundary}
+The crossovers above are one NVLink node. The variable
+Section~\ref{sec:limitations} flags as the sharpest untested one is the host
+boundary, where a model-sized all-reduce leaves NVLink for the cluster fabric.
+We measured it on two $8\times$A100-SXM4-80GB nodes of a rented Instant Cluster,
+same block workload, both placement predictions frozen before the run
+(\texttt{experiments/phase2/multihost}). The cluster's InfiniBand did not carry
+NCCL traffic on any host we drew, so the inter-node transport is TCP sockets
+over the overlay; the preflight ladder measures it at $9.2$\,GiB/s against
+NVLink's $515$\,GiB/s, a boundary at the slow end of the inter-node range.
+Table~\ref{tab:tb7} gives $\log_{10}(t_B/t_A)$ at three topologies: one node
+(\texttt{1x8}, $D{=}8$), the same eight devices split across the boundary
+(\texttt{2x4}), and sixteen across it (\texttt{2x8}, $D{=}16$).
+
+\input{generated/tb7}
+
+Three things follow. First, the boundary is a cliff for the placement that
+crosses it: at fixed $D{=}8$, turning it on (\texttt{1x8} to \texttt{2x4}) moves
+the seed-regenerated $d{=}2048$ cell from $-0.23$ to $+0.43$, about $108$\,ms
+added to strategy B's generation as its all-reduce drops from NVLink to
+$9.2$\,GiB/s. Second, that cliff flips the winner: the seed-regenerated arm at
+$d{=}2048$ wins as B on one node and loses to A across the boundary at both
+populations, while its $d{=}512$ cell keeps B everywhere (its all-reduce is
+cheap) and rank~1 stays A with the margin widening to $+1.44$. The decision rule
+of Section~\ref{sec:contraction} therefore carries a third variable beyond
+$(N,d)$: B's advantage for expensive perturbations holds only while the
+model-sized transfer amortizes, and a slow enough host boundary removes that
+amortization even where the contraction is expensive. Third, the frozen
+prediction caught the direction on one node but missed the flip, placing the
+seed-regenerated $d{=}2048$ cells as B at $D{=}16$ where they measure A and
+under-predicting B's boundary penalty by about $90$ to $105$\,ms. The sign that
+held for the low-rank arm and for the small model did not hold for the expensive
+arm at large $d$.
+
+This locates the flip at or below $9.2$\,GiB/s for the seed-regenerated arm.
+Whether it also occurs at the faster InfiniBand a production cluster provides
+(roughly $12$ to $50$\,GiB/s) is not established here, and the frozen model's own
+flip estimate for this cell was wrong, so it cannot place the contour
+(Section~\ref{sec:limitations}).
+
+
 % F4 -- experiments/phase2/figures/f4-cost-bfloat16.png (plot_cost.py)
 \begin{figure*}[t]
   \centering
