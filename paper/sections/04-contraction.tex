@@ -39,7 +39,11 @@ bytes. B does $1/D$ of A's contraction work, so it should win when
 per-candidate contraction is expensive (dense or regenerated perturbations,
 larger populations) and the model-sized transfer amortizes. A should return
 when that work is already small (the low-rank family) and the transfer is
-pure overhead. No quantitative time model was committed before the runs, and
+pure overhead. Both conditions hide a dependence on the interconnect: the
+transfer amortizes only while it is cheap against the contraction it saves,
+so a slow enough host boundary retracts B's advantage even where the
+contraction is expensive (Section~\ref{subsec:boundary}). No quantitative
+time model was committed before the runs, and
 none is retroactively presented as a prediction. Section~\ref{sec:results}
 tests the byte count and this directional claim on both platforms
 (Figure~\ref{fig:f2}).
