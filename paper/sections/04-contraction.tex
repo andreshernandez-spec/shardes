@@ -43,7 +43,11 @@ bytes. B does $1/D$ of A's contraction work, so it should win when
 per-candidate contraction is expensive (dense or regenerated perturbations,
 larger populations) and the model-sized transfer amortizes. A should return
 when that work is already small (the low-rank family) and the transfer is
-pure overhead. No quantitative time model was committed before the runs, and
+pure overhead. Both conditions hide a dependence on the interconnect: the
+transfer amortizes only while it is cheap against the contraction it saves,
+so a slow enough host boundary retracts B's advantage even where the
+contraction is expensive (Section~\ref{subsec:boundary}). No quantitative
+time model was committed before the runs, and
 none is retroactively presented as a prediction. Section~\ref{sec:results}
 tests the byte count and this directional claim on both platforms
 (Figure~\ref{fig:f2}).
@@ -54,11 +58,13 @@ rate that depends on the payload's own size and on the fabric, so identical
 byte counts can and do give different crossovers on different hardware. The
 byte count is therefore the part worth committing in advance, because it is
 the part that transfers. What it costs is a separate measurement, one per
-fabric, reported in Section~\ref{sec:results} (Table~\ref{tab:tb7}). That
+fabric, reported in Section~\ref{sec:results} (Table~\ref{tab:tb8}). That
 conversion is calibrated on the same platforms it explains, so it is an
-account of the crossover rather than a second prediction; the prediction it
-supports is the one made for a slower fabric, where it has not yet been
-tested.
+account of the crossover rather than a second prediction. It was used as one
+once, out of sample, for the host boundary of Section~\ref{subsec:boundary},
+where it got the direction right and the magnitude wrong by an order of
+magnitude: a payload divided by a benchmarked bandwidth is not what a
+collective costs across a socket fabric.
 
 A and B are the endpoints of the placement space, not two arbitrary samples
 of it, and measuring the endpoints is the economical choice. Every placement

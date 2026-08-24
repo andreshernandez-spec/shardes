@@ -1,0 +1,18 @@
+{
+ "topology": "1x8",
+ "n_processes": 1,
+ "device_kind": "NVIDIA A100-SXM4-80GB",
+ "n_devices": 8,
+ "n_local": 8,
+ "hostname": "node-0",
+ "jax": "0.11.1",
+ "allreduce_seconds_by_bytes": {
+  "8": 0.0003259815275669098,
+  "1024": 0.00032011885195970535,
+  "1048576": 0.0003272518515586853,
+  "104857600": 0.0005154693499207497
+ },
+ "alpha_seconds": 0.0003259815275669098,
+ "beta_bytes_per_second": 553373819475.2921,
+ "setting": ""
+}

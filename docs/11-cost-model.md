@@ -66,7 +66,27 @@ both worst at `mirrored_lr1` d=2048 N=128. `results-contraction/README.md` lists
 measurement separates them. Until it runs, the low-rank side of the crossover is bracketed
 rather than derived, and §8 says so in those words.
 
-## 5. Where it becomes a prediction
+## 5. Where it became a prediction, and how it did
+
+**Tested 2026-08-24 on the E18 cluster, and it missed.** `contraction_isolation.py` ran in
+the preflight, so `predict.py` made point predictions with a measured `C` rather than the
+old bracket, before any boundary cell. Outcome:
+
+- Direction right. Every low-rank cell predicted A and measured A; the boundary hurts B.
+- `C` itself is sound. Measured 28.7, 31.9 and 64.0 ms on the seed cells against 29.7,
+  26.2 and 63.1 ms solved backwards from the D=8 grid.
+- **The fabric term is what broke.** `comm_bump` predicted 10.1 ms for the model-sized
+  all-reduce across the boundary; the measurement is about 108 ms. Ten times, where
+  caveat 2 of `docs/12` allowed about two for the ring wire factor. So the flip cell
+  (seed_regenerated d=2048) was predicted B and measures A.
+
+The lesson is specific and worth keeping: `alpha + 4P/beta` with a beta from a preflight
+ladder does not price a real collective on a socket fabric. Between the ladder's payload
+and a generation's psum sit the transport, the message chunking and the contention, and on
+NVLink those cost a factor of one while on TCP sockets they cost a factor of ten. A cost
+model calibrated on a fat fabric extrapolates its own regime, not the next one.
+
+## 6. The original plan (for the record)
 
 Calibrated on the same platforms it explains, this is an account, not a forecast. It
 becomes a forecast on a fabric it has not seen, which is E18/E18b: `docs/10` H4 and G4
@@ -77,7 +97,7 @@ become point predictions. That is the one experiment that closes two limitations
 the fat fabric and the cost model, and it costs one file written before a rental that is
 already planned.
 
-## 6. Files
+## 7. Files
 
 | file | what |
 |---|---|
