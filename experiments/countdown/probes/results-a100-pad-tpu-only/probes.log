@@ -1,0 +1,115 @@
+030732d lowrank: pad r=1 factors on TPU only
+==== probe-seed (2026-08-23T09:23:28Z) ====
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[0] EVAL reward 0.055 solved 0.013 format 0.43 29s
+[0] reward 0.028 max 1.0 format 0.17 solved 0.01 596.7s
+[1] reward 0.017 max 0.1 format 0.17 solved 0.00 660.6s
+[2] reward 0.031 max 0.1 format 0.31 solved 0.00 4.4s
+[3] reward 0.040 max 1.0 format 0.28 solved 0.01 4.4s
+[4] reward 0.043 max 1.0 format 0.31 solved 0.01 4.4s
+[5] reward 0.030 max 0.1 format 0.30 solved 0.00 4.4s
+[6] reward 0.054 max 1.0 format 0.43 solved 0.01 4.4s
+[7] reward 0.069 max 1.0 format 0.39 solved 0.03 4.4s
+[8] reward 0.038 max 0.1 format 0.38 solved 0.00 4.4s
+[9] reward 0.050 max 1.0 format 0.38 solved 0.01 4.4s
+[10] reward 0.059 max 1.0 format 0.33 solved 0.03 4.3s
+[11] reward 0.054 max 1.0 format 0.46 solved 0.01 4.4s
+[12] reward 0.049 max 1.0 format 0.42 solved 0.01 4.4s
+[13] reward 0.054 max 1.0 format 0.46 solved 0.01 4.4s
+[14] reward 0.072 max 1.0 format 0.53 solved 0.02 4.4s
+[15] reward 0.046 max 0.1 format 0.46 solved 0.00 4.4s
+[16] reward 0.058 max 1.0 format 0.55 solved 0.00 4.4s
+[17] reward 0.078 max 1.0 format 0.67 solved 0.01 4.4s
+[18] reward 0.086 max 1.0 format 0.75 solved 0.01 4.4s
+[19] reward 0.081 max 1.0 format 0.55 solved 0.03 4.4s
+[20] reward 0.077 max 1.0 format 0.66 solved 0.01 4.4s
+[21] reward 0.091 max 1.0 format 0.72 solved 0.02 4.4s
+[22] reward 0.103 max 1.0 format 0.69 solved 0.04 4.4s
+[23] reward 0.104 max 1.0 format 0.78 solved 0.03 4.4s
+[24] reward 0.080 max 1.0 format 0.72 solved 0.01 4.4s
+[25] reward 0.087 max 1.0 format 0.69 solved 0.02 4.4s
+[26] reward 0.107 max 1.0 format 0.69 solved 0.04 4.4s
+[27] reward 0.087 max 1.0 format 0.76 solved 0.01 4.4s
+[28] reward 0.077 max 1.0 format 0.73 solved 0.00 4.4s
+[29] reward 0.112 max 1.0 format 0.85 solved 0.03 4.4s
+[30] EVAL reward 0.132 solved 0.041 format 0.95 25s
+done
+==== probe-lr1 (2026-08-23T09:48:40Z) ====
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[0] EVAL reward 0.056 solved 0.015 format 0.43 31s
+[0] reward 0.027 max 1.0 format 0.20 solved 0.01 358.0s
+[1] reward 0.029 max 1.0 format 0.25 solved 0.00 361.4s
+[2] reward 0.029 max 0.1 format 0.29 solved 0.00 2.6s
+[3] reward 0.029 max 0.1 format 0.29 solved 0.00 2.6s
+[4] reward 0.038 max 1.0 format 0.30 solved 0.01 2.5s
+[5] reward 0.042 max 0.1 format 0.42 solved 0.00 2.5s
+[6] reward 0.058 max 1.0 format 0.47 solved 0.01 2.6s
+[7] reward 0.053 max 1.0 format 0.38 solved 0.02 2.5s
+[8] reward 0.053 max 0.1 format 0.53 solved 0.00 2.6s
+[9] reward 0.058 max 1.0 format 0.47 solved 0.01 2.5s
+[10] reward 0.087 max 1.0 format 0.50 solved 0.04 2.5s
+[11] reward 0.066 max 1.0 format 0.55 solved 0.01 2.5s
+[12] reward 0.069 max 1.0 format 0.61 solved 0.01 2.8s
+[13] reward 0.058 max 1.0 format 0.54 solved 0.00 2.5s
+[14] reward 0.073 max 1.0 format 0.54 solved 0.02 2.5s
+[15] reward 0.065 max 1.0 format 0.61 solved 0.00 2.5s
+[16] reward 0.076 max 1.0 format 0.72 solved 0.00 2.6s
+[17] reward 0.074 max 1.0 format 0.63 solved 0.01 2.6s
+[18] reward 0.084 max 1.0 format 0.80 solved 0.00 2.6s
+[19] reward 0.075 max 1.0 format 0.60 solved 0.02 2.5s
+[20] reward 0.082 max 1.0 format 0.74 solved 0.01 2.6s
+[21] reward 0.090 max 1.0 format 0.75 solved 0.02 2.6s
+[22] reward 0.091 max 1.0 format 0.69 solved 0.03 2.6s
+[23] reward 0.090 max 1.0 format 0.71 solved 0.02 2.6s
+[24] reward 0.077 max 0.1 format 0.77 solved 0.00 2.6s
+[25] reward 0.115 max 1.0 format 0.74 solved 0.05 2.6s
+[26] reward 0.108 max 1.0 format 0.81 solved 0.03 2.6s
+[27] reward 0.103 max 1.0 format 0.84 solved 0.02 2.6s
+[28] reward 0.096 max 1.0 format 0.88 solved 0.01 2.6s
+[29] reward 0.102 max 1.0 format 0.80 solved 0.03 2.5s
+[30] EVAL reward 0.115 solved 0.018 format 0.98 24s
+done
+==== probe-lr1-padded (2026-08-23T10:03:55Z) ====
+ src/shardes/strategies/lowrank.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+[0] EVAL reward 0.053 solved 0.013 format 0.42 31s
+[0] reward 0.025 max 1.0 format 0.21 solved 0.00 353.7s
+[1] reward 0.032 max 1.0 format 0.28 solved 0.00 373.5s
+[2] reward 0.032 max 1.0 format 0.28 solved 0.00 3.0s
+[3] reward 0.042 max 1.0 format 0.30 solved 0.01 2.9s
+[4] reward 0.035 max 1.0 format 0.31 solved 0.00 3.0s
+[5] reward 0.043 max 1.0 format 0.39 solved 0.00 3.0s
+[6] reward 0.057 max 1.0 format 0.46 solved 0.01 3.0s
+[7] reward 0.050 max 1.0 format 0.35 solved 0.02 3.0s
+[8] reward 0.056 max 0.1 format 0.56 solved 0.00 2.9s
+[9] reward 0.062 max 1.0 format 0.50 solved 0.01 2.9s
+[10] reward 0.100 max 1.0 format 0.51 solved 0.05 2.9s
+[11] reward 0.067 max 1.0 format 0.56 solved 0.01 3.0s
+[12] reward 0.078 max 1.0 format 0.67 solved 0.01 2.9s
+[13] reward 0.064 max 1.0 format 0.57 solved 0.01 2.9s
+[14] reward 0.070 max 1.0 format 0.55 solved 0.02 3.0s
+[15] reward 0.055 max 0.1 format 0.55 solved 0.00 3.0s
+[16] reward 0.073 max 0.1 format 0.73 solved 0.00 3.0s
+[17] reward 0.073 max 1.0 format 0.65 solved 0.01 2.9s
+[18] reward 0.086 max 1.0 format 0.82 solved 0.00 3.0s
+[19] reward 0.078 max 1.0 format 0.63 solved 0.02 3.0s
+[20] reward 0.087 max 1.0 format 0.76 solved 0.01 3.0s
+[21] reward 0.085 max 1.0 format 0.78 solved 0.01 3.0s
+[22] reward 0.096 max 1.0 format 0.70 solved 0.03 3.0s
+[23] reward 0.083 max 1.0 format 0.72 solved 0.01 3.0s
+[24] reward 0.077 max 0.1 format 0.77 solved 0.00 3.0s
+[25] reward 0.105 max 1.0 format 0.72 solved 0.04 3.0s
+[26] reward 0.108 max 1.0 format 0.78 solved 0.03 3.0s
+[27] reward 0.104 max 1.0 format 0.82 solved 0.03 2.9s
+[28] reward 0.092 max 1.0 format 0.85 solved 0.01 2.8s
+[29] reward 0.090 max 1.0 format 0.79 solved 0.01 3.0s
+[30] EVAL reward 0.112 solved 0.015 format 0.99 24s
+done
+?? results-es-mirrored-lr1-s0/
+?? results-es-mirrored-lr1-s1/
+?? results-es-mirrored-lr1-s2/
+?? results-probe-lr1-padded-s0/
+?? results-probe-lr1-s0/
+?? results-probe-seed-s0/
+PROBE_DONE

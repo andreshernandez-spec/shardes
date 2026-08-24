@@ -23,7 +23,7 @@ import pathlib
 import statistics
 
 HERE = pathlib.Path(__file__).resolve().parent
-COUNTDOWN = HERE.parent / "countdown" / "results" / "e13-a100-2026-08-17"
+COUNTDOWN = HERE.parent / "countdown" / "results" / "e13-a100-2026-08-22-clean"
 
 GPU = HERE / "results-cost"
 TPU = HERE / "results-cost-tpu-v5e8"

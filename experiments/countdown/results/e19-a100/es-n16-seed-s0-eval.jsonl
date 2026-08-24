@@ -1,0 +1,12 @@
+{"generation": 0, "eval_reward": 0.051600005477666855, "eval_solved": 0.01, "eval_format": 0.426, "eval_seconds": 30.736954536288977, "param_l2_from_init": 0.0}
+{"generation": 0, "eval_reward": 0.051600005477666855, "eval_solved": 0.01, "eval_format": 0.426, "eval_seconds": 31.14333900436759, "param_l2_from_init": 0.0}
+{"generation": 94, "eval_reward": 0.14539998769760132, "eval_solved": 0.0505, "eval_format": 0.9995, "eval_seconds": 23.536839991807938, "param_l2_from_init": 8.175525665283203}
+{"generation": 188, "eval_reward": 0.1516999751329422, "eval_solved": 0.0575, "eval_format": 0.9995, "eval_seconds": 7.94739793241024, "param_l2_from_init": 10.711468696594238}
+{"generation": 282, "eval_reward": 0.1557999849319458, "eval_solved": 0.062, "eval_format": 1.0, "eval_seconds": 7.832490526139736, "param_l2_from_init": 12.791097640991211}
+{"generation": 376, "eval_reward": 0.15309999883174896, "eval_solved": 0.059, "eval_format": 1.0, "eval_seconds": 7.800762593746185, "param_l2_from_init": 14.413386344909668}
+{"generation": 470, "eval_reward": 0.15444999933242798, "eval_solved": 0.0605, "eval_format": 1.0, "eval_seconds": 7.7388661205768585, "param_l2_from_init": 16.055334091186523}
+{"generation": 564, "eval_reward": 0.15444999933242798, "eval_solved": 0.0605, "eval_format": 1.0, "eval_seconds": 7.805160783231258, "param_l2_from_init": 17.551250457763672}
+{"generation": 658, "eval_reward": 0.156700000166893, "eval_solved": 0.063, "eval_format": 1.0, "eval_seconds": 7.699920766055584, "param_l2_from_init": 18.970382690429688}
+{"generation": 752, "eval_reward": 0.15264999866485596, "eval_solved": 0.0585, "eval_format": 1.0, "eval_seconds": 7.735588010400534, "param_l2_from_init": 20.328157424926758}
+{"generation": 846, "eval_reward": 0.15354998409748077, "eval_solved": 0.0595, "eval_format": 1.0, "eval_seconds": 7.730127073824406, "param_l2_from_init": 21.47121238708496}
+{"generation": 940, "eval_reward": 0.1557999849319458, "eval_solved": 0.062, "eval_format": 1.0, "eval_seconds": 7.822220843285322, "param_l2_from_init": 22.588241577148438}

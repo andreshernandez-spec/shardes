@@ -416,7 +416,11 @@ F2 is the figure to design first and work backwards from.
 5. **Experimental setup** — platforms, shape-matching rule, measurement protocol.
 6. **Results** — F1–F4, TB1–TB3.
 7. **Coupled sampling** (conditional) — F5, F6, or the negative result.
-8. **Limitations** — write this honestly and early; see below.
+8. **No limitations section.** Decided 2026-08-23: a caveat goes with the claim it
+   qualifies, in the same paragraph, or it goes nowhere. A separate section invites
+   generic entries nobody expected otherwise ("not every configuration was measured")
+   and lets a real caveat sit four pages from the number it bounds. The list below is
+   the audit trail of where each one landed, not a section to write.
 9. **Related work** — ES at scale, ZO optimization for LLMs (P-GAP, LOREN, GRZO), coupling
    and QMC for ES, sharding in JAX.
 
@@ -426,9 +430,16 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 
 ---
 
-## Limitations to state, not bury
+## Caveats, and the claim each one travels with
 
 - Single-node for the GPU results, if that's what the budget buys.
+- **The cost model closes the dense side of the crossover and not the low-rank side.**
+  Bytes reach time through the measured collectives (`docs/11-cost-model.md`, `tb7`):
+  where B wins its all-reduce is 0.7-3.6% of the advantage, where A wins it is 57-155%
+  of B's deficit. Eight of the eleven fall UNDER 100%, which is B costing more than its
+  local contraction plus the isolated all-reduce allows. State the open term; do not write
+  "the crossover is an observation, not a cost model", which stopped being true once
+  the ladder ran.
 - v5e-8 has 16 GB/chip, so absolute population sizes don't match EGGROLL's H100 figures.
   The scaling *behaviour* transfers; the absolute numbers don't.
 - Kaggle T4s are Turing-class and appear only in correctness runs, never in a throughput
@@ -458,7 +469,9 @@ fitted afterwards, and it's cheap to do — write it during Phase 1.
 
 **Framing decided 2026-08-21: the paper is the ES-scaling investigation; the library is the instrument**, cited and released, one contribution bullet. The project's deliverable is still the library (CLAUDE.md); the paper's contribution is what it measured, which is both the stronger review posture and the better story.
 
-**Title decided 2026-08-21: "Sharded evolution strategies on GPUs and TPUs".** Plain and descriptive, no library name in it, consistent with the framing above. Rejected: the folk-claims phrasing (too informal for the first impression), a communication-only title (undersells the accuracy and stability results), and any title leading with shardes.
+**Title, current: "Update-contraction placement in sharded evolution strategies on GPUs and TPUs"** (239a45a, 2026-08-22). It names the measurement. The previous title said "the contraction crossover", and only the low-rank family crosses: the dense and seed-regenerated families never change sign anywhere in the grid, so "crossover" promised something two thirds of the results do not show. "Crossover" stays in the body, where it names the low-rank sign flip and is accurate.
+
+Superseded on the way here: "Sharded evolution strategies on GPUs and TPUs" (2026-08-21, plain and descriptive but says nothing about what was found), and before that the folk-claims phrasing (too informal), a communication-only title (undersells the accuracy results), and any title leading with shardes.
 
 **Decided 2026-08-20: MLSys-style full paper** ("it can always be compressed later").
 The fallbacks stay what they were: a NeurIPS/ICML workshop on efficient training or

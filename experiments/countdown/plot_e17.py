@@ -57,8 +57,11 @@ def main() -> None:
             if xs:
                 ax.plot(xs, ys, marker="o", ms=5, lw=1.6, color=color, label=f"N={n}")
             if ooms:
-                ax.scatter(ooms, [0.0] * len(ooms), facecolors="none", edgecolors=color,
-                           s=36, lw=1.2, zorder=3)
+                # Spread the populations' OOM markers around the device count so
+                # four of them at one D stay tellable apart (a sixth of an octave).
+                k = pops.index(n) - (len(pops) - 1) / 2
+                ax.scatter([d * 2 ** (k / 6) for d in ooms], [0.0] * len(ooms),
+                           facecolors="none", edgecolors=color, s=36, lw=1.2, zorder=3)
         ax.axhline(0.0, color="#888888", lw=0.8, ls="--")
         ax.set_xscale("log", base=2)
         ax.set_xticks(DEVICES)

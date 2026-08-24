@@ -1,0 +1,26 @@
+{
+ "d_model": 2048,
+ "population": 256,
+ "params": 25165824,
+ "env": {
+  "commit": "6718d828e05c14fab78afa6ce05ae18686adac6a",
+  "dirty_worktree": false,
+  "jax": "0.11.1",
+  "jaxlib": "0.11.1",
+  "numpy": "2.5.2",
+  "scipy": "1.18.1",
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.39",
+  "hostname": "6ee65648463b",
+  "device_count": 1,
+  "device_kind": "NVIDIA A100-SXM4-80GB",
+  "device_platform": "gpu",
+  "xla_flags": "",
+  "jax_platforms": ""
+ },
+ "device_kind": "NVIDIA A100-SXM4-80GB",
+ "t_iid": 0.15250747464597225,
+ "t_seed": 0.20104126632213593,
+ "t_rng": 0.07010360388085246,
+ "gap_over_two_rng": 0.34615760809281165
+}

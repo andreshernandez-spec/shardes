@@ -14,7 +14,7 @@ per-device memory; the v5e's matrix unit multiplies in bfloat16 by default.
 % Enumerated, not a range: table numbers follow order of appearance and
 % the real-model crossover table (tb5) sits between these in section 6.
 (Figures~\ref{fig:f2} and~\ref{fig:f4}, the grids of
-Appendix~\ref{sec:grids}, Tables~\ref{tab:tb2}, \ref{tab:tb1},
+Appendix~\ref{sec:grids}, Tables~\ref{tab:tb1},
 \ref{tab:tb1b}, and~\ref{tab:tb3})
 are microbenchmarks of a single, deliberately simplified transformer
 block: six square $d\times d$ matrices (attention q, k, v, o and a
@@ -22,9 +22,11 @@ two-matrix MLP), a single head, no learned normalization parameters,
 $d_{\mathrm{ff}}{=}d$ where a real transformer uses roughly $4d$,
 synthetic inputs and targets, mean-squared-error loss. Every matrix being
 square keeps the sampling dimension a single number per rank,
-which is what the alignment study needs; the simplifications move
-arithmetic intensity and memory, and are stated in
-Section~\ref{sec:limitations}. Parameter count is $P{=}6d^2$, so
+which is what the alignment study needs. The simplifications move
+arithmetic intensity and memory, so every absolute ratio from these grids is
+a property of this workload rather than of transformers in general; what
+should carry is the sign of a comparison and how it moves with $N$, $d$ and
+$D$. Parameter count is $P{=}6d^2$, so
 $d{=}2048$ means 25.2M parameters and a 100.7\,MB float32 update. Every
 generation evaluates the whole population on one shared batch of 8
 sequences of length 32. The scaling grid is $d\in\{512, 2048\}$ with
@@ -74,10 +76,10 @@ the records; every figure and table in this paper regenerates from a script in
 the released repository
 (\url{https://github.com/andreshernandez-spec/shardes}); the submitted
 version of this manuscript will pin the frozen tag it was built from.
-The E13 task-training logs mark their worktree dirty. Their scripts,
-configurations, outputs, and recorded commit are archived, but we therefore do
-not claim that campaign was executed from an exactly clean checkout. The
-systems sweeps and alignment experiments are unaffected by that provenance
-qualification.
+The E13 task-training curves and timings are from a rerun of that campaign
+at a committed tree (the first campaign's logs mark their worktree dirty;
+both are archived, and the rerun reproduces the first's held-out rewards
+inside seed noise). The GRPO reference was not rerun and is read from the
+first campaign.
 %% TODO(andres): archived artifact DOI + the frozen version tag at
 %% submission; until the tag exists the sentence above is a promise.

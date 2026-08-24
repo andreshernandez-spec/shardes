@@ -54,7 +54,10 @@ def rng_seconds(n: int, p: int, warmup: int, repeats: int) -> float:
     def draw_all(k):
         def body(acc, i):
             z = jax.random.normal(jax.random.fold_in(k, i), (p,), jnp.float32)
-            return acc + z[0] + z[-1], None  # touch the draw; never keep it
+            # Reduce the whole draw so XLA cannot slice the generation down to
+            # the elements it needs: touching z[0] + z[-1] let the A100 report
+            # 6.4e9 normals in 4.5 ms at d=2048, eleven times the d=512 rate.
+            return acc + z.sum(), None
         acc, _ = jax.lax.scan(body, jnp.float32(0), jnp.arange(n))
         return acc
 
@@ -77,7 +80,9 @@ def main(argv=None) -> int:
     cells = [(64, 8), (64, 16)] if args.smoke else CELLS
     out_dir = HERE / ("results-regen-smoke" if args.smoke else "results-regen")
     out_dir.mkdir(exist_ok=True)
-    env = harness.capture_env(HERE, (out_dir.name,))
+    # Both outputs are excluded so the two T7 scripts can share one checkout
+    # in either order without the second stamping the first's output as dirt.
+    env = harness.capture_env(HERE, (out_dir.name, "results-ladder"))
     kind = jax.devices()[0].device_kind.replace(" ", "-").lower()
 
     for d, n in cells:

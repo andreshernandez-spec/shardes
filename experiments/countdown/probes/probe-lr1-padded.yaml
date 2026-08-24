@@ -1,0 +1,22 @@
+# Timing probe, not a result: 30 generations of the E13 lr1 arm on one host, so the
+# per-update seconds of two arms can be compared on the same machine and SHA.
+# Evaluation is switched off beyond generation 0. Derived from pilot-lr1.yaml.
+model: Qwen/Qwen2.5-0.5B-Instruct
+strategy: mirrored_lr1
+population: 30
+sigma: 0.001
+lr: 5.0e-7
+seed: 0
+eval_chunk: 5
+puzzle_seed: 7
+n_puzzles: 256                   # the rotating pool
+puzzles_per_gen: 8
+pad_to: 128                      # prompt budget; measured max for this template is ~110
+max_new: 96
+generations: 30
+checkpoint_every: 1000
+results_dir: results-probe-lr1-padded
+eval_seed: 1007
+eval_puzzles: 2000
+eval_every: 1000
+eval_batch: 250
