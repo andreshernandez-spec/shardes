@@ -34,12 +34,33 @@ phase() { echo; echo "==== $1 ===="; }
 phase "preflight 1x8 (node 0 alone: the anchor, writes the invariance ref)"
 E18_TOPOLOGY=1x8 E18_EXPECT_DEVICES=8 timeout 900 python preflight.py
 
-phase "preflight 2x8 (both nodes, 8 GPUs each)"
-run_node1 "E18_TOPOLOGY=2x8 E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=1 \
-  E18_EXPECT_DEVICES=16 timeout 900 python preflight.py" &
-E18_TOPOLOGY=2x8 E18_COORD=$ME:$COORD_PORT E18_NPROC=2 E18_PID=0 \
-  E18_EXPECT_DEVICES=16 timeout 900 python preflight.py
-wait
+# 2x8 preflight, doubling as the inter-node transport probe. RunPod Instant
+# Cluster IB has failed NCCL with RETRY_EXC (2026-08-24, cluster dmzn...); try
+# IB first (the fast fabric, the top inter-node point), and if the cross-node
+# handshake fails fall back to the socket transport over the overlay, which the
+# coordinator and ssh already use. Decided once, then exported so every later
+# node-0 command and run_node1 call (via IFENV) inherits the choice. Invoked in
+# an `if` so a failed attempt does not trip set -e.
+run_2x8_preflight() {  # $1 = coordinator port
+  run_node1 "E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=1 \
+    E18_EXPECT_DEVICES=16 timeout 900 python preflight.py" &
+  local n1=$!
+  E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=0 \
+    E18_EXPECT_DEVICES=16 timeout 900 python preflight.py
+  local rc=$?; wait "$n1" 2>/dev/null || true; return $rc
+}
+
+phase "preflight 2x8 (both nodes; IB, socket fallback)"
+if run_2x8_preflight "$COORD_PORT"; then
+  echo "E18_TRANSPORT=ib"
+else
+  echo "2x8 IB handshake failed; falling back to socket over ${NCCL_SOCKET_IFNAME:-overlay}"
+  export NCCL_IB_DISABLE=1 NCCL_NET=Socket
+  IFENV="$IFENV NCCL_IB_DISABLE=1 NCCL_NET=Socket"
+  sleep 5
+  run_2x8_preflight "$((COORD_PORT + 10))" || { echo "2x8 socket handshake also failed; aborting"; exit 1; }
+  echo "E18_TRANSPORT=socket"
+fi
 
 phase "preflight 2x4 (4 GPUs per node: H1's controlled topology)"
 run_node1 "CUDA_VISIBLE_DEVICES=0,1,2,3 E18_TOPOLOGY=2x4 \
