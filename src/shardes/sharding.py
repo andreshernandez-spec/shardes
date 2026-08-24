@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.sharding import AxisType, Mesh, NamedSharding, PartitionSpec as P
 
 from shardes.types import Array
@@ -60,10 +61,24 @@ def make_mesh(n_devices: int | None = None) -> Mesh:
         n_devices = len(devices)
     if not 1 <= n_devices <= len(devices):
         raise ValueError(f"asked for {n_devices} devices, {len(devices)} visible")
+    chosen = devices[:n_devices]
     # AxisType.Auto, not jax.make_mesh's Explicit default. This is a load-bearing choice,
     # not a stylistic one: see AXIS_TYPE_NOTE below.
-    return jax.make_mesh((n_devices,), (POP,), axis_types=(AxisType.Auto,),
-                         devices=devices[:n_devices])
+    if len({d.process_index for d in chosen}) == 1:
+        return jax.make_mesh((n_devices,), (POP,), axis_types=(AxisType.Auto,),
+                             devices=chosen)
+    # Multi-host: jax.make_mesh (via create_device_mesh) rejects a multi-slice topology
+    # and points at create_hybrid_device_mesh, which builds a 2-D per-slice/across-slice
+    # mesh. The pop axis is one flat axis, and a reduction over it crosses the host
+    # boundary exactly once however devices are permuted (NVLink inside a host is
+    # all-to-all), so a process-contiguous flat arrangement is both valid and optimal.
+    # Build the Mesh directly. Placement is irrelevant to the update anyway: member i
+    # always derives from fold_in(base_key, i), so the result is invariant to which
+    # device holds which member (the seed contract above), which the cluster preflight's
+    # 1x8-vs-2x8 invariance gate re-checks before any campaign cell runs.
+    ordered = sorted(chosen, key=lambda d: (d.process_index, d.id))
+    return Mesh(np.asarray(ordered, dtype=object).reshape(n_devices), (POP,),
+                axis_types=(AxisType.Auto,))
 
 
 AXIS_TYPE_NOTE = """Why the mesh is Auto rather than Explicit.

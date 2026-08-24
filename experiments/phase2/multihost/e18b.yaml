@@ -1,0 +1,35 @@
+# E18b: the fabric throttle sweep. Same 2x8 host boundary as E18, NCCL forced
+# onto the socket transport, tc tbf on the overlay at each setting. Combined
+# with E18's NVLink (1x8) and native-fabric (2x8, NCCL default) points, this
+# covers the full inter-node range from ~600 GB/s down to ~0.1 GB/s.
+#
+# Frozen hypotheses (predictions written by predict_e18b.py from the committed
+# single-node D=8 sweep + the socket-native calibration, BEFORE any throttled
+# cell; the driver order and the session log timestamps are the witness):
+#   G1: as beta falls, t_B rises (B pays the model-sized all-reduce every gen)
+#       while t_A is ~flat (A gathers scalars), so t_B - t_A rises monotonically.
+#   G2: seed_regenerated d=2048 stays B-favored at socket-native but the sign
+#       FLIPS to A at some throttled beta; the alpha-beta model predicts where.
+#   G3: mirrored_lr1 d=2048 is A-favored at every setting (small B compute
+#       saving, boundary penalty on top), unchanged across the sweep.
+#   G4: the model calibrated ONLY at socket-native predicts the sign of
+#       t_B - t_A at 10gbit and 1gbit before those cells run.
+#
+# Orchestration keys (read by launch-e18b.sh, ignored by driver.py):
+socket_transport: true
+settings:
+  - {name: socket-native, rate: none}    # unthrottled socket: isolates transport from bandwidth
+  - {name: rate-10gbit,   rate: 10gbit}
+  - {name: rate-1gbit,    rate: 1gbit}
+# Driver keys:
+arms: [seed_regenerated, mirrored_lr1]
+hows: [A, B]
+cells:
+  - {d: 2048, N: 128}    # the bracketing pair: B-favored (seed), A-leaning (lr1)
+  - {d: 512,  N: 1024}   # near-parity for lr1
+batch: 8
+seq: 32
+warmup: 3
+repeats: 7               # network jitter; IQR recorded
+matmul_precision: highest
+results_dir: results-e18b

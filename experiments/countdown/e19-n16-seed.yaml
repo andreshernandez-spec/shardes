@@ -1,0 +1,53 @@
+# E19: positive control for the E13 rank-parity null (review 7, hole 4).
+# Committed before any run, cited by SHA. Identical to the E13 arm config
+# below except population 16 (the nearest even halving of 30; Mirrored needs
+# pairs), with the sample budget held at ~120k: 940 updates x 16 members x 8
+# puzzles = 120,320 scored completions, held-out evals every 94 updates
+# (12,032 samples, matching E13's every-50-updates cadence in sample space).
+#
+# Frozen prediction: the E1 fit gives cosine proportional to sqrt(N), so the
+# N=16 arm has 0.73x the per-update alignment of N=30 and twice the updates
+# per sample. If the held-out metric can resolve a modestly worse arm at this
+# task, N=16 should reach the 0.15 plateau later in samples and/or plateau
+# lower; if it cannot, the E13 null is "the instrument does not see", and the
+# paper says so. Either outcome is reported.
+#
+model: Qwen/Qwen2.5-0.5B-Instruct
+strategy: mirrored_seed          # the Qiu algorithm; lr arms get their own configs
+population: 16
+sigma: 0.001
+# lr = alpha * sigma = 5e-4 * 0.001. Their update is theta += (alpha/N) * sum(z_i eps_i)
+# with NO division by sigma (es-fine-tuning-paper worker_extension.py line 103:
+# "coeffs[i] should be: (alpha / population_size) * normalized_reward"); our tell steps
+# by lr/(N*sigma). Their alpha fed to our lr therefore oversteps by 1/sigma = 1000x,
+# which the 2026-08-15 probe measured as total reward collapse after one generation.
+# Residual difference: their z-scored fitness has ~3.5x the scale of our centered
+# ranks; recorded, not corrected, since sigma-relative step size is the load-bearing part.
+lr: 5.0e-7
+seed: 0
+
+# Members evaluated together per decode pass (SeedRegenerated only; LowRank's
+# evaluation is already batched). 15 mirrored directions / chunk 5 = 3 scan steps.
+# Memory: chunk * |params| in bf16 plus chunk KV caches, ~7 GB at 0.5B, sized for the
+# A100's 80 GB with room for the f32 master.
+eval_chunk: 4                    # 8 mirrored directions per device at N=16; chunk must divide them (5 does not)
+
+puzzle_seed: 7
+n_puzzles: 256                   # the rotating pool
+puzzles_per_gen: 8
+pad_to: 128                      # prompt budget; measured max for this template is ~110
+max_new: 96
+generations: 940
+checkpoint_every: 10
+
+results_dir: results-e19-n16-seed
+
+# Held-out evaluation, Qiu's 2000-sample test discipline. The set is disjoint from
+# the training pool by construction (task.make_eval_puzzles drops collisions), the
+# decode is greedy on the master weights, and eval.jsonl gets one line per pass:
+# generation 0 pre-training, every eval_every-th generation, and once after the
+# last update. eval_batch must divide eval_puzzles.
+eval_seed: 1007
+eval_puzzles: 2000
+eval_every: 94
+eval_batch: 250

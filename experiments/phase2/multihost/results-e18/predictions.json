@@ -1,0 +1,98 @@
+{
+ "seed_regenerated__d=512__N=1024": {
+  "delta_1x8_measured": -0.025918273953720927,
+  "comm_bump_predicted": 0.0007277130149304868,
+  "delta_2x8_bracket": [
+   -0.026987209710932804,
+   -0.026987209710932804
+  ],
+  "delta_predicted": -0.026987209710932804,
+  "delta_bracket": [
+   -0.026987209710932804,
+   -0.026987209710932804
+  ],
+  "contraction_seconds": 0.02874638035427779,
+  "contraction_source": "measured",
+  "predicted_sign_B_minus_A": "B_wins"
+ },
+ "seed_regenerated__d=2048__N=128": {
+  "delta_1x8_measured": -0.021994899958372116,
+  "comm_bump_predicted": 0.0100769842043519,
+  "delta_2x8_bracket": [
+   -0.01391239340446191,
+   -0.01391239340446191
+  ],
+  "delta_predicted": -0.01391239340446191,
+  "delta_bracket": [
+   -0.01391239340446191,
+   -0.01391239340446191
+  ],
+  "contraction_seconds": 0.03191164240706712,
+  "contraction_source": "measured",
+  "predicted_sign_B_minus_A": "B_wins"
+ },
+ "seed_regenerated__d=2048__N=256": {
+  "delta_1x8_measured": -0.05430259904824197,
+  "comm_bump_predicted": 0.0100769842043519,
+  "delta_2x8_bracket": [
+   -0.04822591886331793,
+   -0.04822591886331793
+  ],
+  "delta_predicted": -0.04822591886331793,
+  "delta_bracket": [
+   -0.04822591886331793,
+   -0.04822591886331793
+  ],
+  "contraction_seconds": 0.06400486431084573,
+  "contraction_source": "measured",
+  "predicted_sign_B_minus_A": "B_wins"
+ },
+ "mirrored_lr1__d=512__N=1024": {
+  "delta_1x8_measured": 7.542897947132587e-05,
+  "comm_bump_predicted": 0.0007277130149304868,
+  "delta_2x8_bracket": [
+   0.0007813361240550877,
+   0.0007813361240550877
+  ],
+  "delta_predicted": 0.0007813361240550877,
+  "delta_bracket": [
+   0.0007813361240550877,
+   0.0007813361240550877
+  ],
+  "contraction_seconds": 0.0003488939255475998,
+  "contraction_source": "measured",
+  "predicted_sign_B_minus_A": "A_wins"
+ },
+ "mirrored_lr1__d=2048__N=128": {
+  "delta_1x8_measured": 0.0016317570116370916,
+  "comm_bump_predicted": 0.0100769842043519,
+  "delta_2x8_bracket": [
+   0.011677882701042107,
+   0.011677882701042107
+  ],
+  "delta_predicted": 0.011677882701042107,
+  "delta_bracket": [
+   0.011677882701042107,
+   0.011677882701042107
+  ],
+  "contraction_seconds": 0.0004937362391501665,
+  "contraction_source": "measured",
+  "predicted_sign_B_minus_A": "A_wins"
+ },
+ "mirrored_lr1__d=2048__N=256": {
+  "delta_1x8_measured": 0.0014039368834346533,
+  "comm_bump_predicted": 0.0100769842043519,
+  "delta_2x8_bracket": [
+   0.01143240938981762,
+   0.01143240938981762
+  ],
+  "delta_predicted": 0.01143240938981762,
+  "delta_bracket": [
+   0.01143240938981762,
+   0.01143240938981762
+  ],
+  "contraction_seconds": 0.0007761871675029397,
+  "contraction_source": "measured",
+  "predicted_sign_B_minus_A": "A_wins"
+ }
+}
