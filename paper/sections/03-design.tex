@@ -48,8 +48,9 @@ covers every cell. The honest cost of this generality is
 an API constraint: a model must route its parameterized matrix multiplies
 and embedding lookups through the library's seams (\texttt{shardes.nn}),
 because a structured weight substituted into the parameter tree raises on
-direct arithmetic. Section~\ref{sec:limitations} carries the portability
-consequence.
+direct arithmetic. An existing model therefore does not run unmodified, and a
+layer type the library has no seam for needs one written. That is the price
+of never materializing the noise, paid at the API rather than at runtime.
 
 \paragraph{One deliberate synchronization point.} Fitness shaping needs every
 candidate's score (a global sort for centered ranks), so \emph{tell} gathers

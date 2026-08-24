@@ -1,5 +1,14 @@
 # 12 — E18/E18b: what the cost model predicts, written before the rental
 
+> **Outcome, added 2026-08-24 after the E18 run.** The rental happened and the model was
+> tested out of sample. It got the direction right on every cell and the magnitude wrong
+> by 10x on the one that mattered: the measured socket fabric was 9.2 GiB/s, above the
+> 4.12 GB/s flip point predicted below, so the model said `seed_regenerated` d=2048 stays
+> B-favored across the boundary. It measures A. The cause is caveat 2, larger than
+> allowed: `4P/beta` under-prices a real all-reduce on TCP sockets by about ten, not two.
+> H3/G3 held (`mirrored_lr1` A-favored everywhere, widening to +1.44). Nothing below is
+> edited; it is the prediction as frozen.
+
 Written 2026-08-23, before any 2-node cluster exists. `docs/10` §2 froze four directional
 hypotheses (H1-H4) and `e18b.yaml` froze four more (G1-G4), and both H4 and G4 say the
 same thing: a calibrated model should predict the sign before the cells run. Until now

@@ -67,24 +67,57 @@ ahead at $d{=}2048$ by 4--15\% on the A100 and 17--46\% on the v5e. Both
 halves match the prediction: B's
 advantage grows with per-candidate work, and A returns where that work
 becomes small; its trajectory in device count is monotone
-(Figure~\ref{fig:f2b}). The folk claim resolves as true but incomplete:
+(Figure~\ref{fig:f2b}). The grid is $3\times2$ per platform with holes at the
+memory ceiling, which resolves regions and the sign changes between them
+rather than a contour: read a crossover here as the cell where the sign
+turns, not as a value of $N$ or $d$. The folk claim resolves as true but
+incomplete:
 A moves only scalars, but B all-reduces a model-sized buffer and still
 wins whenever the contraction it avoids costs more than those bytes.
-Strategy A's scalar payload is exactly twice the naive count
-(Table~\ref{tab:tb2}: two $4N$-byte gathers, the raw fitnesses for
-shaping and the shaped weights for the contraction). The timing experiment does not measure network time separately
-from compute, so what the crossover establishes about communication is
-end-to-end: the model-sized all-reduce did not prevent B from winning
-every dense and seed-regenerated cell. The low-rank timings are consistent
-with its overhead returning cells to A where the contraction work B avoids is too
-small to pay for the transfer. Communication does not decide the dense
-side of the grid; it sets the low-rank side of the crossover. Both
-statements are about one host with a fat fabric: an NVLink node and a v5e
-host are where a 100\,MB all-reduce is cheapest, and the commodity
-clusters the scalar folk claim was made for \citep{salimans2017} are not
-measured here (Section~\ref{sec:limitations}).
+Strategy A's scalar payload is exactly twice the naive count, two $4N$-byte
+gathers rather than one (Section~\ref{sec:contraction}).
 
-\input{generated/tb2}
+\paragraph{Bytes into time.} What decides a cell is not the payload but what
+the payload costs, and the two differ by a rate that varies with message size
+and with the fabric. Table~\ref{tab:tb8} times both collectives in isolation
+on both platforms, as the marginal cost of one more collective inside a
+program that is already running rather than as a program of its own: the
+one-op floor is 0.32\,ms on the A100 and 0.60\,ms on the v5e, twelve and a
+hundred times the in-program latency, so it is the marginal number a
+generation pays. B's model-sized all-reduce costs 0.93\,ms on the A100 and
+2.01\,ms on the v5e at $d{=}2048$, and 0.12\,ms on both at $d{=}512$; the
+fitness gather both placements share stays under 10\,$\mu$s everywhere the
+grid runs, and is under 21\,$\mu$s even at $N{=}2^{18}$.
+
+Against the grid the two sides separate cleanly. In every cell B wins, its
+all-reduce is 0.7 to 3.6\% of the advantage it buys, so the model-sized
+transfer is not what decides the dense side; the contraction it avoids is.
+In every cell A wins, the same all-reduce is 57 to 155\% of B's deficit, so
+the low-rank side of the crossover is the collective and almost nothing else.
+That also accounts for the platform shift, which the byte count cannot: the
+same 96\,MiB payload costs $2.17\times$ more on the v5e, and A's low-rank
+lead grows from 4--15\% there to 17--46\%. The fabric moved, the bytes did
+not.
+
+The cells that fall short of 100\% are the model's open term rather than a
+rounding artifact, and there are eight of the eleven. In each, B is slower
+than its local contraction plus the isolated all-reduce can account for,
+which a contraction cannot be: the shortfall reaches 0.71\,ms on the A100
+and 0.63\,ms on the v5e, both at \texttt{mirrored\_lr1}, $d{=}2048$,
+$N{=}128$. A collective issued inside a generation holding a model's worth of
+live buffers is not the collective the ladder times in an otherwise empty
+program, and the contraction itself has never been timed apart from the
+generation that carries it. Which of the two owns the shortfall is settled by
+neither harness here. Every number in this paragraph is also one host with a
+fat fabric: an NVLink node and a v5e host are where a 100\,MB all-reduce is
+cheapest, the dense-side result is therefore B's easy case, and the commodity
+clusters of hundreds of workers the scalar folk claim was made for
+\citep{salimans2017} are where it may well hold. The boundary is where the
+fabric term grows by one to two orders of magnitude, so it is the one change
+that could move the crossover rather than shift it, and
+Section~\ref{subsec:boundary} crosses it.
+
+\input{generated/tb8}
 
 \paragraph{Placement outcomes on the real model.} The same question,
 re-measured outside the simplified block: Table~\ref{tab:tb5} times one
@@ -100,15 +133,20 @@ at its largest model size. The memory column doubles as a finding: rank
 the seed arm runs at every cell, the storage-for-compute trade at real
 scale. The one absent B cell was killed during compilation; its A
 sibling exceeded memory at the same shape, so no feasible placement was
-demonstrated for that cell.
+demonstrated for that cell. This anchor is one accelerator: the real-model
+crossover was measured on the v5e only, so it confirms that the block's signs
+survive a real model and not that they survive on both platforms. Every
+cross-accelerator statement in this section rests on the controlled block
+instead, where the 16\,GB and 80\,GB ceilings sit at different cells and
+matched shapes are what make the two comparable.
 
 \input{generated/tb5}
 
 \subsection{Across a real host boundary}
 \label{subsec:boundary}
-The crossovers above are one NVLink node. The variable
-Section~\ref{sec:limitations} flags as the sharpest untested one is the host
-boundary, where a model-sized all-reduce leaves NVLink for the cluster fabric.
+The crossovers above are one NVLink node, and the sharpest untested variable
+is the host boundary, where a model-sized all-reduce leaves NVLink for the
+cluster fabric.
 We measured it on two $8\times$A100-SXM4-80GB nodes of a rented Instant Cluster,
 same block workload, both placement predictions frozen before the run
 (\texttt{experiments/phase2/multihost}). The cluster's InfiniBand did not carry
@@ -139,11 +177,15 @@ under-predicting B's boundary penalty by about $90$ to $105$\,ms. The sign that
 held for the low-rank arm and for the small model did not hold for the expensive
 arm at large $d$.
 
-This locates the flip at or below $9.2$\,GiB/s for the seed-regenerated arm.
-Whether it also occurs at the faster InfiniBand a production cluster provides
-(roughly $12$ to $50$\,GiB/s) is not established here, and the frozen model's own
-flip estimate for this cell was wrong, so it cannot place the contour
-(Section~\ref{sec:limitations}).
+This locates the flip at or below $9.2$\,GiB/s for the seed-regenerated arm,
+and no closer. The boundary measured is one bandwidth point and it is
+sockets: the cluster's InfiniBand carried no NCCL traffic on any host drawn,
+so whether the flip survives the $12$ to $50$\,GiB/s a production
+InfiniBand cluster provides is not established. The frozen model's own flip
+estimate for this cell was wrong in the direction that matters, placing it
+below the fabric that was measured, so the model cannot place the contour
+either. What the measurement establishes is that a boundary exists and which
+arms cross it, not where.
 
 
 % F4 -- experiments/phase2/figures/f4-cost-bfloat16.png (plot_cost.py)

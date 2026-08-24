@@ -49,6 +49,18 @@ def _not_an_array(op: str, seam: str):
     )
 
 
+#: Whether `LowRankWeight` pads r=1 factors to a rank-2 dot. "auto" pads on the TPU
+#: backend only (see `_factors`). Set True or False to force it: the tests pin the pad's
+#: numerics on CPU, and probe_lr1.py lowers for a TPU from a CPU host.
+PAD_RANK1: bool | str = "auto"
+
+
+def pad_rank1() -> bool:
+    if PAD_RANK1 == "auto":
+        return jax.default_backend() == "tpu"
+    return bool(PAD_RANK1)
+
+
 @register_dataclass
 @dataclass(frozen=True)
 class LowRankWeight:
@@ -112,14 +124,16 @@ class LowRankWeight:
     __rmatmul__ = __matmul__
 
     def _factors(self) -> tuple[Array, Array]:
-        # r=1 is padded to a rank-2 dot with a zero column. XLA strength-reduces a
-        # contracting-dim-1 dot into a multiply chain, and the TPU scheduler then keeps
+        # On TPU, r=1 is padded to a rank-2 dot with a zero column. XLA strength-reduces
+        # a contracting-dim-1 dot into a multiply chain, and the TPU scheduler then keeps
         # activation-sized f32 copies alive around it: rank 1 OOMed cells rank 4 ran
         # (results-cost-tpu-v5e8/README.md; probe_lr1.py reproduces the compile with no
         # TPU). The added product is identically zero: bitwise in bf16, 1-2 ulp in f32
-        # because a k=2 dot accumulates differently than a multiply.
+        # because a k=2 dot accumulates differently than a multiply. The GPU compiler
+        # keeps k=1 monotonic in r and the pad only costs it: 16% per rank-1 update on
+        # an A100 (experiments/countdown/probes, 2026-08-23), so it is TPU-only.
         a, b = self.a, self.b
-        if a.shape[-1] == 1:
+        if a.shape[-1] == 1 and pad_rank1():
             a = jnp.concatenate([a, jnp.zeros_like(a)], axis=-1)
             b = jnp.concatenate([b, jnp.zeros_like(b)], axis=-1)
         return a, b

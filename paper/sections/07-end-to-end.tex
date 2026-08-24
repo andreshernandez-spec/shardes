@@ -5,14 +5,15 @@
 \label{sec:endtoend}
 
 This section asks whether the systems savings preserve useful update
-directions and task quality. The objectives form a deliberate chain rather
-than one continuous experiment. The synthetic study uses mean-squared error;
+directions and task quality. The synthetic study uses mean-squared error;
 the real-model alignment studies use teacher-forced negative log-likelihood
 (NLL), whose exact gradient is available; and the training campaign optimizes
 a nondifferentiable reward from decoded Countdown answers. Thus the alignment
 experiments test whether a prediction transfers from a synthetic block to a
-real language-model loss. The task campaign is a subsequent outcome check, not
-a direct true-gradient validation of the decoded-reward objective.
+real language-model loss. Each objective is measured against the strongest
+reference it admits: cosine with an exact gradient where one exists, and
+held-out reward where none does, which is the quantity the method is chosen
+on in the first place.
 
 % F5 -- experiments/phase0/figures/f5-estimator-quality.png
 % (experiments/phase0/plot.py --sigma 0.001 --shaping centered_ranks)
@@ -39,9 +40,9 @@ cell over 456 cells. Per-strategy fits of
 $\log\cos = a + b\log(N/d_{\mathrm{samp}})$ have slopes from 0.494 to
 0.508 (Figure~\ref{fig:f5}). That exponent is the classical
 Gaussian-smoothing scaling, $\cos \propto \sqrt{N/d}$
-\citep{nesterov2017,duchi2015}, confirmed rather than discovered; what the
-measurement adds is that it survives centered-rank shaping, which changes
-the estimand (Section~\ref{sec:background}), to within $0.01$ of one half.
+\citep{nesterov2017,duchi2015}. What the measurement adds is that the
+exponent survives centered-rank shaping, which changes the estimand
+(Section~\ref{sec:background}), in every strategy on the grid.
 At matched population, mirrored low-rank and
 mirrored full-rank have similar alignment: the low-rank curves have lower
 intercepts against $N/d_{\mathrm{samp}}$, while their smaller sampling
@@ -68,21 +69,25 @@ and at $N{=}240$ the unpaired rank-1 arm has $1.36\times$ the alignment of
 mirrored rank 1, close to the synthetic ordering.
 
 Two held-out probes test whether the remaining correction is portable.
-Repeating the full-rank and rank-1 cells on a freshly drawn frozen prompt batch
-reproduces their ratios to two decimals ($0.94\times$ and $0.52\times$ on
-either batch). On Qwen2.5-1.5B, with predictions frozen before the run, the
+Repeating the full-rank and rank-1 cells on a freshly drawn frozen prompt
+batch reproduces their ratios to two decimals ($0.94\times$ and
+$0.52\times$ on either batch), so the factor belongs to the arm and not to
+the prompts. On Qwen2.5-1.5B, with predictions frozen before the run, the
 within-arm $N$-scaling is $2.80\times$ and $2.94\times$ against
-$\sqrt{8}=2.83$, and the raw full-rank prediction remains within 5--8\%.
-Multiplying the rank-1 fit by the 0.53 correction measured at 0.5B predicts
-the 1.5B cells within 23--26\%; the observed correction itself moves to about
-0.40, so it is useful across this scale step but not scale-invariant
-(Table~\ref{tab:tb6}). The correction is an empirical patch for a variable
-that is not quite right: $d_{\mathrm{samp}}$ counts draws, and the
-cell-to-cell scatter of the factor ($0.43$--$0.67$, about a quarter either
-side of its mean) is as large as the $23$--$26\%$ it then predicts within,
-so the defensible statement is that the low-rank family lands near half its
-raw prediction, drifting with scale. Deriving the variable that absorbs the
-factor is future work. Within these models, this objective, and the measured
+$\sqrt{8}=2.83$: the square-root law crosses the scale step intact, and the
+raw full-rank prediction with it, within 5--8\%. The correction crosses less
+well. Multiplying the rank-1 fit by the 0.53 measured at 0.5B predicts the
+1.5B cells within 23--26\%, while the correction observed at 1.5B is about
+0.40 (Table~\ref{tab:tb6}).
+
+Its scatter sets what it supports. The factor ranges from $0.43$ to $0.67$
+across cells, $18\%$ below to $27\%$ above its geometric mean of 0.53, which
+is the same size as the $23$--$26\%$ error it leaves at 1.5B. It is a patch
+on a variable that counts the wrong thing: $d_{\mathrm{samp}}$ counts draws
+where the quantity that matters is how much of the gradient a rank-$r$
+family can reach. What the two probes establish is that the low-rank family
+lands near half its raw prediction, and that the half drifts with scale.
+Deriving the variable that absorbs it is future work. Within these models, this objective, and the measured
 populations and ranks, perturbation rank does not dominate alignment at equal
 $N$. That is consistent with---but does not by itself explain---the task-level
 parity tested next.
@@ -142,7 +147,7 @@ hardware & one A100-SXM4-80GB; the campaign is $\sim$13\,h \\
     held-out reward against training sample evaluations, mean over three
     seeds,
     min--max band. The four ES perturbation ranks lie on top of each
-    other, and freezing the embedding shows no detectable difference in this
+    other; freezing the embedding costs little if anything in this
     three-seed experiment. GRPO is shown only as same-budget context, not as a
     controlled algorithm comparison: it runs in a different implementation
     and its three seeds vary from no solved held-out puzzles to a 4.9\%
@@ -159,14 +164,25 @@ rank-\{1,4,16\} perturbations in this three-seed experiment
 facts bound what that null can mean. The setup does resolve a known-worse
 arm: the $4\times$ noise-scale ES arm of the appendix stress test stays at
 the base-model floor for its whole 150-step horizon
-(Appendix~\ref{sec:stability}). But every arm here saturates by about
-update 100 (24{,}000 of the 120{,}000 samples), freezing 27\% of the
-parameters changes nothing, and no arm expected to be modestly worse at
-this population (a halved $N$, say) was run as a control; the null is no
-detectable difference in a setup that resolves a freeze and may not
-resolve a modest loss. The
+(Appendix~\ref{sec:stability}). It does not resolve a modestly worse one.
+As a positive control, the full-rank and rank-1 recipes were rerun at
+population 16 on the same 120{,}000-sample budget, an arm the square-root
+law predicts to align 27\% worse per update (prediction frozen in the
+configuration before the run); it reaches the same plateau, inside seed
+noise (Figure~\ref{fig:f7c}, Appendix~\ref{sec:validation}). Every arm
+saturates by 24{,}000--36{,}000 samples, and freezing 27\% of the
+parameters costs at most a little: across three campaigns of this
+configuration the frozen arm's plateau mean sits 0.001--0.006 below the
+rank-1 arm's, a gap two campaigns do not resolve and the third does, so
+its size is inside campaign-to-campaign variation. The null is therefore no detectable
+difference in a setup whose ceiling is set by the task: it resolves a
+freeze and does not resolve a 27\% alignment change, so it cannot rank
+the perturbation families more finely than that, and it is one task at one
+training model size: Countdown, 0.5B parameters, three seeds, $N{=}30$. The
+alignment chain spans 0.5B and 1.5B, the training campaign does not. The
 outcome agrees with the alignment study's pre-campaign prediction that the
-ranks would be closer than a three-seed experiment could resolve. Because the
+ranks would be closer than a three-seed experiment could resolve, and says
+nothing stronger. Because the
 training objective is decoded reward rather than NLL, this non-difference is
 consistent with the alignment result, not a direct test or proof of its
 mechanism.
@@ -178,7 +194,7 @@ mechanism.
   \caption{The curves of Figure~\ref{fig:f7}, ES arms only, against
     cumulative accelerator time in steady state: generations 0 and 1 are
     both excluded because both are compilation-scale events in every arm
-    and seed (335--671\,s against steady-state 2.4--4.3\,s per update),
+    and seed (322--635\,s against steady-state 2.8--4.5\,s per update),
     and held-out evaluation decode is excluded on both axes as
     measurement overhead. The evaluation at generation $g$ runs before
     update $g$, so its x is the cumulative time of updates strictly
@@ -192,18 +208,18 @@ mechanism.
 \paragraph{Equal samples, unequal seconds.} Figure~\ref{fig:f7}
 resolves no rank-dependent quality difference over three seeds;
 Figure~\ref{fig:f7b} prices the same curves in accelerator time. A
-steady-state full-rank update costs 4.29\,s against 2.41\,s for rank 1,
+steady-state full-rank update costs 4.44\,s against 2.62\,s for rank 1,
 means over the 498 steady-state updates each run observed (the
 regeneration compute the cost surfaces of Section~\ref{sec:results}
-price at microbenchmark scale, here on the real model): 44\% less time per
-update, equivalent to a $1.78\times$ update-throughput advantage, and an
-estimated 2147\,s against 1205\,s for a
+price at microbenchmark scale, here on the real model): 41\% less time per
+update, equivalent to a $1.69\times$ update-throughput advantage, and an
+estimated 2211\,s against 1304\,s for a
 500-update run. Time to first reach the shared plateau (held-out reward
-0.15) is 419--1069\,s for full rank against 236--483\,s for rank 1
-across seeds; the ranges overlap between 419 and 483\,s, so three seeds
-do not resolve a strict time-to-threshold ordering, and the per-update
-ratio is the clean claim. This is where the systems and quality halves meet:
-the cheap perturbation uses 44\% less time per update, while the experiment
+0.15) is 432--1103\,s for full rank against 256--394\,s for rank 1
+across seeds; the ranges do not overlap here, but the evaluation grid is
+coarse (every 50 updates) and $n{=}3$, so the per-update ratio remains the
+clean claim. This is where the systems and quality halves meet: the cheap
+perturbation uses two fifths less time per update, while the experiment
 resolves no additional sample requirement.
 
 \paragraph{GRPO context.} The GRPO arm \citep{deepseekmath2024} uses the

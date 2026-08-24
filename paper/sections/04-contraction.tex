@@ -15,8 +15,8 @@ contraction). There are two natural placements:
     Each device gathers every member's fitness, then regenerates all $N$
     perturbations and computes the whole contraction itself; nothing is
     combined afterwards, because every device already holds the full sum.
-    Communication: scalar gathers only ($8N$ bytes as measured,
-    Table~\ref{tab:tb2}; the model below explains the count). This is the
+    Communication: scalar gathers only ($8N$ bytes as measured; the model
+    below explains the count). This is the
     arrangement behind the folk claim that ES only communicates scalars \citep{salimans2017}.
   \item \textbf{Strategy B: contract partially, then all-reduce.} Each device
     contracts only its own $N/D$ perturbations and the partial sums are added
@@ -28,11 +28,15 @@ contraction). There are two natural placements:
 The trade is compute against communication, so it predicts a crossover in
 (population $N$, model size $d$) space rather than one universal winner. The
 record committed before measurement contained two claims. The quantitative
-one was a byte count, $4N$ for A and $4P$ for B ($P$ parameters, float32);
-Table~\ref{tab:tb2} corrects it to $8N$ (two $4N$-byte gathers, the raw
-fitnesses for shaping and the shaped weights for the contraction) and
-$4P{+}4N$, matches every measured payload to the byte, and changes no
-conclusion: 2\,KB against 100\,MB at $d{=}2048$.
+one was a byte count, $4N$ for A and $4P$ for B ($P$ parameters, float32).
+Counting the payload of every collective in the compiled update corrects it
+to $8N$ and $4P{+}4N$: A moves two $4N$-byte gathers, the raw fitnesses for
+shaping and the shaped weights for the contraction, and B's fitness gather
+rides beside its all-reduce. At $d{=}2048$, $N{=}256$ that is 2{,}048 bytes
+measured against 1{,}024 predicted for A, and 100{,}664{,}320 against
+100{,}663{,}296 for B, and the same two corrections hold for every strategy
+and shape in the grid, exactly. The conclusion is unchanged: 2\,KB against
+100\,MB.
 
 The directional claim followed from what each placement buys with those
 bytes. B does $1/D$ of A's contraction work, so it should win when
@@ -48,14 +52,41 @@ none is retroactively presented as a prediction. Section~\ref{sec:results}
 tests the byte count and this directional claim on both platforms
 (Figure~\ref{fig:f2}).
 
-A and B are two points in a larger space this paper does not measure. A
-reduce-scatter followed by an all-gather, with the update applied sharded
-(the ZeRO arrangement, \citealp{rajbhandari2020zero}), halves B's bytes;
-reduced-precision or compressed collectives shrink them further; a
-hierarchical contraction replicates within a host and all-reduces across
-hosts; and overlapping B's all-reduce with the next generation's
-evaluation, the standard engineering answer to exactly this trade, could
-hide the transfer entirely. If it can, the low-rank side of the crossover
-belongs to the unoverlapped implementation rather than to the placement.
-What is measured is therefore the two simplest placements as implemented,
-on one host with a fat fabric.
+Bytes are what the placement determines and time is what decides a cell, and
+the two are not the same statement: a payload reaches a duration through a
+rate that depends on the payload's own size and on the fabric, so identical
+byte counts can and do give different crossovers on different hardware. The
+byte count is therefore the part worth committing in advance, because it is
+the part that transfers. What it costs is a separate measurement, one per
+fabric, reported in Section~\ref{sec:results} (Table~\ref{tab:tb8}). That
+conversion is calibrated on the same platforms it explains, so it is an
+account of the crossover rather than a second prediction. It was used as one
+once, out of sample, for the host boundary of Section~\ref{subsec:boundary},
+where it got the direction right and the magnitude wrong by an order of
+magnitude: a payload divided by a benchmarked bandwidth is not what a
+collective costs across a socket fabric.
+
+A and B are the endpoints of the placement space, not two arbitrary samples
+of it, and measuring the endpoints is the economical choice. Every placement
+is a separate implementation against the library's sharding seams and a
+separate pass over the $(N,d)$ grid on rented hardware, so the family was
+never going to be measured whole; the question is which members buy the most
+per pass. These two bound it. A replicates the entire contraction and moves
+the fewest bytes any placement can, B splits the contraction as far as $D$
+devices allow and pays a model-sized transfer to do it, and every
+intermediate trades one for the other between them. A reduce-scatter
+followed by an all-gather, with the update applied sharded (the ZeRO
+arrangement, \citealp{rajbhandari2020zero}), halves B's bytes at the same
+split contraction; reduced-precision or compressed collectives shrink them
+further; a hierarchical contraction is A within a host and B across hosts.
+Each sits inside the bracket, which is what makes the bracket worth the
+machine time.
+
+One thing sits outside it, because it is not a placement at all. Overlapping
+B's all-reduce with the next generation's evaluation, the standard
+engineering answer to exactly this trade, hides the transfer instead of
+shrinking it, so it is bounded by neither endpoint. It is not implemented
+here and not measured. If overlap can hide the transfer entirely, the
+low-rank side of the crossover belongs to the unoverlapped implementation
+rather than to the placement, and that reading stands unrefuted by anything
+in this paper.

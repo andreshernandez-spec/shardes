@@ -1,0 +1,36 @@
+{
+ "config": {
+  "strategy": "mirrored_seed",
+  "how": "A",
+  "population": 32,
+  "devices": 4,
+  "sigma": 0.001,
+  "n_prompts": 8,
+  "matmul_precision": "highest",
+  "smoke": false
+ },
+ "env": {
+  "commit": "e2d275d69f46583720ef50d221fead1162c98ef2",
+  "dirty_worktree": false,
+  "jax": "0.11.1",
+  "jaxlib": "0.11.1",
+  "numpy": "2.5.0",
+  "scipy": "1.18.0",
+  "python": "3.12.13",
+  "platform": "Linux-6.6.143+-x86_64-with-glibc2.41",
+  "hostname": "40c1befb9db0",
+  "device_count": 8,
+  "device_kind": "TPU v5 lite",
+  "device_platform": "tpu",
+  "xla_flags": " --xla_cpu_enable_fast_math=false --xla_gpu_force_compilation_parallelism=8",
+  "jax_platforms": ""
+ },
+ "seconds_all": [
+  1.4741195429996878,
+  1.473118703000182,
+  1.4725818430006257,
+  1.4740676619994701,
+  1.4724510429996371
+ ],
+ "seconds_median": 1.473118703000182
+}

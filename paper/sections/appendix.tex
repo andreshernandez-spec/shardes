@@ -86,9 +86,10 @@ rank-1 path does not compile on a 16\,GB TPU chip at $d{=}512$,
 $N{=}16384$: the compiler allocates 24.1\,GiB of temporaries,
 reproducible with no TPU via the compile-only probe in the repository,
 the same pathology this instrument diagnosed and works around. The workaround
-pads rank-1 factors with one zero column so the compiler retains a fused matrix
-multiply; its numerical footprint and regression check are archived, and the
-same cell runs here at 245\,ms. The reference also declines embedding tables
+pads rank-1 factors with one zero column on TPU so the compiler retains a fused
+matrix multiply; its numerical footprint and regression check are archived, and
+the same cell runs here at 245\,ms. The pad is TPU-only: the GPU compiler keeps
+these dots monotonic in rank, and padding there only costs time. The reference also declines embedding tables
 outright, while the instrument carries that seam
 (Section~\ref{sec:design}). Both are properties of the released
 implementations, not of the algorithms.
@@ -182,7 +183,21 @@ specific to ES \citep{schweighofer2026awd}; the stress test's numbers
 should be read beside both.
 
 \section{Validation checklist}
+\label{sec:validation}
 \input{generated/tb3b}
+% F7c -- experiments/countdown/figures/f7c-e19-positive-control.png (plot_e19.py)
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{f7c-e19-positive-control.png}
+  \caption{The positive control for the task null. Held-out reward against
+    training samples for full rank and rank 1 at population 30 (the
+    Section~\ref{sec:endtoend} arms) and at population 16 on the same
+    120{,}000-sample budget, three seeds each, mean with min--max band. The
+    square-root law predicts 27\% lower alignment per update at 16; the
+    curves do not separate, so the task's plateau, not the perturbation
+    family, sets what the null can resolve.}
+  \label{fig:f7c}
+\end{figure}
 Table~\ref{tab:tb3b} collects the checks behind the systems claims that
 are not themselves timing results: held-out task quality by rank, the
 update--gradient-alignment study's coverage, the sub-float32 fitness guard, and
@@ -200,14 +215,19 @@ incident). The figure and table map: F1, F2 and F2b from
 \texttt{plot\_e14.py}; the appendix grids (M1--M3, both platforms) from
 \texttt{plot.py} against each platform's results directory;
 Tables~\ref{tab:tb1} and~\ref{tab:tb1b} from \texttt{tb1.py};
-Table~\ref{tab:tb2} from \texttt{tb2.py}; Tables~\ref{tab:tb3}
+Table~\ref{tab:tb8} from \texttt{tb8.py}; Table~\ref{tab:tb7} from
+\texttt{multihost/tb7\_e18.py}; Tables~\ref{tab:tb3}
 and~\ref{tab:tb3b} from \texttt{tb3.py};
 Table~\ref{tab:tb4} from
 \texttt{analysis\_e15.py}; Table~\ref{tab:tb5} from
 \texttt{tb5\_e17.py}; and Table~\ref{tab:tb6} from
 \texttt{tb6\_e16.py}. Each table
 script accepts \texttt{--latex} and writes the exact file this document
-inputs. Table~\ref{tab:tb6}'s predicted columns are the committed E1 fit
+inputs. The per-collective byte counts quoted in
+Section~\ref{sec:contraction} come from \texttt{comms.py}, which reads the
+compiled HLO, and \texttt{tb2.py} prints them for every cell; they are two
+numbers per placement across the whole grid, so the paper states them rather
+than tabling them. Table~\ref{tab:tb6}'s predicted columns are the committed E1 fit
 and the 0.53 correction, both frozen (rounded) in \texttt{e16-gate.yaml}
 and \texttt{e16-stage2.yaml} before the runs; nothing in them is fit to
 E16's measurements. The test

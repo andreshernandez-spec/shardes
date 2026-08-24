@@ -42,7 +42,7 @@ def curves(root: Path, stem: str, unit: int):
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--e13", type=Path, default=HERE / "results" / "e13-a100-2026-08-17")
+    ap.add_argument("--e13", type=Path, default=HERE / "results" / "e13-a100-2026-08-22-clean")
     args = ap.parse_args(argv)
     fig, ax = plt.subplots(figsize=(7.0, 4.4))
     for root, stem, unit, color, label in ARMS:

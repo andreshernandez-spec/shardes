@@ -18,6 +18,7 @@ from shardes.strategies.iid_gaussian import IIDGaussian
 from shardes.core import ShardedES
 from shardes import sharding
 from shardes.strategies._scale import Separable
+from shardes.strategies import lowrank
 from shardes.strategies.lowrank import LowRank, LowRankWeight
 
 M, K, N = 6, 4, 8
@@ -249,8 +250,8 @@ def test_a_structured_weight_is_not_a_sequence():
 
 
 @pytest.mark.parametrize("dtype", [jnp.bfloat16, jnp.float32])
-def test_rank1_pad_is_numerically_invisible(dtype):
-    """The r=1 paths pad their factors to a rank-2 dot before contracting.
+def test_rank1_pad_is_numerically_invisible(dtype, monkeypatch):
+    """On TPU the r=1 paths pad their factors to a rank-2 dot before contracting.
 
     Why there is a pad at all: XLA strength-reduces a contracting-dim-1 dot into a
     multiply chain, and the TPU scheduler keeps activation-sized f32 copies alive
@@ -259,7 +260,10 @@ def test_rank1_pad_is_numerically_invisible(dtype):
     half of the argument: the zero column's product is identically zero, so the padded
     expression equals the unpadded one bitwise in bf16, and within ulps in f32, where
     a k=2 dot may accumulate differently than a multiply and bitwise is not promised.
+    The pad is TPU-only (it costs the A100 16% per rank-1 update), so it is forced on
+    here; `test_rank1_pad_follows_the_backend` pins the switch itself.
     """
+    monkeypatch.setattr(lowrank, "PAD_RANK1", True)
     kx, kw, ka, kb = jax.random.split(jax.random.key(7), 4)
     x = jax.random.normal(kx, (2, N, K), dtype)
     w = jax.random.normal(kw, (M, K), dtype)
@@ -277,6 +281,19 @@ def test_rank1_pad_is_numerically_invisible(dtype):
     else:
         assert jnp.allclose(lw.apply_to(x), want_apply, rtol=RTOL)
         assert jnp.allclose(lw.gather(ids), want_gather, rtol=RTOL)
+
+
+def test_rank1_pad_follows_the_backend(monkeypatch):
+    """`auto` pads on TPU and nowhere else; True and False force it either way."""
+    a = jnp.ones((M, 1)); b = jnp.ones((K, 1))
+    lw = LowRankWeight(jnp.zeros((M, K)), a, b, jnp.float32(1.0))
+    monkeypatch.setattr(lowrank, "PAD_RANK1", "auto")
+    assert lowrank.pad_rank1() == (jax.default_backend() == "tpu")
+    assert lw._factors()[0].shape[-1] == (2 if lowrank.pad_rank1() else 1)
+    monkeypatch.setattr(lowrank, "PAD_RANK1", True)
+    assert lw._factors()[0].shape[-1] == 2 and lw._factors()[1].shape[-1] == 2
+    monkeypatch.setattr(lowrank, "PAD_RANK1", False)
+    assert lw._factors()[0].shape[-1] == 1
 
 
 # --------------------------------------------------------------------------------------

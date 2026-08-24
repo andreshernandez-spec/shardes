@@ -1,0 +1,30 @@
+{
+ "config": {
+  "strategy": "mirrored_lr4",
+  "how": "B",
+  "population": 240,
+  "devices": 2,
+  "sigma": 0.001,
+  "n_prompts": 8,
+  "matmul_precision": "highest",
+  "smoke": false
+ },
+ "env": {
+  "commit": "e2d275d69f46583720ef50d221fead1162c98ef2",
+  "dirty_worktree": false,
+  "jax": "0.11.1",
+  "jaxlib": "0.11.1",
+  "numpy": "2.5.0",
+  "scipy": "1.18.0",
+  "python": "3.12.13",
+  "platform": "Linux-6.6.143+-x86_64-with-glibc2.41",
+  "hostname": "40c1befb9db0",
+  "device_count": 8,
+  "device_kind": "TPU v5 lite",
+  "device_platform": "tpu",
+  "xla_flags": " --xla_cpu_enable_fast_math=false --xla_gpu_force_compilation_parallelism=8",
+  "jax_platforms": ""
+ },
+ "status": "oom",
+ "error": "RESOURCE_EXHAUSTED: Ran out of memory on HBM, the total memory required for HLO temporaries (112.60G) exceeds available HBM (15.75G). HLO module: jit_generation."
+}

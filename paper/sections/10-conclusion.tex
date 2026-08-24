@@ -20,7 +20,7 @@ and 1.5B parameters. The low-rank family lands near half its raw prediction,
 a factor whose own scatter is about a quarter and which drifts with scale,
 so it is a patch rather than a law. On decoded-reward Countdown training, a three-seed experiment
 resolves no quality difference among full rank and ranks 1, 4, and 16 at equal
-training samples, while rank 1 uses 44\% less steady-state time per update.
+training samples, while rank 1 uses 41\% less steady-state time per update.
 That task result is consistent with the NLL alignment evidence, not a claim
 that the objectives are interchangeable. The measurement past the single-host boundary bears this out where it was
 taken: on two A100 nodes the interconnect changes the contraction question
