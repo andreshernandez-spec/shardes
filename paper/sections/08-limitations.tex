@@ -8,8 +8,13 @@
     interconnects on which a model-sized all-reduce is cheapest. The scalar
     folk claim was made for commodity clusters of hundreds of workers
     \citep{salimans2017}, where it may well hold; the dense-side result here
-    is the easy case for B. Scaling past a host boundary is untested and may
-    move the crossover substantially.
+    is the easy case for B. Section~\ref{subsec:boundary} tests one host boundary and confirms the
+    concern: over a $9.2$\,GiB/s socket fabric the crossover moves
+    substantially and the dense (seed-regenerated) arm flips from B to A.
+    That boundary is socket, not InfiniBand, and a single bandwidth point;
+    whether the flip persists at the faster InfiniBand a production cluster
+    provides is not established, and the frozen model mispredicted this
+    cell.
   \item \textbf{Costs are attributed in bytes, not in time.} Every timing
     is end-to-end wall clock; no collective is timed in isolation at $P$
     bytes on either fabric, no achieved bandwidth is reported, and the
