@@ -79,8 +79,12 @@ ssh0 "ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10 $IP1
 say "overlay ssh ok"
 
 # -- 4. launch, detached on node 0 ----------------------------------------
-ssh0 "cd /root/shardes/experiments/phase2/multihost && . /root/shardes/.venv/bin/activate \
-  && NODE1=$IP1 E18_NODE0_IP=$IP0 SHA=$SHA E18B=${E18B:-0} NCCL_SOCKET_IFNAME=$IFNAME GLOO_SOCKET_IFNAME=$IFNAME setsid bash -c 'echo \$\$ > /root/e18.pid; exec bash launch.sh' > /root/e18.log 2>&1 < /dev/null & sleep 1; echo launched pid \$(cat /root/e18.pid)"
+# timeout-bound: the setsid job is detached and keeps running even if the ssh
+# channel refuses to close (it hung 37 min once), so kill the client after 90s
+# and let the harvest loop pick the run up from e18.pid / e18.log.
+timeout 90 ssh0 "cd /root/shardes/experiments/phase2/multihost && . /root/shardes/.venv/bin/activate \
+  && NODE1=$IP1 E18_NODE0_IP=$IP0 SHA=$SHA E18B=${E18B:-0} NCCL_SOCKET_IFNAME=$IFNAME GLOO_SOCKET_IFNAME=$IFNAME setsid bash -c 'echo \$\$ > /root/e18.pid; exec bash launch.sh' > /root/e18.log 2>&1 < /dev/null & sleep 1; echo launched pid \$(cat /root/e18.pid)" \
+  || say "launch ssh returned nonzero/timed out; launch.sh is detached, continuing to harvest"
 say "launch.sh started on node 0; log /root/e18.log"
 
 # -- 5. harvest loop until done or cap -----------------------------------
