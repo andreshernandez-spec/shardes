@@ -30,6 +30,15 @@
 set -euo pipefail
 
 API=https://api.runpod.io/v2
+REPO=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)
+require_pushed() {  # refuse to bootstrap a SHA the pod cannot fetch from origin
+  local sha=$1
+  git -C "$REPO" fetch -q origin 2>/dev/null || true
+  if ! git -C "$REPO" branch -r --contains "$sha" 2>/dev/null | grep -q .; then
+    echo "REFUSING: commit $sha is not on any origin branch; push it first" >&2
+    exit 1
+  fi
+}
 : "${RUNPOD_API_KEY:?RUNPOD_API_KEY is not set}"
 NAME=${E18_NAME:-shardes-e18}
 PODS=${E18_PODS:-2}
@@ -98,7 +107,7 @@ for p in json.load(sys.stdin)["pods"]:
   billing) api GET /billing/clusters | python3 -m json.tool ;;
   body)    create_body | python3 -m json.tool ;;
   session)
-    cid=${1:?cluster id}; sha=${2:?commit sha}
+    cid=${1:?cluster id}; sha=${2:?commit sha}; require_pushed "$sha"
     dir=$(cd "$(dirname "$0")" && pwd); mkdir -p "$dir/results-e18"
     unit=e18-session-$(date -u +%Y%m%dT%H%M%SZ)
     systemd-run --user --unit="$unit" --collect --same-dir \
@@ -107,7 +116,7 @@ for p in json.load(sys.stdin)["pods"]:
       bash -c "exec >> '$dir/results-e18/arm.log' 2>&1 < /dev/null; bash '$dir/cluster-session.sh' $cid $sha"
     echo "session unit $unit on $cid at $sha (systemctl --user stop $unit to abandon; the cluster stays)" ;;
   arm)
-    sha=${1:?commit sha for the session}; every=${2:-300}
+    sha=${1:?commit sha for the session}; every=${2:-300}; require_pushed "$sha"
     dir=$(cd "$(dirname "$0")" && pwd); mkdir -p "$dir/results-e18"
     # Loop: acquire a cluster, run a session; a session that ABORTS (bad host,
     # launch died, cap) exits 3, so acquire another. Stop when one COMPLETES
