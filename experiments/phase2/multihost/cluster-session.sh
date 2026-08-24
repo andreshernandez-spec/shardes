@@ -93,6 +93,10 @@ while true; do
   sleep 180
   rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/multihost/results-e18/" "$HERE/results-e18/" 2>/dev/null
   rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/multihost/results-e18b/" "$HERE/results-e18b/" 2>/dev/null
+  # The preflight's contraction cells land outside multihost/ and were lost with the
+  # 2026-08-24 pod: predict.py had used them, so C reached predictions.json and the
+  # per-cell records (allreduce_insitu, shard_ratio) did not reach anywhere.
+  rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/results-contraction/" "$HERE/../results-contraction/" 2>/dev/null
   rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/e18.log" "$HERE/results-e18/e18.log" 2>/dev/null
   last=$(tail -n 1 "$HERE/results-e18/e18.log" 2>/dev/null)
   say "cells $(ls "$HERE/results-e18"/arm=*.json 2>/dev/null | wc -l); last: $last"
