@@ -31,6 +31,25 @@ run_node1() {  # mirror a command on node 1, same directory, venv and interface 
 
 phase() { echo; echo "==== $1 ===="; }
 
+run_2x8_preflight() {  # $1=coordinator port  $2=extra env applied to both nodes
+  run_node1 "$2 E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=1 \
+    E18_EXPECT_DEVICES=16 timeout 420 python preflight.py" &
+  local n1=$!
+  env $2 E18_TOPOLOGY=2x8 E18_COORD=$ME:$1 E18_NPROC=2 E18_PID=0 \
+    E18_EXPECT_DEVICES=16 timeout 420 python preflight.py
+  local rc=$?; wait "$n1" 2>/dev/null || true; return $rc
+}
+
+ib_healthy() {  # both nodes still answer and their GPUs are queryable
+  timeout 25 nvidia-smi -L >/dev/null 2>&1 && run_node1 "timeout 20 nvidia-smi -L >/dev/null 2>&1"
+}
+
+ib_diag() {  # best-effort fabric snapshot to the log; never fatal
+  echo "--- IB diag node 0:"; { ibstat; echo '[gids]'; show_gids; ibv_devinfo 2>&1 | grep -iE 'hca_id|state|link_layer|GID'; } 2>&1 | head -40 || true
+  echo "--- IB diag node 1:"; run_node1 "{ ibstat; echo '[gids]'; show_gids; ibv_devinfo 2>&1 | grep -iE 'hca_id|state|link_layer|GID'; } 2>&1 | head -40" 2>&1 || true
+  return 0
+}
+
 phase "preflight 1x8 (node 0 alone: the anchor, writes the invariance ref)"
 E18_TOPOLOGY=1x8 E18_EXPECT_DEVICES=8 timeout 900 python preflight.py
 
