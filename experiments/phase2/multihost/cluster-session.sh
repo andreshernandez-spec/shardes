@@ -92,6 +92,7 @@ mkdir -p "$HERE/results-e18"
 while true; do
   sleep 180
   rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/multihost/results-e18/" "$HERE/results-e18/" 2>/dev/null
+  rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/multihost/results-e18b/" "$HERE/results-e18b/" 2>/dev/null
   rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/e18.log" "$HERE/results-e18/e18.log" 2>/dev/null
   last=$(tail -n 1 "$HERE/results-e18/e18.log" 2>/dev/null)
   say "cells $(ls "$HERE/results-e18"/arm=*.json 2>/dev/null | wc -l); last: $last"
@@ -106,6 +107,7 @@ while true; do
   if [ $(( $(date +%s) - T0 )) -ge "$CAP_SECONDS" ]; then say "HARD CAP reached"; rc=3; break; fi
 done
 rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/multihost/results-e18/" "$HERE/results-e18/" 2>/dev/null
+rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/shardes/experiments/phase2/multihost/results-e18b/" "$HERE/results-e18b/" 2>/dev/null
 rsync -az -e "ssh $SSHOPT -p $P0" "$N0:/root/e18.log" "$HERE/results-e18/e18.log" 2>/dev/null
 teardown
 say "uptime $(( ($(date +%s) - T0) / 60 )) min; results in $HERE/results-e18"
