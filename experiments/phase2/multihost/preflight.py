@@ -136,8 +136,12 @@ def main() -> int:
     batch = transformer_block.make_batch(jax.random.fold_in(key, 1),
                                          d_model=64, batch=4, seq=8)
     fingerprints = {}
+    # n=32, not 16: the mirrored arm pairs members (2k, 2k+1), so the per-device
+    # count must be a whole number of pairs. 16 members is 1/device on the 2x8's
+    # 16 devices (half a pair -> check_population raises); 32 is 2/device there and
+    # 4/device on the 1x8 anchor's 8, valid on both so the invariance compare holds.
     for name, (mk, how) in ARMS.items():
-        es = ShardedES(mk(), n=16, sigma=0.01, lr=0.05, mesh=mesh, how=how)
+        es = ShardedES(mk(), n=32, sigma=0.01, lr=0.05, mesh=mesh, how=how)
         state = es.init(key, params)
 
         @jax.jit
