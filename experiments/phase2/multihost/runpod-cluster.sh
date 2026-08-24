@@ -113,6 +113,9 @@ for p in json.load(sys.stdin)["pods"]:
     # launch died, cap) exits 3, so acquire another. Stop when one COMPLETES
     # (exit 0) or after E18_MAX_ATTEMPTS tries. Each cluster is torn down by
     # cluster-session.sh before the next acquisition.
+    # stop any prior poller so two units never race for clusters
+    systemctl --user stop 'e18-arm-*' 2>/dev/null || true
+    systemctl --user reset-failed 'e18-arm-*' 2>/dev/null || true
     max=${E18_MAX_ATTEMPTS:-8}
     chain="for a in \$(seq 1 $max); do echo \"\$(date -u +%FT%TZ) attempt \$a/$max\"; id=\$(bash '$dir/runpod-cluster.sh' wait $every) || break; bash '$dir/cluster-session.sh' \$id $sha && break; done"
     # A transient systemd user unit outlives the shell that started it; a
