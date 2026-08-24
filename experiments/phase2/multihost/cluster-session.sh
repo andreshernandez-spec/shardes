@@ -82,7 +82,7 @@ say "overlay ssh ok"
 # timeout-bound: the setsid job is detached and keeps running even if the ssh
 # channel refuses to close (it hung 37 min once), so kill the client after 90s
 # and let the harvest loop pick the run up from e18.pid / e18.log.
-timeout 90 ssh0 "cd /root/shardes/experiments/phase2/multihost && . /root/shardes/.venv/bin/activate \
+timeout 90 ssh $SSHOPT -p "$P0" "$N0" "cd /root/shardes/experiments/phase2/multihost && . /root/shardes/.venv/bin/activate \
   && NODE1=$IP1 E18_NODE0_IP=$IP0 SHA=$SHA E18B=${E18B:-0} NCCL_SOCKET_IFNAME=$IFNAME GLOO_SOCKET_IFNAME=$IFNAME setsid bash -c 'echo \$\$ > /root/e18.pid; exec bash launch.sh' > /root/e18.log 2>&1 < /dev/null & sleep 1; echo launched pid \$(cat /root/e18.pid)" \
   || say "launch ssh returned nonzero/timed out; launch.sh is detached, continuing to harvest"
 say "launch.sh started on node 0; log /root/e18.log"
@@ -98,8 +98,8 @@ while true; do
   if grep -q 'E18_SESSION_DONE' "$HERE/results-e18/e18.log" 2>/dev/null; then say "session done"; rc=0; break; fi
   # a wedged host (CUDA_ERROR_UNKNOWN, ssh hangs) is the common failure; a
   # bounded liveness probe detects it instead of blocking the loop forever.
-  if ! timeout 40 ssh0 'kill -0 $(cat /root/e18.pid) 2>/dev/null' 2>/dev/null; then
-    if timeout 40 ssh0 true 2>/dev/null; then say "launch.sh is no longer running (see e18.log)"
+  if ! timeout 40 ssh $SSHOPT -p "$P0" "$N0" 'kill -0 $(cat /root/e18.pid) 2>/dev/null' 2>/dev/null; then
+    if timeout 40 ssh $SSHOPT -p "$P0" "$N0" true 2>/dev/null; then say "launch.sh is no longer running (see e18.log)"
     else say "node 0 is unreachable (wedged host); aborting"; fi
     rc=3; break
   fi
