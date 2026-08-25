@@ -154,7 +154,15 @@ def rows(platform: str, spec: dict, devices=DEVICES, fabric: Fabric | None = Non
         c_solved = (delta - ag + ar) * devices / (devices - 1)
         rec = contr.get((strategy, d_model, n))
         c_meas = rec["contraction_seconds"] if rec else None
-        pred = (c_meas * (devices - 1) / devices + ag - ar) if c_meas is not None else None
+        # With the isolation records the two modelled terms become measured ones: the
+        # saving is C - C_local, not C (D-1)/D, because the contraction does not shard
+        # at 1/D; and the collective is the psum this program actually issues, not the
+        # ladder's psum in an empty one.
+        if rec is not None:
+            saving = rec["contraction_seconds"] - rec["contraction_local_seconds"]
+            pred = saving + ag - rec["allreduce_insitu_seconds"]
+        else:
+            pred = None
         out.append({
             "strategy": strategy, "d_model": d_model, "population": n,
             "t_A": t["A"], "t_B": t["B"], "delta_measured": delta,
@@ -162,7 +170,10 @@ def rows(platform: str, spec: dict, devices=DEVICES, fabric: Fabric | None = Non
             "params_bytes": params_bytes(d_model),
             "contraction_solved": c_solved,
             "contraction_measured": c_meas,
+            "contraction_local_measured": rec["contraction_local_seconds"] if rec else None,
+            "shard_ratio": rec["shard_ratio"] if rec else None,
             "allreduce_insitu": rec["allreduce_insitu_seconds"] if rec else None,
+            "allreduce_insitu_over_ladder": (rec["allreduce_insitu_seconds"] / ar) if rec else None,
             "delta_predicted": pred,
             "sign_agrees": None if pred is None else ((pred > 0) == (delta > 0)),
         })
