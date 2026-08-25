@@ -47,6 +47,18 @@ file exists is skipped, so a session that dies partway resumes over what it wrot
 `--budget` stops cleanly between cells and exits 2 rather than being killed inside one.
 Cells run cheapest first (low rank before dense, small before large) so a short budget
 buys the crossover's own side of the grid rather than a single dense cell.
+
+`--resident` tests one thing the isolated measurement cannot see. In a real generation
+`ask` has already materialized the population before `tell` contracts, so the contraction
+runs with that memory occupied; here nothing else is resident. The flag allocates the
+same `N/D * P` floats per device and holds them live across the timed chain, so XLA
+compiles and the allocator runs against the real free-memory budget. It deliberately does
+NOT feed the buffer into the program: for `iid_gaussian` the contraction regenerates its
+noise rather than reading what `ask` stored, so what a real generation adds is capacity
+pressure, not a second reader. `C_resident - C` is that pressure, priced.
+
+Only `iid_gaussian` materializes, so only it should show an effect; the other arms are
+the control, and a shift on them would mean the flag is measuring something else.
 """
 from __future__ import annotations
 
@@ -150,12 +162,25 @@ def slope(runs: dict) -> float:
     return (runs[str(k1)]["median"] - runs[str(k0)]["median"]) / (k1 - k0)
 
 
-def measure(strategy_name, d_model, n, mesh, d_count, warmup, repeats, precision):
+def resident_buffer(params, n: int, d_count: int, mesh):
+    """What `ask` leaves occupying the device while `tell` contracts: the population
+    shard, `N/D` members of `P` floats each, sharded over the population axis."""
+    p = sum(int(x.size) for x in jax.tree.leaves(params))
+    per_device = max(n // d_count, 1)
+    return jax.device_put(
+        jnp.zeros((d_count, per_device, p), jnp.float32), NamedSharding(mesh, P(POP)))
+
+
+def measure(strategy_name, d_model, n, mesh, d_count, warmup, repeats, precision,
+            resident=False):
     key = jax.random.key(SEED)
     params = transformer_block.init(key, d_model=d_model)
     strategy = STRATEGIES[strategy_name]()
     member = NamedSharding(mesh, P(POP))
     rep = sharding.replicated(mesh)
+    # Held in Python scope, never passed to a program: the point is the allocator's free
+    # budget, not an extra operand.
+    hold = resident_buffer(params, n, d_count, mesh) if resident else None
 
     ids = jax.device_put(jnp.arange(n, dtype=jnp.int32), member)
     weights = jax.device_put(jnp.linspace(-1.0, 1.0, n, dtype=jnp.float32), member)
@@ -182,6 +207,10 @@ def measure(strategy_name, d_model, n, mesh, d_count, warmup, repeats, precision
     out["allreduce_insitu_seconds"] = out["B"]["slope_seconds"] - c_local
     # 1.0 means the contraction shards perfectly; above 1.0 is what A repeats for nothing.
     out["shard_ratio"] = (c_full / (d_count * c_local)) if c_local > 0 else None
+    out["resident"] = bool(resident)
+    if hold is not None:
+        out["resident_bytes_per_device"] = int(hold.nbytes // d_count)
+        del hold
     return out
 
 
@@ -194,6 +223,8 @@ def main(argv=None) -> int:
     ap.add_argument("--strategies", nargs="*", default=None)
     ap.add_argument("--budget", type=float, default=None,
                     help="seconds; stop between cells and exit 2 when spent")
+    ap.add_argument("--resident", action="store_true",
+                    help="hold a population-sized buffer live while timing")
     args = ap.parse_args(argv)
     started = time.perf_counter()
 
@@ -218,14 +249,16 @@ def main(argv=None) -> int:
                           f"d={d_model} N={n} s={name}", flush=True)
                     stopped = True
                     break
-                slug = f"d={d_model}__N={n}__s={name}__{kind}__D{d_count}"
+                tag = "__resident" if args.resident else ""
+                slug = f"d={d_model}__N={n}__s={name}__{kind}__D{d_count}{tag}"
                 path = out_dir / f"{slug}.json"
                 if path.exists() and not args.smoke:
                     print(f"skip {slug} (exists)", flush=True)
                     continue
                 try:
                     rec = measure(name, d_model, n, mesh, d_count,
-                                  args.warmup, args.repeats, args.precision)
+                                  args.warmup, args.repeats, args.precision,
+                                  resident=args.resident)
                 except Exception as exc:  # a cell that does not fit is a result
                     rec = {"failed": f"{type(exc).__name__}: {exc}"}
                     print(f"FAIL {slug}: {type(exc).__name__}: {exc}", flush=True)
