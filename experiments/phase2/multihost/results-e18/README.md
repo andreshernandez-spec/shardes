@@ -69,8 +69,10 @@ could not run: RunPod containers have no NET_ADMIN, so `tc` is unavailable
 degraded to its socket-native point alone, which duplicates the 2x8 baseline, so
 nothing new was measured. The frozen G4 predictions were written before that was
 known and survive in the session log; the throttled points (10 Gbit, 1 Gbit) and
-the InfiniBand point both need a provider with real VMs and working IB (Crusoe;
-see docs/13).
+the InfiniBand point both need a provider with real VMs and working IB. Crusoe was
+that provider; it has no 16xA100 capacity (checked 2026-08-25), so docs/13 is closed
+and neither point has a path on A100 today. The socket-native result stands on its
+own; nothing here is waiting on them.
 
 ## Session, honestly
 

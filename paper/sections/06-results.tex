@@ -102,13 +102,33 @@ not.
 The cells that fall short of 100\% are the model's open term rather than a
 rounding artifact, and there are eight of the eleven. In each, B is slower
 than its local contraction plus the isolated all-reduce can account for,
-which a contraction cannot be: the shortfall reaches 0.71\,ms on the A100
-and 0.63\,ms on the v5e, both at \texttt{mirrored\_lr1}, $d{=}2048$,
-$N{=}128$. A collective issued inside a generation holding a model's worth of
-live buffers is not the collective the ladder times in an otherwise empty
-program, and the contraction itself has never been timed apart from the
-generation that carries it. Which of the two owns the shortfall is settled by
-neither harness here. Every number in this paragraph is also one host with a
+which a contraction cannot be. Timing the contraction apart from the
+generation that carries it, at the same cells and the same discipline, says
+why, and the answer is both of the available reasons at once.
+
+The contraction does not shard at $1/D$. Measured as
+$C/(D\,C_{\mathrm{local}})$ it reaches $0.60$--$1.01$ on the dense and
+seed-regenerated arms and only $0.18$--$0.46$ on the low-rank family. What
+separates them is the size of the contraction rather than the strategy: at
+$C$ of 3.6--61\,ms the per-device fixed cost amortises and B keeps nearly
+all of its ideal saving, while at $C$ of 0.15--1.3\,ms it does not. And the
+same collective costs more in a leaner program: the 96\,MiB psum runs at
+$1.75$--$1.80\times$ the ladder's isolated step inside the low-rank programs
+against $1.15$--$1.41\times$ inside the dense ones, the low-rank generation
+having less compute to hide the transfer behind. Both errors push the same
+way and both are largest where the contraction is smallest, which is the side
+of the grid A wins.
+
+Replacing the two modelled terms with the measured ones closes those cells.
+The four low-rank $d{=}2048$ cells fall from residuals of $0.98$--$1.17$\,ms
+to $0.012$--$0.224$\,ms, and across the grid the median absolute residual
+falls from 1.13 to 0.63\,ms with sign agreement at 18 of 20. Neither
+mechanism suffices alone. What remains unexplained sits on the other side:
+the dense and seed arms keep a residual of 2--34\% of a large gap, present
+under both models, bounding the model's precision where the sign was never in
+doubt. These are A100 measurements; the v5e decomposition is not run, and the
+two fabrics already differ by $2.17\times$ on the isolated 96\,MiB
+all-reduce. Every number in this paragraph is also one host with a
 fat fabric: an NVLink node and a v5e host are where a 100\,MB all-reduce is
 cheapest, the dense-side result is therefore B's easy case, and the commodity
 clusters of hundreds of workers the scalar folk claim was made for

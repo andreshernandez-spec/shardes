@@ -154,7 +154,15 @@ def rows(platform: str, spec: dict, devices=DEVICES, fabric: Fabric | None = Non
         c_solved = (delta - ag + ar) * devices / (devices - 1)
         rec = contr.get((strategy, d_model, n))
         c_meas = rec["contraction_seconds"] if rec else None
-        pred = (c_meas * (devices - 1) / devices + ag - ar) if c_meas is not None else None
+        # With the isolation records the two modelled terms become measured ones: the
+        # saving is C - C_local, not C (D-1)/D, because the contraction does not shard
+        # at 1/D; and the collective is the psum this program actually issues, not the
+        # ladder's psum in an empty one.
+        if rec is not None:
+            saving = rec["contraction_seconds"] - rec["contraction_local_seconds"]
+            pred = saving + ag - rec["allreduce_insitu_seconds"]
+        else:
+            pred = None
         out.append({
             "strategy": strategy, "d_model": d_model, "population": n,
             "t_A": t["A"], "t_B": t["B"], "delta_measured": delta,
@@ -162,7 +170,10 @@ def rows(platform: str, spec: dict, devices=DEVICES, fabric: Fabric | None = Non
             "params_bytes": params_bytes(d_model),
             "contraction_solved": c_solved,
             "contraction_measured": c_meas,
+            "contraction_local_measured": rec["contraction_local_seconds"] if rec else None,
+            "shard_ratio": rec["shard_ratio"] if rec else None,
             "allreduce_insitu": rec["allreduce_insitu_seconds"] if rec else None,
+            "allreduce_insitu_over_ladder": (rec["allreduce_insitu_seconds"] / ar) if rec else None,
             "delta_predicted": pred,
             "sign_agrees": None if pred is None else ((pred > 0) == (delta > 0)),
         })
@@ -233,13 +244,27 @@ def render(platform, rows_, fab, devices=DEVICES) -> str:
     deficit = [r for r in rows_ if r["contraction_solved"] < 0]
     if deficit:
         worst = min(deficit, key=lambda r: r["contraction_solved"])
+        measured = [r for r in deficit if r["shard_ratio"] is not None]
         lines.append(
-            "unexplained: %d of %d cells solve to a negative contraction; worst "
-            "%s d=%d N=%d at %.2f ms, where B costs %.2f ms more than the ladder's "
-            "all-reduce accounts for"
+            "backwards solve: %d of %d cells want a negative contraction; worst "
+            "%s d=%d N=%d at %.2f ms"
             % (len(deficit), len(rows_), worst["strategy"], worst["d_model"],
-               worst["population"], worst["contraction_solved"] * 1e3,
-               -worst["contraction_solved"] * (devices - 1) / devices * 1e3))
+               worst["population"], worst["contraction_solved"] * 1e3))
+        if measured:
+            # Not an open question any more where the isolation records exist: the solve
+            # goes negative because both of its inputs are wrong in the same direction.
+            lines.append(
+                "  explained on %d of them: shard_ratio %.2f-%.2f (the contraction does "
+                "not split 1/D) and in-situ all-reduce %.2fx-%.2fx the ladder"
+                % (len(measured),
+                   min(r["shard_ratio"] for r in measured),
+                   max(r["shard_ratio"] for r in measured),
+                   min(r["allreduce_insitu_over_ladder"] for r in measured),
+                   max(r["allreduce_insitu_over_ladder"] for r in measured)))
+        if len(measured) < len(deficit):
+            lines.append(
+                "  %d unmeasured: contraction_isolation.py has not run on this platform"
+                % (len(deficit) - len(measured)))
     resid = [r for r in rows_ if r["delta_predicted"] is not None]
     if resid:
         miss = [r for r in resid if not r["sign_agrees"]]

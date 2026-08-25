@@ -56,7 +56,29 @@ Nothing here is fitted. `ar` and `ag` come from `allreduce_ladder.py`, `C` from
   and 2.01 ms on ICI, 2.17x, and A's low-rank lead grows from 4-15% to 17-46% in the same
   cells. The bytes did not move; the fabric did.
 
-## 4. What it does not explain
+## 4. What it did not explain, and what closed it
+
+**Measured 2026-08-25, 8xA100, 20 cells, 12 minutes.** `contraction_isolation.py` timed
+the contraction apart from the generation, and both candidate mechanisms turned out real:
+
+- `C (D-1)/D` overstates B's saving. `shard_ratio` is 0.18-0.46 on the low-rank family
+  and 0.60-1.01 on the dense and seed arms; the divider is the size of `C`, not the
+  strategy.
+- The ladder's step understates the collective. The 96 MiB psum costs 1.75-1.80x it
+  inside a low-rank program and 1.15-1.41x inside a dense one. A payload has a cost in a
+  program, not a cost.
+
+Both errors push the same way and both peak where `C` is smallest, which is the low-rank
+side of the crossover. With the measured terms substituted, the four low-rank d=2048
+cells go from 0.98-1.17 ms of residual to 0.012-0.224 ms; median absolute residual across
+the grid falls 1.13 -> 0.63 ms, sign agreement 17/20 -> 18/20. Neither mechanism closes
+them alone.
+
+The open term left is smaller and on the other side: the dense and seed arms keep 2-34%
+of a large gap unexplained under both models. Details and the correction to an earlier
+claim: `experiments/phase2/results-contraction/README.md`.
+
+## 4b. The original statement of the open term
 
 A cell UNDER 100% is a cell where B is slower than `C/D + ar` allows, and a contraction
 cannot cost less than nothing. Eight of the eleven A-favored cells are under it, four per
