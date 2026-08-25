@@ -123,10 +123,13 @@ Replacing the two modelled terms with the measured ones closes those cells.
 The four low-rank $d{=}2048$ cells fall from residuals of $0.98$--$1.17$\,ms
 to $0.012$--$0.224$\,ms, and across the grid the median absolute residual
 falls from 1.13 to 0.63\,ms with sign agreement at 18 of 20. Neither
-mechanism suffices alone. What remains unexplained sits on the other side:
-the dense and seed arms keep a residual of 2--34\% of a large gap, present
-under both models, bounding the model's precision where the sign was never in
-doubt. These are A100 measurements; the v5e decomposition is not run, and the
+mechanism suffices alone. Two cells keep a residual larger than twice the
+sweep's own repeat spread, both \texttt{iid\_gaussian} at $d{=}512$, where A
+is 1.5 and 5.4\,ms slower than the contraction accounts for; the rest of the
+grid agrees within that spread, which on the dense arms is wide (up to
+14\,ms on a generation of tens) because those generations are long. The
+model is therefore not resolved past the repeat noise on the dense side, and
+the two cells that exceed it are the only ones asking a question. These are A100 measurements; the v5e decomposition is not run, and the
 two fabrics already differ by $2.17\times$ on the isolated 96\,MiB
 all-reduce. Every number in this paragraph is also one host with a
 fat fabric: an NVLink node and a v5e host are where a 100\,MB all-reduce is
