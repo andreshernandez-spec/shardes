@@ -1,5 +1,25 @@
 # 13 - E18 on Crusoe: the full range RunPod could not give
 
+> **CLOSED 2026-08-25: Crusoe has no 16xA100 capacity.** The plan below is kept for
+> the reasoning, not as work to schedule. With Crusoe out, the two things it existed to
+> buy have no self-serve path left on A100:
+>
+> - **The InfiniBand point.** RunPod has IB hardware but NCCL fails it (RETRY_EXC on
+>   all five clusters drawn), and Crusoe was the only surveyed provider with real IB on
+>   A100-SXM4-80GB that could be rented self-serve ([[a100-multinode-providers]],
+>   2026-08-22 survey). Azure ND96amsr_A100_v4 spot is the remaining candidate and needs
+>   NDAMSv4 quota that is zero by default.
+> - **E18b, the throttle sweep.** `tc` needs NET_ADMIN, which containers do not grant
+>   and real VMs do. No VMs, no sweep. `e18b.yaml`, `predict_e18b.py`,
+>   `preregister_e18b.py` and `launch-e18b.sh` stay committed and unrunnable; their
+>   frozen predictions (`docs/12`) were written before the run and stand as a record of
+>   what the model said, not as a pending test.
+>
+> The paper does not depend on any of this. Section 7.3 states the socket point as one
+> bandwidth point and says the InfiniBand question is not established, which stays true
+> whether or not anyone measures it later. Nothing needs rewording; there is simply no
+> experiment coming.
+
 Written 2026-08-24 after the RunPod run (experiments/phase2/multihost/results-e18).
 RunPod gave a clean two-point result (NVLink 515 GiB/s, socket 9.2 GiB/s) but
 cannot give the other two things E18/E18b wanted, and neither is a RunPod config
