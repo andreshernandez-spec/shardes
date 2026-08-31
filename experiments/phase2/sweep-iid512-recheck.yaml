@@ -1,0 +1,34 @@
+# Step 0 of the dense-side residual check: re-time the only two cells whose residual
+# survives the sweep's own repeat noise.
+#
+# `results-consistent` timed every cell with 5 repeats. Against that spread, 18 of 20
+# cells agree with the measured cost model and two do not: iid_gaussian d=512 at N=256
+# (residual 1.487 ms against a 0.588 ms spread) and N=1024 (5.392 ms against 0.702 ms).
+# Five repeats is a thin basis for calling a 5 ms gap real, and these generations are
+# 10-30 ms, so 25 repeats costs seconds of device time.
+#
+# If the residual shrinks toward the spread at 25 repeats there is nothing to explain and
+# the --resident experiment does not need to run. That is the point of running this first.
+#
+# Everything else is copied from sweep-consistent.yaml so the numbers drop straight in.
+modes: [strong]
+devices: [8]
+d_model: [512]
+
+population:
+  512: [256, 1024]
+population_per_device:
+  512: [32, 128]
+
+strategies: [iid_gaussian]
+how: [A, B]
+
+batch: 8
+seq: 32
+
+warmup: 3
+repeats: 25          # 5x the sweep: the whole question is whether 5 was enough
+
+results_dir: results-iid512-recheck
+
+matmul_precision: highest

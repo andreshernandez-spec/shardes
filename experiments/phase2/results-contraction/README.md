@@ -82,22 +82,31 @@ both are needed.
 
 ## What it does not settle
 
-**The dense and seed arms keep a residual the measurement does not explain**, 2-34% of a
-large delta and up to 9.2 ms absolute (`iid_gaussian` d=2048 N=128). It is present under
-both models and slightly worse under this one, so the decomposition is not the cause of
-it. The sign is never in doubt on that side, because the compute saving dwarfs
-everything, so this bounds the model's precision rather than any conclusion. A candidate
-worth checking: the chain measures a contraction fed by a carry, while a real generation
-feeds it from `apply`, and XLA may fuse the two differently.
+**Most of the dense-side residual is the sweep's own repeat noise.** Compared against
+the spread of each cell's five timed repeats, 18 of 20 cells agree within twice that
+spread. The largest absolute residual, 9.2 ms at `iid_gaussian` d=2048 N=128, sits on a
+cell whose own repeats span 10.5 ms: there is nothing there to explain. The dense and
+seed arms have long generations and wide spreads (up to 14 ms), so a residual of a few ms
+on them is not evidence of a missing term.
+
+**Two cells do exceed it**, both `iid_gaussian` at d=512: N=256 at 1.487 ms against a
+0.588 ms spread (2.5x) and N=1024 at 5.392 ms against 0.702 ms (7.7x). Both are positive,
+meaning A is slower in a real generation than the isolated contraction accounts for.
+`iid_gaussian` is the only arm that materializes the population, so the leading candidate
+is that A's replicated contraction runs while `ask`'s materialized population is still
+resident and competes for memory bandwidth, which the isolation harness cannot see
+because nothing else is resident there. `contraction_isolation.py --resident` would test
+it by allocating a population-sized buffer before timing. Two cells is a thin basis for a
+rental; the question is real but small.
 
 **The two sign misses are both near-parity cells** (`lowrank_r1` d=512 N=256 at +0.017 ms
 measured, `mirrored_lr1` d=512 N=1024 at -0.075 ms), where the model and the measurement
 disagree by less than either differs from zero.
 
-**The v5e is not measured.** These are A100 numbers. The v5e cells ride a Kaggle TPU
-session with the pending `results-regen` re-measurement, and nothing here should be
-assumed to transfer: the two fabrics already differ by 2.17x on the isolated 96 MiB
-all-reduce.
+**The residual analysis above is A100 only.** The v5e half was measured afterwards and
+is below; the repeat-noise comparison and the two surviving cells have not been redone
+against it. The two fabrics differ by 2.17x on the isolated 96 MiB all-reduce, so the
+absolute spreads do not transfer even where the mechanisms do.
 
 ## A correction
 
