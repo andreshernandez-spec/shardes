@@ -68,7 +68,10 @@ def main(argv=None) -> int:
             r"wins. OOM: the shape does not fit the per-cell device count "
             r"on 16\,GB chips (recorded outcomes); the dash is one cell "
             r"killed in compilation whose A sibling exceeded memory at the "
-            r"same shape.}",
+            r"same shape. Superseded in the main text by "
+            r"Figure~\ref{fig:f9}, the same driver over four populations "
+            r"and four perturbation arms; this smaller grid is kept for "
+            r"its wall-clock figures.}",
             r"\label{tab:tb5}",
             r"\begin{tabular}{llrrrr}", r"\toprule",
             r"arm & $N$ & $D{=}1$ & $D{=}2$ & $D{=}4$ & $D{=}8$ \\",
