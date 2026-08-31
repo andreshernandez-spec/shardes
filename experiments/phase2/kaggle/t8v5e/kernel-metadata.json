@@ -1,0 +1,12 @@
+{
+  "id": "USERNAME/shardes-t8-v5e",
+  "title": "shardes t8 v5e",
+  "code_file": "t8v5e.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [], "competition_sources": [],
+  "kernel_sources": [], "model_sources": []
+}
