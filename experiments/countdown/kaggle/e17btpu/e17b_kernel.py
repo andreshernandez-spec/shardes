@@ -78,7 +78,11 @@ for attempt in range(ATTEMPTS):
     have = len(list(CELLS.glob("*.json")))
     print(f"attempt {attempt}: driver exit {r.returncode}, cells on disk {have}",
           flush=True)
-    if have == 128 or r.returncode == 2 or have == prev:
+    # Exit 2 is this invocation's slice ending, not the session's: the budget is
+    # per invocation so the loop can bound host memory, which is what killed
+    # session 2. Session 3 broke here and spent 1.5 h of a 9 h slot. Stop only
+    # when the grid is done or an invocation adds nothing.
+    if have == 128 or have == prev:
         break
     prev = have
 
