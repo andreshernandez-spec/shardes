@@ -13,7 +13,10 @@ cd "$(dirname "$0")/.."
 . ../../.venv/bin/activate
 git log --oneline -1
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1
-for c in probe-seed-chunk1 probe-seed probe-seed-chunk15 probe-lr1; do
+# Decisive arms first. chunk 1 decodes 30 members strictly sequentially, about
+# 285 s a generation against 4 s for the batched arms, so it runs last: if the
+# pod goes away the comparison the paper needs is already on disk.
+for c in probe-seed probe-seed-chunk15 probe-lr1 probe-seed-chunk1; do
   echo "==== $c ($(date -u +%FT%TZ)) ===="
   python run_es.py --config probes/$c.yaml --seed 0
 done
