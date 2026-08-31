@@ -1,0 +1,26 @@
+{
+ "d_model": 512,
+ "population": 1024,
+ "params": 1572864,
+ "env": {
+  "commit": "1ba0dd0e7f535587ffd3253bfaf8df1290a3d121",
+  "dirty_worktree": false,
+  "jax": "0.11.1",
+  "jaxlib": "0.11.1",
+  "numpy": "2.5.0",
+  "scipy": "1.18.0",
+  "python": "3.12.13",
+  "platform": "Linux-6.6.143+-x86_64-with-glibc2.41",
+  "hostname": "e9fb5aec6360",
+  "device_count": 8,
+  "device_kind": "TPU v5 lite",
+  "device_platform": "tpu",
+  "xla_flags": "",
+  "jax_platforms": ""
+ },
+ "device_kind": "TPU v5 lite",
+ "t_iid": 0.09182580199995982,
+ "t_seed": 0.5462731769999891,
+ "t_rng": 0.054111951000038516,
+ "gap_over_two_rng": 4.1991405466022265
+}
