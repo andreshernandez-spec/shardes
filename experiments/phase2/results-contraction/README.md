@@ -103,10 +103,10 @@ rental; the question is real but small.
 measured, `mirrored_lr1` d=512 N=1024 at -0.075 ms), where the model and the measurement
 disagree by less than either differs from zero.
 
-**The v5e is not measured.** These are A100 numbers. The v5e cells ride a Kaggle TPU
-session with the pending `results-regen` re-measurement, and nothing here should be
-assumed to transfer: the two fabrics already differ by 2.17x on the isolated 96 MiB
-all-reduce.
+**The residual analysis above is A100 only.** The v5e half was measured afterwards and
+is below; the repeat-noise comparison and the two surviving cells have not been redone
+against it. The two fabrics differ by 2.17x on the isolated 96 MiB all-reduce, so the
+absolute spreads do not transfer even where the mechanisms do.
 
 ## A correction
 
