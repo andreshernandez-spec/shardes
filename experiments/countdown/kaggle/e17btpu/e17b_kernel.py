@@ -16,9 +16,11 @@ from pathlib import Path
 
 SHA = "PINNED_AT_PUSH"
 # Per invocation, not per session: the retry loop below can run the driver
-# several times, and 45 cells remain, most of them fast or immediate OOMs.
+# several times. Session 4 spent four slices to add 25 cells and stopped with
+# the loop exhausted, not the grid, so six slices now fill the 9 h session.
+# 10 cells remain, 3 of them immediate OOMs (>= 30 members per device).
 BUDGET_S = "5400"
-ATTEMPTS = 4
+ATTEMPTS = 6
 
 
 def run(cmd, **kw):
