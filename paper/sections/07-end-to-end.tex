@@ -220,7 +220,16 @@ across seeds; the ranges do not overlap here, but the evaluation grid is
 coarse (every 50 updates) and $n{=}3$, so the per-update ratio remains the
 clean claim. This is where the systems and quality halves meet: the cheap
 perturbation uses two fifths less time per update, while the experiment
-resolves no additional sample requirement.
+resolves no additional sample requirement. One caveat on what that
+$1.69\times$ contains. The two arms do not evaluate their populations the
+same way: the full-rank arm regenerates and scores members in chunks of
+five, so it reads the weights once per chunk, while the low-rank arm scores
+its whole population in one batch and reads them once, sharing the base
+multiply across members. That batching is what makes the low-rank path fast
+and is not separable from it, but it is an evaluation setting rather than a
+property of the perturbation, and only the regenerating path exposes it. The
+ratio is therefore between the two paths as this library runs them, not
+between the two perturbation schemes with everything else held equal.
 
 \paragraph{GRPO context.} The GRPO arm \citep{deepseekmath2024} uses the
 published settings of \citet{qiu2025}, without tuning. Its variance across

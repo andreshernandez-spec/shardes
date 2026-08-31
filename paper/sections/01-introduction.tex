@@ -87,8 +87,10 @@ validity chain just described, closed by a three-seed quality check.
     Figure~\ref{fig:f2}), in the direction predicted before the
     measurements; the byte model itself was corrected by them
     (Section~\ref{sec:contraction}). Both signs also
-    reappear when the placement is re-measured on Qwen2.5-0.5B itself
-    (Table~\ref{tab:tb5}).
+    reappear when the placement is re-measured on Qwen2.5-0.5B itself, over
+    a 128-cell grid in which a third frozen prediction holds too: A's
+    advantage shrinks as the perturbation rank rises
+    (Figure~\ref{fig:f9}).
   \item \textbf{The low-rank motivation does not invert on TPU; it
     strengthens.} At matched shapes, rank-1 perturbations cost
     $0.05$--$0.18\times$ the dense baseline on the v5e against

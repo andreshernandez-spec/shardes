@@ -16,9 +16,11 @@ from pathlib import Path
 
 SHA = "PINNED_AT_PUSH"
 # Per invocation, not per session: the retry loop below can run the driver
-# several times, and 45 cells remain, most of them fast or immediate OOMs.
+# several times. Session 4 spent four slices to add 25 cells and stopped with
+# the loop exhausted, not the grid, so six slices now fill the 9 h session.
+# 10 cells remain, 3 of them immediate OOMs (>= 30 members per device).
 BUDGET_S = "5400"
-ATTEMPTS = 4
+ATTEMPTS = 6
 
 
 def run(cmd, **kw):
@@ -78,7 +80,11 @@ for attempt in range(ATTEMPTS):
     have = len(list(CELLS.glob("*.json")))
     print(f"attempt {attempt}: driver exit {r.returncode}, cells on disk {have}",
           flush=True)
-    if have == 128 or r.returncode == 2 or have == prev:
+    # Exit 2 is this invocation's slice ending, not the session's: the budget is
+    # per invocation so the loop can bound host memory, which is what killed
+    # session 2. Session 3 broke here and spent 1.5 h of a 9 h slot. Stop only
+    # when the grid is done or an invocation adds nothing.
+    if have == 128 or have == prev:
         break
     prev = have
 
