@@ -143,35 +143,71 @@ Section~\ref{subsec:boundary} crosses it.
 
 \input{generated/tb8}
 
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{f9-e17-crossover.png}
+  \caption{The placement map on a real model. One complete ES update of
+    Qwen2.5-0.5B (ask, teacher-forced NLL, tell) per cell, TPU v5e-8, all
+    128 cells of a frozen grid: four perturbation arms, four populations,
+    $D \in \{1,2,4,8\}$, both placements. Negative favours B, the
+    model-sized all-reduce. Hollow markers are shapes that exceed HBM under
+    either placement and are recorded rather than resized. The full-rank
+    panel is B's, monotonically in both $N$ and $D$; the three low-rank
+    panels are A's, and the advantage shrinks as the rank rises and as the
+    population grows.}
+  \label{fig:f9}
+\end{figure*}
+
 \paragraph{Placement outcomes on the real model.} The same question,
-re-measured outside the simplified block: Table~\ref{tab:tb5} times one
+re-measured outside the simplified block. Figure~\ref{fig:f9} times one
 full ES update per cell of Qwen2.5-0.5B on a TPU v5e, on the frozen
 prompt batch of Section~\ref{sec:endtoend}: ask, evaluate teacher-forced NLL,
-and tell once, with both directional predictions frozen before the
-run. Both transfer with their signs intact and widening in device
+and tell once, over four perturbation arms and four populations, with three
+directional predictions frozen before the run.
+All three hold. Both signs transfer from the block and widen in device
 count: the seed-regenerated arm's B advantage grows monotonically to
-$\log_{10}(t_B/t_A) = -0.164$ at $D{=}8$, and rank 1 flips to A
-everywhere it fits, growing to $+0.212$, stronger than the block showed
-at its largest model size. The memory column doubles as a finding, though not the
-one it looks like: rank 1 does not fit one 16\,GB chip even at $N{=}32$
-while the seed arm runs at every cell, and extending the grid to three
-ranks shows why. All three OOM at identical cells with temporaries
-agreeing to 0.1\%, so the term is not the stored perturbation, which
-would scale with $r$. It is per-member activations, and what sets them is
-how many members are evaluated at once: the seed arm scans its population
-one member at a time, while the low-rank arms evaluate the whole
-per-device population in a single batch, which is where their speed
-advantage comes from. Batching members is what costs memory here, not
-carrying them. The one absent B cell was killed during compilation; its A
-sibling exceeded memory at the same shape, so no feasible placement was
-demonstrated for that cell. This anchor is one accelerator: the real-model
+$\log_{10}(t_B/t_A) = -0.164$ at $D{=}8$, and the low-rank arms flip to A
+at all 18 shapes that fit, reaching $+0.225$, stronger than the block showed
+at its largest model size. The third prediction was the falsifiable one,
+that A's advantage should shrink as the rank rises, because the
+per-candidate contraction work B avoids grows with $r$ while its all-reduce
+does not: rank 16 is below rank 1 at every population they share
+($+0.177$ against $+0.225$ at $N{=}32$, $+0.004$ against $+0.066$ at
+$N{=}128$), approaching a tie from A's side without crossing. The wider
+grid also shows what two populations could not, that the low-rank advantage
+shrinks with $N$ as well, and for the same reason: raising the population
+feeds A's per-candidate cost while leaving B's model-sized transfer
+unchanged. Table~\ref{tab:tb5} in the appendix carries the wall-clock
+figures behind the earlier and smaller version of this grid.
+
+\paragraph{What the memory column measures.} The hollow markers double as a
+finding, though not the one they look like. Rank 1 does not fit one 16\,GB
+chip even at $N{=}32$ while the seed arm runs at every cell, which invites
+the reading that carrying factors is what costs memory. Extending the grid
+to three ranks refutes it: all three exceed HBM at identical shapes, with
+XLA's reported temporaries agreeing to 0.1\%, and stored perturbations
+would scale with $r$. The feasibility boundary is instead a pure function of
+members per device, and the term is per-member activations. What sets how
+many are live is the evaluation, not the perturbation: the seed arm scans
+its population one member at a time, while the low-rank arms evaluate the
+whole per-device population in a single batch, which is exactly where their
+speed advantage comes from, since the base weight is unbatched under the
+$\mathrm{vmap}$ and members share one multiply. Giving the seed arm the same
+batching reproduces the low-rank memory curve. So the trade is real but runs
+opposite to the obvious reading: the arm with the cheap perturbation is the
+one that runs out of memory, because it buys speed by batching members, and
+batching members costs activations. This leaves the ratios above untouched,
+since A and B are the same arm at the same shape, but it does mean a
+cross-arm wall-clock comparison prices two evaluation strategies as well as
+two perturbation schemes.
+
+\paragraph{Scope of the real-model anchor.} This anchor is one accelerator: the real-model
 crossover was measured on the v5e only, so it confirms that the block's signs
 survive a real model and not that they survive on both platforms. Every
 cross-accelerator statement in this section rests on the controlled block
 instead, where the 16\,GB and 80\,GB ceilings sit at different cells and
 matched shapes are what make the two comparable.
 
-\input{generated/tb5}
 
 \subsection{Across a real host boundary}
 \label{subsec:boundary}
