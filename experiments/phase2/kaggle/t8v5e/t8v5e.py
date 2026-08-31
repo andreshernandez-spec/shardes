@@ -72,8 +72,12 @@ print(f"regen exit: {r2.returncode}", flush=True)
 run(["bash", "-c", "cp -r experiments/phase2/results-contraction "
      "experiments/phase2/results-regen /kaggle/working/ && "
      "ls /kaggle/working/results-contraction /kaggle/working/results-regen"])
-cells = list(Path("/kaggle/working/results-contraction").glob("*.json"))
-regen = list(Path("/kaggle/working/results-regen").glob("*.json"))
+# Count this platform's records, not the directory: results-regen already ships the
+# four A100 cells, so a complete v5e run leaves eight files and a bare count would
+# call a good session a failure. The exit code is the only signal Kaggle gives from
+# outside, so it has to mean what it says.
+cells = list(Path("/kaggle/working/results-contraction").glob("*tpu-v5-lite*.json"))
+regen = list(Path("/kaggle/working/results-regen").glob("*tpu-v5-lite*.json"))
 print(f"contraction cells: {len(cells)} of 20, regen cells: {len(regen)} of 4", flush=True)
 
 if r1.returncode == 2:
