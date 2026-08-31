@@ -107,3 +107,29 @@ contraction that fails to shard; it is B paying more for its all-reduce." That w
 A positive `C` shows only that B saves something, not that it saves `C (D-1)/D`, and the
 `shard_ratio` column it could not see is 0.18-0.46 on exactly those cells. Both mechanisms
 were needed and one of them had been argued away on insufficient evidence.
+
+## The v5e half (2026-08-31)
+
+Measured on a Kaggle TPU v5e-8 by the `kaggle/e17btpu` session that also resumed the
+E17b grid, pinned at 1ba0dd0, matmul precision `highest`, D=8, all 20 cells. The
+`--resident` flag exists at that commit but was not passed, so the measurement path is
+the one the A100 cells used; the records carry `"resident": false` where the A100 ones
+predate the field.
+
+| what | A100 (NVLink) | v5e (ICI) |
+|---|---|---|
+| `C/(D C_local)`, dense and seed arms | 0.60-1.01 | 0.95-1.00 |
+| `C/(D C_local)`, low-rank arms | 0.18-0.46 | 0.16-0.62 |
+| in-situ all-reduce over the ladder's step | 1.49-1.77x | 1.18-1.60x |
+| forward model, cells with the right sign | 18 of 20 | 15 of 16 |
+| cells whose backwards solve wants a negative C | 4 | 4 |
+
+Both mechanisms are present on both fabrics and at the same sizes, which is what makes
+them properties of the placement rather than of one machine: the contraction shards
+nearly perfectly when it is large (dense, tens of ms) and poorly when it is small
+(low-rank, tenths of a ms), and the same collective costs more inside a lean program
+than the ladder measures it at alone. The two fabrics differ by 2.17x on the isolated
+96 MiB all-reduce and still fail in the same two ways.
+
+`timemodel.py` prints both tables; the paper quotes them in prose rather than typesetting
+them (`tb7.tex` is the E18 host-boundary table, a different result).
