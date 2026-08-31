@@ -1,0 +1,30 @@
+83e602e0b86a on 8 simulated cpu devices
+
+A. members per device, at 8 prompts of 128 tokens, D=1
+ members           seed            lr1            lr4           lr16
+       2         1.223G         1.726G         1.155G         1.169G
+       4         0.721G         3.452G         2.310G         2.337G
+       8         0.721G         6.904G         4.620G         4.674G
+      16         0.721G        13.808G         9.257G         9.399G
+
+B. prompts in the batch, at 4 members per device, D=1
+ prompts           seed            lr1            lr4           lr16
+       2         0.289G         0.864G         0.584G         0.612G
+       4         0.433G         1.727G         1.159G         1.187G
+       8         0.721G         3.452G         2.310G         2.337G
+      16         1.296G         6.903G         4.611G         4.638G
+
+C. rank, at 8 members per device, 8 prompts, D=1
+    seed: 0.721G
+     lr1: 6.904G
+     lr4: 4.620G
+    lr16: 4.674G
+
+D. seed with the low-rank arms' evaluation (chunk = members)
+   the arms differ by chunking, not by perturbation scheme, so
+   un-chunking the seed arm should reproduce the low-rank curve
+ members   seed chunk=1   seed chunk=n            lr1
+       2         1.223G         1.223G         1.726G
+       4         0.721G         2.446G         3.452G
+       8         0.721G         4.819G         6.904G
+      16         0.721G         9.572G        13.808G
