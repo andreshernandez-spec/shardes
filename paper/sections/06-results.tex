@@ -126,9 +126,13 @@ falls from 1.13 to 0.63\,ms with sign agreement at 18 of 20. Neither
 mechanism suffices alone. What remains unexplained sits on the other side:
 the dense and seed arms keep a residual of 2--34\% of a large gap, present
 under both models, bounding the model's precision where the sign was never in
-doubt. These are A100 measurements; the v5e decomposition is not run, and the
-two fabrics already differ by $2.17\times$ on the isolated 96\,MiB
-all-reduce. Every number in this paragraph is also one host with a
+doubt. The same decomposition on the v5e finds both mechanisms again, at
+the same sizes: $C/(D\,C_{\mathrm{local}})$ of $0.95$--$1.00$ on the dense
+and seed arms against $0.16$--$0.62$ on the low-rank family, an in-situ
+all-reduce at $1.18$--$1.60\times$ the ladder, and sign agreement at 15 of
+16 cells. That the two fabrics differ by $2.17\times$ on the isolated
+96\,MiB all-reduce and still fail in the same two ways is the reason to
+read them as properties of the placement rather than of one machine. Every number in this paragraph is also one host with a
 fat fabric: an NVLink node and a v5e host are where a 100\,MB all-reduce is
 cheapest, the dense-side result is therefore B's easy case, and the commodity
 clusters of hundreds of workers the scalar folk claim was made for

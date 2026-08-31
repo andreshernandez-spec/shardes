@@ -2,7 +2,7 @@
 """The contraction crossover as a time model, calibrated per fabric.
 
     python timemodel.py                       # the table, both platforms
-    python timemodel.py --latex               # also writes ../../paper/generated/tb7.tex
+    python timemodel.py --json out.json       # the same rows as JSON
     python timemodel.py --fabric 120e-6,12.5e9 --label "25 GbE"   # predict another fabric
 
 Section 4 of the paper commits a byte count before the measurement and Section 6 reports
@@ -293,7 +293,9 @@ def main(argv=None) -> int:
     ap.add_argument("--fabric", help="alpha_seconds,beta_bytes_per_second for a hypothetical link")
     ap.add_argument("--label", default="hypothetical fabric")
     ap.add_argument("--json", type=pathlib.Path)
-    ap.add_argument("--latex", action="store_true")
+    # No --latex: paper/generated/tb7.tex belongs to multihost/tb7_e18.py, and this
+    # table is quoted in prose rather than typeset.
+
     args = ap.parse_args(argv)
 
     fabric = None
@@ -316,9 +318,6 @@ def main(argv=None) -> int:
     print(out)
     if args.json:
         args.json.write_text(json.dumps(dump, indent=1))
-    if args.latex:
-        print("latex output needs the measured contraction column; run "
-              "contraction_isolation.py first", file=sys.stderr)
     return 0
 
 
