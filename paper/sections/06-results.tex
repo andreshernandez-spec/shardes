@@ -152,10 +152,17 @@ run. Both transfer with their signs intact and widening in device
 count: the seed-regenerated arm's B advantage grows monotonically to
 $\log_{10}(t_B/t_A) = -0.164$ at $D{=}8$, and rank 1 flips to A
 everywhere it fits, growing to $+0.212$, stronger than the block showed
-at its largest model size. The memory column doubles as a finding: rank
-1 on the real model does not fit one 16\,GB chip even at $N{=}32$ while
-the seed arm runs at every cell, the storage-for-compute trade at real
-scale. The one absent B cell was killed during compilation; its A
+at its largest model size. The memory column doubles as a finding, though not the
+one it looks like: rank 1 does not fit one 16\,GB chip even at $N{=}32$
+while the seed arm runs at every cell, and extending the grid to three
+ranks shows why. All three OOM at identical cells with temporaries
+agreeing to 0.1\%, so the term is not the stored perturbation, which
+would scale with $r$. It is per-member activations, and what sets them is
+how many members are evaluated at once: the seed arm scans its population
+one member at a time, while the low-rank arms evaluate the whole
+per-device population in a single batch, which is where their speed
+advantage comes from. Batching members is what costs memory here, not
+carrying them. The one absent B cell was killed during compilation; its A
 sibling exceeded memory at the same shape, so no feasible placement was
 demonstrated for that cell. This anchor is one accelerator: the real-model
 crossover was measured on the v5e only, so it confirms that the block's signs
