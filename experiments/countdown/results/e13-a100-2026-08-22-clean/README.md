@@ -33,6 +33,18 @@ Quality reproduces inside seed noise.
 Full rank and ranks 4 and 16 are 4-5% off the 08-17 campaign, which is host drift (that
 campaign ran every arm on one pod; this one used several) plus jax 0.11.0 to 0.11.1.
 
+**The arms do not evaluate their populations the same way, and the ratio contains that.**
+`pilot.yaml` sets `eval_chunk: 5`, which reaches `mirrored_seed` (built as
+`SeedRegenerated(chunk=5)`, so it scores five members per scan step and reads the weights
+once per step) and is silently ignored by the three low-rank arms, since `run_es.py` builds
+them as `Mirrored(LowRank(r=...))` and never reads the config. They score the whole
+population in one vmap and read the weights once, which is where their speed comes from:
+the base weight is unbatched under vmap so members share one GEMM. So the 41% is between
+the two paths as the library runs them, not between the perturbation schemes with the
+evaluation held equal. See `../../results-e17b-memory/README.md`, which found the same
+asymmetry behind E17's memory column. A matched-chunk rerun (the seed arm at chunk 15) is
+the experiment that would separate the two, and has not been run.
+
 **The rank-1 arms were measured twice.** Run first at 8d06d64 they came out 24% slower
 than 08-17 (2.98 and 2.97 s), which is a671dc6: it pads the r=1 factors to a rank-2 dot
 so the TPU keeps them fused (rank 1 OOMed cells rank 4 ran,
