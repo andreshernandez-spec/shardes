@@ -38,8 +38,8 @@ all 16 cells. The new populations 64 and 128 land between N=32 and N=240 as pred
 and the ordering in N is monotone at every device count. D=1 ties to within 0.05%, as
 it must: no communication, same arithmetic.
 
-**The low-rank arms: A wins, growing with D.** Confirmed at all 14 cells that fit,
-across three ranks and four populations. No sign flip anywhere.
+**The low-rank arms: A wins, growing with D.** Confirmed at all 18 shapes that fit,
+six per rank, across four populations. No sign flip anywhere.
 
 **The gap shrinks as rank grows.** Confirmed. The config froze this as the falsifiable
 one ("a gap LARGER than rank 1's would" contradict the mechanism), and rank 16 is below
@@ -67,7 +67,8 @@ including the three measured last.
 E17 read this column as the storage-for-compute trade, and `e17b.yaml` froze the
 prediction that "rank 16 is expected to OOM where rank 1 runs at the largest N". **That
 prediction is wrong, and this is the run's one clear miss.** Rank changes nothing: the
-three ranks OOM at the same 27 cells with XLA's reported temporaries agreeing to 0.1%
+three ranks OOM at the same 10 (N, D) shapes, both placements, with XLA's reported
+temporaries agreeing to 0.1%
 (114.58G at r=16, 114.61G at r=1, 114.66G at r=4 for N=128, D=1). Memory that does not
 move with r is not the factors.
 
