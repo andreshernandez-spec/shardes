@@ -90,6 +90,11 @@ This does not touch the ratios above: A and B are the same arm at the same shape
 chunking is common to both and cancels. It does reach cross-arm comparisons. At D=8,
 N=32 the best low-rank configuration is 71.0 ms against the seed arm's 672.6 ms, and
 that 9.5x is between two evaluation strategies as well as two perturbation schemes.
+This grid ran the seed arm at chunk 1, the setting that batches least. On E13's decode
+workload the chunk is worth 2.26x across its range, more than the perturbation scheme
+is worth at matched evaluation (`../probes/results-a100-chunk/`), so 9.5x is inflated
+in a known direction. Not by a known amount: that probe decodes 96 tokens where this
+scores a teacher-forced NLL, and the two reward batching differently.
 
 ## Best-placement wall clock at D=8, ms
 
