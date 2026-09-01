@@ -123,15 +123,17 @@ Replacing the two modelled terms with the measured ones closes those cells.
 The four low-rank $d{=}2048$ cells fall from residuals of $0.98$--$1.17$\,ms
 to $0.012$--$0.224$\,ms, and across the grid the median absolute residual
 falls from 1.13 to 0.63\,ms with sign agreement at 18 of 20. Neither
-mechanism suffices alone. What remains unexplained sits on the other side,
-and most of it is noise rather than model error: two cells keep a residual
-larger than twice the sweep's own repeat spread, both \texttt{iid\_gaussian}
-at $d{=}512$, where A is 1.5 and 5.4\,ms slower than the contraction
-accounts for. The rest of the grid agrees within that spread, which on the
-dense arms is wide (up to 14\,ms on a generation of tens) because those
-generations are long. So the model is not resolved past the repeat noise on
-the dense side, where the sign was never in doubt, and those two cells are
-the only ones asking a question. The same decomposition on the v5e finds
+mechanism suffices alone. What remains unexplained sits on the other side.
+Bootstrapping the noise on each cell's difference of medians, which is the
+quantity the residual is a residual of, nine of the twenty residuals exceed
+twice it, so the model is not merely absorbing timing jitter. That noise is
+measured within one process after one compilation, so it is a floor on the
+true run-to-run uncertainty and nine is correspondingly an upper bound on how
+many cells are genuinely unexplained. Two stand clear of the rest by an order
+of magnitude either way, both \texttt{iid\_gaussian} at $d{=}512$, at
+$10\times$ and $34\times$ their noise, where A is 1.5 and 5.4\,ms slower than
+the contraction accounts for. Those two are what asks a question; the rest of
+the grid is small residuals on a side where the sign was never in doubt. The same decomposition on the v5e finds
 both mechanisms again, at the same sizes: $C/(D\,C_{\mathrm{local}})$ of
 $0.95$--$1.00$ on the dense and seed arms against $0.16$--$0.62$ on the
 low-rank family, an in-situ all-reduce at $1.18$--$1.60\times$ the ladder,
