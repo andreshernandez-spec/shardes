@@ -42,8 +42,11 @@ population in one vmap and read the weights once, which is where their speed com
 the base weight is unbatched under vmap so members share one GEMM. So the 41% is between
 the two paths as the library runs them, not between the perturbation schemes with the
 evaluation held equal. See `../../results-e17b-memory/README.md`, which found the same
-asymmetry behind E17's memory column. A matched-chunk rerun (the seed arm at chunk 15) is
-the experiment that would separate the two, and has not been run.
+asymmetry behind E17's memory column. The matched-chunk probe has since been run
+(`../../probes/results-a100-chunk/`): with both arms batching alike the seed arm goes
+from 4.31 to 3.62 s against rank 1's 2.52, so the ratio falls from 1.71x to 1.44x on one
+host and the chunk setting accounts for 1.19x of it. About a quarter of the 41% was the
+evaluation setting; the rest is the perturbation.
 
 **The rank-1 arms were measured twice.** Run first at 8d06d64 they came out 24% slower
 than 08-17 (2.98 and 2.97 s), which is a671dc6: it pads the r=1 factors to a rank-2 dot
