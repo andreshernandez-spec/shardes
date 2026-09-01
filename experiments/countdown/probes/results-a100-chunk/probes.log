@@ -108,3 +108,36 @@ done
 ==== probe-seed-chunk1 (2026-09-01T00:41:36Z) ====
 [transformers] PyTorch was not found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
 [0] EVAL reward 0.055 solved 0.013 format 0.43 28s
+[0] reward 0.028 max 1.0 format 0.17 solved 0.01 491.2s
+[1] reward 0.020 max 1.0 format 0.17 solved 0.00 523.6s
+[2] reward 0.030 max 1.0 format 0.27 solved 0.00 8.1s
+[3] reward 0.041 max 1.0 format 0.26 solved 0.02 8.2s
+[4] reward 0.044 max 1.0 format 0.33 solved 0.01 8.2s
+[5] reward 0.028 max 0.1 format 0.28 solved 0.00 8.2s
+[6] reward 0.058 max 1.0 format 0.42 solved 0.02 8.2s
+[7] reward 0.067 max 1.0 format 0.37 solved 0.03 8.2s
+[8] reward 0.040 max 0.1 format 0.40 solved 0.00 8.2s
+[9] reward 0.045 max 1.0 format 0.37 solved 0.01 8.2s
+[10] reward 0.047 max 1.0 format 0.32 solved 0.02 8.2s
+[11] reward 0.068 max 1.0 format 0.45 solved 0.03 8.2s
+[12] reward 0.052 max 1.0 format 0.44 solved 0.01 8.2s
+[13] reward 0.057 max 1.0 format 0.45 solved 0.01 8.2s
+[14] reward 0.079 max 1.0 format 0.57 solved 0.03 8.2s
+[15] reward 0.051 max 1.0 format 0.47 solved 0.00 8.1s
+[16] reward 0.057 max 1.0 format 0.53 solved 0.00 8.2s
+[17] reward 0.083 max 1.0 format 0.68 solved 0.02 8.1s
+[18] reward 0.089 max 1.0 format 0.74 solved 0.02 8.0s
+[19] reward 0.085 max 1.0 format 0.55 solved 0.03 8.1s
+[20] reward 0.070 max 1.0 format 0.62 solved 0.01 8.2s
+[21] reward 0.092 max 1.0 format 0.77 solved 0.02 8.2s
+[22] reward 0.098 max 1.0 format 0.68 solved 0.03 8.2s
+[23] reward 0.098 max 1.0 format 0.79 solved 0.02 8.2s
+[24] reward 0.082 max 1.0 format 0.78 solved 0.00 8.1s
+[25] reward 0.098 max 1.0 format 0.68 solved 0.03 8.1s
+[26] reward 0.110 max 1.0 format 0.69 solved 0.05 8.1s
+[27] reward 0.097 max 1.0 format 0.78 solved 0.02 8.2s
+[28] reward 0.073 max 0.1 format 0.73 solved 0.00 8.1s
+[29] reward 0.106 max 1.0 format 0.87 solved 0.02 8.1s
+[30] EVAL reward 0.137 solved 0.045 format 0.97 24s
+done
+PROBE_DONE

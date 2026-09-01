@@ -21,11 +21,12 @@ member on the device (Mirrored halves the population).
 
 ## Steady-state seconds per update, median over generations 2-29
 
-| arm | s/update |
-|---|---|
-| seed, chunk 5 (as E13 ran it) | 4.313 |
-| seed, chunk 15 (evaluation matched to the low-rank arm) | 3.619 |
-| rank 1 | 2.520 |
+| arm | s/update | against rank 1 |
+|---|---|---|
+| seed, chunk 1 (the library default, and what E17b ran) | 8.173 | 3.24x |
+| seed, chunk 5 (as E13 ran it) | 4.313 | 1.71x |
+| seed, chunk 15 (evaluation matched to the low-rank arm) | 3.619 | 1.44x |
+| rank 1 | 2.520 | |
 
 Generations 0 and 1 are compilation (349-608 s) and excluded, as everywhere else.
 The chunk-5 arm reproduces the E13 campaign's 4.45 s within host drift, and rank 1
@@ -45,6 +46,16 @@ The two factors compose: 1.19 x 1.44 = 1.71.
 about a quarter of the measured advantage was the evaluation setting rather than the
 perturbation scheme. The remaining 1.44x is the perturbation: the low-rank arm still
 does less work per update once both arms score their populations the same way.
+
+**The knob is worth more than the scheme.** Across its whole range the chunk moves the
+seed arm 2.26x (8.173 s at 1 against 3.619 s at 15), against the 1.44x the perturbation
+is worth at matched evaluation. So on this workload how the population is scored matters
+more than what perturbs it, which is not how either paper frames the choice. It also
+means any cross-arm ratio is quoting a chunk as much as a scheme, and the more so the
+lower the chunk. E17b ran at 1, the worst of the three, so its D=8 cross-arm figure
+(9.5x at N=32) is inflated in the same direction; by how much is not measured here,
+since E17b scores a teacher-forced NLL where this decodes 96 tokens, and the two
+workloads reward batching differently.
 
 Held-out reward is unmoved by the chunk, as it must be, since chunking changes only the
 order of a sum: the two seed arms end 30 generations at 0.112 and 0.111 mean reward.
