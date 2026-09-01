@@ -82,22 +82,40 @@ both are needed.
 
 ## What it does not settle
 
-**Most of the dense-side residual is the sweep's own repeat noise.** Compared against
-the spread of each cell's five timed repeats, 18 of 20 cells agree within twice that
-spread. The largest absolute residual, 9.2 ms at `iid_gaussian` d=2048 N=128, sits on a
-cell whose own repeats span 10.5 ms: there is nothing there to explain. The dense and
-seed arms have long generations and wide spreads (up to 14 ms), so a residual of a few ms
-on them is not evidence of a missing term.
+**Nine of the twenty residuals exceed twice the noise on their own measurement**, which
+is more than an earlier version of this file claimed. `residual_spread.py` prints the
+table. The comparison has to be against the noise on `median(A) - median(B)`, since that
+is the quantity the residual is a residual of, and that is what the script bootstraps;
+the earlier text compared against the spread of individual timings, a wider number that
+flattered the model into 18 of 20 agreeing. Those earlier per-cell spreads (0.588 and
+0.702 ms) do not reproduce from the committed records under any statistic tried and are
+withdrawn.
 
-**Two cells do exceed it**, both `iid_gaussian` at d=512: N=256 at 1.487 ms against a
-0.588 ms spread (2.5x) and N=1024 at 5.392 ms against 0.702 ms (7.7x). Both are positive,
-meaning A is slower in a real generation than the isolated contraction accounts for.
+One caveat cuts the other way. The five repeats are consecutive generations inside one
+process after one compilation, so they price steady-state jitter and nothing else: not
+compilation, not the process, not the host. The bootstrap is therefore a floor on the
+real run-to-run uncertainty, and nine is an upper bound on how many cells are genuinely
+unexplained.
+
+**Two cells stand clear of the rest by an order of magnitude** on either statistic, both
+`iid_gaussian` at d=512: N=256 at 1.487 ms against 0.142 ms of noise (10.5x) and N=1024
+at 5.392 ms against 0.161 ms (33.6x). Both are positive, meaning A is slower in a real
+generation than the isolated contraction accounts for.
 `iid_gaussian` is the only arm that materializes the population, so the leading candidate
 is that A's replicated contraction runs while `ask`'s materialized population is still
 resident and competes for memory bandwidth, which the isolation harness cannot see
 because nothing else is resident there. `contraction_isolation.py --resident` would test
 it by allocating a population-sized buffer before timing. Two cells is a thin basis for a
 rental; the question is real but small.
+
+**What `sweep-iid512-recheck.yaml` would and would not settle.** That config raises the
+repeats from 5 to 25 on these two cells, on the premise that five is a thin basis for
+calling a 5 ms gap real and that the residual might shrink toward the spread. Against the
+bootstrap it cannot: at 10.5x and 33.6x the within-run noise, more repeats of the same
+kind only shrink the denominator and raise the ratio. And more repeats inside one process
+still say nothing about the variance that has not been measured, which is between runs.
+So the informative version re-runs each cell as several fresh invocations rather than one
+invocation with more repeats. Both fit the same session as `--resident`.
 
 **The two sign misses are both near-parity cells** (`lowrank_r1` d=512 N=256 at +0.017 ms
 measured, `mirrored_lr1` d=512 N=1024 at -0.075 ms), where the model and the measurement
