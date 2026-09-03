@@ -82,22 +82,53 @@ both are needed.
 
 ## What it does not settle
 
-**Most of the dense-side residual is the sweep's own repeat noise.** Compared against
-the spread of each cell's five timed repeats, 18 of 20 cells agree within twice that
-spread. The largest absolute residual, 9.2 ms at `iid_gaussian` d=2048 N=128, sits on a
-cell whose own repeats span 10.5 ms: there is nothing there to explain. The dense and
-seed arms have long generations and wide spreads (up to 14 ms), so a residual of a few ms
-on them is not evidence of a missing term.
+**Nine of the twenty residuals exceed twice the noise on their own measurement**, which
+is more than an earlier version of this file claimed. `residual_spread.py` prints the
+table. The comparison has to be against the noise on `median(A) - median(B)`, since that
+is the quantity the residual is a residual of, and that is what the script bootstraps;
+the earlier text compared against the spread of individual timings, a wider number that
+flattered the model into 18 of 20 agreeing. Those earlier per-cell spreads (0.588 and
+0.702 ms) do not reproduce from the committed records under any statistic tried and are
+withdrawn.
 
-**Two cells do exceed it**, both `iid_gaussian` at d=512: N=256 at 1.487 ms against a
-0.588 ms spread (2.5x) and N=1024 at 5.392 ms against 0.702 ms (7.7x). Both are positive,
-meaning A is slower in a real generation than the isolated contraction accounts for.
+One caveat cuts the other way. The five repeats are consecutive generations inside one
+process after one compilation, so they price steady-state jitter and nothing else: not
+compilation, not the process, not the host. The bootstrap is therefore a floor on the
+real run-to-run uncertainty, and nine is an upper bound on how many cells are genuinely
+unexplained.
+
+**Two cells stand clear of the rest by an order of magnitude** on either statistic, both
+`iid_gaussian` at d=512: N=256 at 1.487 ms against 0.142 ms of noise (10.5x) and N=1024
+at 5.392 ms against 0.161 ms (33.6x). Both are positive, meaning A is slower in a real
+generation than the isolated contraction accounts for.
 `iid_gaussian` is the only arm that materializes the population, so the leading candidate
 is that A's replicated contraction runs while `ask`'s materialized population is still
 resident and competes for memory bandwidth, which the isolation harness cannot see
 because nothing else is resident there. `contraction_isolation.py --resident` would test
 it by allocating a population-sized buffer before timing. Two cells is a thin basis for a
 rental; the question is real but small.
+
+**All of this was rechecked on a second 8x A100 node**, five fresh invocations plus a
+matched `--resident` pair: `../results-recheck-2026-09-03/`. Three results, and they cut
+the question in half rather than answering it.
+
+Between-run variation, the one the sweep cannot see, is 0.02-0.06 ms sd across five
+separate processes and compilations, at or below the within-run bootstrap. So the worry
+that five repeats inside one process understate the uncertainty is real but small, and
+`sweep-iid512-recheck.yaml`'s premise (that five was too thin) was wrong.
+
+The N=1024 residual does not reproduce: +5.392 ms there, -0.611 ms here, with that cell's
+A time moving from 31.0 to 25.1 ms and its shard ratio from the low-rank band to 0.863. It
+was a property of that host or session. The N=256 residual does reproduce, +1.560 against
++1.487 ms.
+
+And the memory-pressure explanation is refuted. `--resident` moves the contraction by less
+than 0.31% and less than 13 microseconds at every cell, with up to 3 GiB per device
+resident and mixed signs. If occupancy were worth 1.5 ms it would have shown.
+
+So one cell is left asking a question, not two, and the surviving candidate is the other
+one this file raised: the chain measures a contraction fed by a carry while a real
+generation feeds it from `apply`. That is answerable from compiled HLO on any GPU.
 
 **The two sign misses are both near-parity cells** (`lowrank_r1` d=512 N=256 at +0.017 ms
 measured, `mirrored_lr1` d=512 N=1024 at -0.075 ms), where the model and the measurement
