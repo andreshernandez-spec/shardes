@@ -132,8 +132,18 @@ true run-to-run uncertainty and nine is correspondingly an upper bound on how
 many cells are genuinely unexplained. Two stand clear of the rest by an order
 of magnitude either way, both \texttt{iid\_gaussian} at $d{=}512$, at
 $10\times$ and $34\times$ their noise, where A is 1.5 and 5.4\,ms slower than
-the contraction accounts for. Those two are what asks a question; the rest of
-the grid is small residuals on a side where the sign was never in doubt. The same decomposition on the v5e finds
+the contraction accounts for. Rerunning both on a second node of the same type
+keeps one and dissolves the other: the $N{=}256$ residual reproduces at
+1.6\,ms, while the $N{=}1024$ residual becomes $-0.6$\,ms once that cell's own
+contraction is remeasured, so it was a property of the host rather than the
+placement. The natural explanation for what survives, that A's replicated
+contraction competes with the still-resident materialized population, is
+refuted rather than merely unsupported: holding a population-sized buffer
+during the isolated measurement, up to 3\,GiB per device, moves it by under
+$0.31\%$ at every cell. One cell is therefore unexplained, the rest of the grid
+is small residuals on a side where the sign was never in doubt, and the
+remaining candidate is that the isolation harness feeds the contraction from a
+carry where a generation feeds it from the evaluation. The same decomposition on the v5e finds
 both mechanisms again, at the same sizes: $C/(D\,C_{\mathrm{local}})$ of
 $0.95$--$1.00$ on the dense and seed arms against $0.16$--$0.62$ on the
 low-rank family, an in-situ all-reduce at $1.18$--$1.60\times$ the ladder,

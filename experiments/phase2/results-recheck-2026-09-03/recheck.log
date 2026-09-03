@@ -1,0 +1,61 @@
+158a930 put a script behind the residual/noise comparison, and fix what it compared
+NVIDIA A100-SXM4-80GB
+==== recheck run 1 (2026-09-03T19:15:29Z) ====
+[1/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=A  9.0 ms
+[2/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=B  4.7 ms
+[3/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=A  25.2 ms
+[4/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=B  13.3 ms
+
+4 written, 0 failed, 0 over cap, 0 needed more devices
+run 1 exit 0
+==== recheck run 2 (2026-09-03T19:16:31Z) ====
+WARNING: dirty worktree, results will be stamped unreproducible
+[1/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=A  8.9 ms
+[2/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=B  4.6 ms
+[3/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=A  25.1 ms
+[4/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=B  13.2 ms
+
+4 written, 0 failed, 0 over cap, 0 needed more devices
+run 2 exit 0
+==== recheck run 3 (2026-09-03T19:17:33Z) ====
+WARNING: dirty worktree, results will be stamped unreproducible
+[1/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=A  8.9 ms
+[2/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=B  4.6 ms
+[3/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=A  25.1 ms
+[4/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=B  13.2 ms
+
+4 written, 0 failed, 0 over cap, 0 needed more devices
+run 3 exit 0
+==== recheck run 4 (2026-09-03T19:18:35Z) ====
+WARNING: dirty worktree, results will be stamped unreproducible
+[1/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=A  8.9 ms
+[2/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=B  4.6 ms
+[3/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=A  25.0 ms
+[4/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=B  13.2 ms
+
+4 written, 0 failed, 0 over cap, 0 needed more devices
+run 4 exit 0
+==== recheck run 5 (2026-09-03T19:19:37Z) ====
+WARNING: dirty worktree, results will be stamped unreproducible
+[1/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=A  8.9 ms
+[2/4] mode=strong__D=8__d=512__N=256__s=iid_gaussian__how=B  4.6 ms
+[3/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=A  25.1 ms
+[4/4] mode=strong__D=8__d=512__N=1024__s=iid_gaussian__how=B  13.2 ms
+
+4 written, 0 failed, 0 over cap, 0 needed more devices
+run 5 exit 0
+==== isolation, no resident buffer (2026-09-03T19:20:40Z) ====
+d=512__N=256__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8: C    3.821 ms, C/D    0.889 ms, allreduce    173.2 us, shard 0.54
+d=512__N=1024__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8: C   14.654 ms, C/D    2.122 ms, allreduce     60.5 us, shard 0.86
+d=2048__N=128__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8: C   32.064 ms, C/D    4.121 ms, allreduce   1187.0 us, shard 0.97
+d=2048__N=256__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8: C   61.035 ms, C/D    9.539 ms, allreduce   1268.6 us, shard 0.80
+wrote /workspace/shardes/experiments/phase2/results-contraction
+isolation plain exit 0
+==== isolation, --resident (2026-09-03T19:22:40Z) ====
+d=512__N=256__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8__resident: C    3.809 ms, C/D    0.883 ms, allreduce    178.9 us, shard 0.54
+d=512__N=1024__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8__resident: C   14.641 ms, C/D    2.135 ms, allreduce     40.9 us, shard 0.86
+d=2048__N=128__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8__resident: C   32.075 ms, C/D    4.112 ms, allreduce   1181.4 us, shard 0.98
+d=2048__N=256__s=iid_gaussian__nvidia-a100-sxm4-80gb__D8__resident: C   61.025 ms, C/D    9.526 ms, allreduce   1302.3 us, shard 0.80
+wrote /workspace/shardes/experiments/phase2/results-contraction
+isolation resident exit 0
+RECHECK_DONE

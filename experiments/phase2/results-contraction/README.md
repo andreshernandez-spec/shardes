@@ -108,14 +108,27 @@ because nothing else is resident there. `contraction_isolation.py --resident` wo
 it by allocating a population-sized buffer before timing. Two cells is a thin basis for a
 rental; the question is real but small.
 
-**What `sweep-iid512-recheck.yaml` would and would not settle.** That config raises the
-repeats from 5 to 25 on these two cells, on the premise that five is a thin basis for
-calling a 5 ms gap real and that the residual might shrink toward the spread. Against the
-bootstrap it cannot: at 10.5x and 33.6x the within-run noise, more repeats of the same
-kind only shrink the denominator and raise the ratio. And more repeats inside one process
-still say nothing about the variance that has not been measured, which is between runs.
-So the informative version re-runs each cell as several fresh invocations rather than one
-invocation with more repeats. Both fit the same session as `--resident`.
+**All of this was rechecked on a second 8x A100 node**, five fresh invocations plus a
+matched `--resident` pair: `../results-recheck-2026-09-03/`. Three results, and they cut
+the question in half rather than answering it.
+
+Between-run variation, the one the sweep cannot see, is 0.02-0.06 ms sd across five
+separate processes and compilations, at or below the within-run bootstrap. So the worry
+that five repeats inside one process understate the uncertainty is real but small, and
+`sweep-iid512-recheck.yaml`'s premise (that five was too thin) was wrong.
+
+The N=1024 residual does not reproduce: +5.392 ms there, -0.611 ms here, with that cell's
+A time moving from 31.0 to 25.1 ms and its shard ratio from the low-rank band to 0.863. It
+was a property of that host or session. The N=256 residual does reproduce, +1.560 against
++1.487 ms.
+
+And the memory-pressure explanation is refuted. `--resident` moves the contraction by less
+than 0.31% and less than 13 microseconds at every cell, with up to 3 GiB per device
+resident and mixed signs. If occupancy were worth 1.5 ms it would have shown.
+
+So one cell is left asking a question, not two, and the surviving candidate is the other
+one this file raised: the chain measures a contraction fed by a carry while a real
+generation feeds it from `apply`. That is answerable from compiled HLO on any GPU.
 
 **The two sign misses are both near-parity cells** (`lowrank_r1` d=512 N=256 at +0.017 ms
 measured, `mirrored_lr1` d=512 N=1024 at -0.075 ms), where the model and the measurement
