@@ -504,9 +504,17 @@ def main(argv=None) -> int:
             print(f"  {retry} of those are previous errors, which are retried")
         if skipped:
             print(f"  {skipped} need more devices than this machine has")
+        if not pending and not runnable:
+            # Nothing runnable is not the same as nothing to do, and saying so the
+            # wrong way round is how a rental gets wasted: on a machine with too few
+            # devices this used to report every configuration as already measured.
+            print(f"\nWRONG MACHINE: none of the {len(configs)} configurations fit "
+                  f"{available} device(s). This config needs more; nothing was "
+                  "measured and nothing is done.")
+            return 1
         if not pending:
-            print(f"\nNOTHING TO DO: every configuration already has a result in "
-                  f"{cfg.get('results_dir', 'results')}/. Point results_dir at a fresh "
+            print(f"\nNOTHING TO DO: every runnable configuration already has a result "
+                  f"in {cfg.get('results_dir', 'results')}/. Point results_dir at a fresh "
                   "directory, or delete what should be re-measured. Renting hardware for "
                   "this config would measure nothing.")
             return 1
