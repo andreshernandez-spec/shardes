@@ -140,10 +140,15 @@ placement. The natural explanation for what survives, that A's replicated
 contraction competes with the still-resident materialized population, is
 refuted rather than merely unsupported: holding a population-sized buffer
 during the isolated measurement, up to 3\,GiB per device, moves it by under
-$0.31\%$ at every cell. One cell is therefore unexplained, the rest of the grid
-is small residuals on a side where the sign was never in doubt, and the
-remaining candidate is that the isolation harness feeds the contraction from a
-carry where a generation feeds it from the evaluation. The same decomposition on the v5e finds
+$0.31\%$ at every cell. The other candidate, that the isolation harness
+feeds the contraction from a carry where a generation feeds it from the
+evaluation, fails too: on a single device, where placement A's contraction is
+the same computation it is at $D{=}8$, making the weights depend on the
+evaluation is about 1\,ms faster than handing them in, on a machine where a
+mechanism of this size would have shown as roughly 7\,ms. One cell is therefore
+unexplained with both of its candidate explanations measured and rejected, and
+the rest of the grid is small residuals on a side where the sign was never in
+doubt. The same decomposition on the v5e finds
 both mechanisms again, at the same sizes: $C/(D\,C_{\mathrm{local}})$ of
 $0.95$--$1.00$ on the dense and seed arms against $0.16$--$0.62$ on the
 low-rank family, an in-situ all-reduce at $1.18$--$1.60\times$ the ladder,
