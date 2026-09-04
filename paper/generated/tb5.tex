@@ -2,16 +2,28 @@
 \begin{table*}[t]
 \centering
 \small
-\caption{The contraction crossover on the real model (Qwen2.5-0.5B, one full ask--teacher-forced-NLL--tell update on the fixed prompt batch, TPU v5e): $\log_{10}(t_B/t_A)$ of median generation time, negative where the model-sized all-reduce placement wins. OOM: the shape does not fit the per-cell device count on 16\,GB chips (recorded outcomes); the dash is one cell killed in compilation whose A sibling exceeded memory at the same shape. Superseded in the main text by Figure~\ref{fig:f9}, the same driver over four populations and four perturbation arms; this smaller grid is kept for its wall-clock figures.}
+\caption{What one real-model update costs, in milliseconds (Qwen2.5-0.5B, one full ask--teacher-forced-NLL--tell update on the fixed prompt batch, TPU v5e-8, median of five timed repeats). Each entry is the faster of the two contraction placements, which is what a user who picks correctly pays; Figure~\ref{fig:f9} gives the ratio between them over the same grid, so the two together determine both placements at every cell. OOM: neither placement fits 16\,GB chips at that shape (recorded outcomes, not skipped cells). The seed arm is the only one that reaches $N{=}240$, and it pays 4.6\,s an update there against rank 1's 230\,ms at $N{=}128$.}
 \label{tab:tb5}
 \begin{tabular}{llrrrr}
 \toprule
 arm & $N$ & $D{=}1$ & $D{=}2$ & $D{=}4$ & $D{=}8$ \\
 \midrule
-full rank (seed) & 32 & $-0.000$ & $-0.020$ & $-0.067$ & $-0.137$ \\
-full rank (seed) & 240 & $-0.000$ & $-0.027$ & $-0.078$ & $-0.164$ \\
-rank 1 & 32 & OOM & $+0.094$ & $+0.134$ & $+0.212$ \\
-rank 1 & 240 & OOM & OOM & OOM & -- \\
+full rank (seed) & 32 & 4902 & 2481 & 1263 & 673 \\
+full rank (seed) & 64 & 9788 & 4893 & 2469 & 1276 \\
+full rank (seed) & 128 & 19559 & 9718 & 4882 & 2482 \\
+full rank (seed) & 240 & 36658 & 18159 & 9102 & 4590 \\
+rank 1 & 32 & OOM & 217 & 109 & 71 \\
+rank 1 & 64 & OOM & OOM & 219 & 122 \\
+rank 1 & 128 & OOM & OOM & OOM & 230 \\
+rank 1 & 240 & OOM & OOM & OOM & OOM \\
+rank 4 & 32 & OOM & 211 & 111 & 72 \\
+rank 4 & 64 & OOM & OOM & 214 & 119 \\
+rank 4 & 128 & OOM & OOM & OOM & 227 \\
+rank 4 & 240 & OOM & OOM & OOM & OOM \\
+rank 16 & 32 & OOM & 225 & 117 & 78 \\
+rank 16 & 64 & OOM & OOM & 241 & 136 \\
+rank 16 & 128 & OOM & OOM & OOM & 272 \\
+rank 16 & 240 & OOM & OOM & OOM & OOM \\
 \bottomrule
 \end{tabular}
 \end{table*}
