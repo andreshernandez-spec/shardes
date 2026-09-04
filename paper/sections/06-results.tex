@@ -200,8 +200,13 @@ $N{=}128$), approaching a tie from A's side without crossing. The wider
 grid also shows what two populations could not, that the low-rank advantage
 shrinks with $N$ as well, and for the same reason: raising the population
 feeds A's per-candidate cost while leaving B's model-sized transfer
-unchanged. Table~\ref{tab:tb5} in the appendix carries the wall-clock
-figures behind the earlier and smaller version of this grid.
+unchanged. Figure~\ref{fig:f9} gives the ratio between the
+placements; Table~\ref{tab:tb5} in the appendix gives the level, the faster
+placement's wall clock at every cell of the same grid, so the two together
+determine both placements everywhere. The levels are worth reading beside the
+ratios: the seed arm's update falls from 4.9\,s to 673\,ms across the eight
+devices at $N{=}32$ and still costs 4.6\,s at $N{=}240$, while the low-rank
+arms run at 71--272\,ms wherever they fit at all.
 
 \paragraph{What the memory column measures.} The hollow markers double as a
 finding, though not the one they look like. Rank 1 does not fit one 16\,GB
@@ -325,7 +330,8 @@ comparison is throughput at the same shapes, which is how both papers report \ci
 Beyond parity, the measurements locate two differences from the reference
 implementations, stated with their caveats. First, none of the references
 shards: at eight devices the instrument reaches
-$6\times$ the reference's single-chip ceiling (Table~\ref{tab:tb1b}), which
+$6\times$ the reference's single-chip ceiling
+(Tables~\ref{tab:tb1} and~\ref{tab:tb1b}), which
 is a statement about released code, not about what the papers' internal
 systems could do. Second, choices the references hardcode are measured to
 matter: the contraction placement flips winner by platform

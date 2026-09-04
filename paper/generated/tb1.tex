@@ -25,20 +25,20 @@ $d{=}2048$, $N{=}256$ & TPU v5e & 3.22M & 34k & 4.52M & 140k & OOM \\
 \centering
 \small
 \setlength{\tabcolsep}{5pt}
-\caption{Eight devices: what sharding adds. The references have no sharding path and idle seven devices: on the v5e they were run at $D{=}8$ anyway and reproduce their $D{=}1$ rows, on the A100 they were not rerun (dashes). These rows are context, not a like-for-like ratio.}
+\caption{Eight devices: what sharding adds, for the two arms that shard. Compare against Table~\ref{tab:tb1} for the same shapes at $D{=}1$. The reference implementations are omitted rather than repeated: none has a sharding path, so on the v5e their $D{=}8$ rows reproduce their $D{=}1$ rows (identical in three cells) and on the A100 they were not rerun. Their $D{=}1$ figures in Table~\ref{tab:tb1} are therefore also their eight-device figures, which is the comparison and not a like-for-like ratio.}
 \label{tab:tb1b}
-\begin{tabular}{llrrrrr}
+\begin{tabular}{llrr}
 \toprule
-shape & platform & mirrored\_lr1 & seed\_regenerated & eggroll & naive\_es & evosax \\
+shape & platform & mirrored\_lr1 & seed\_regenerated \\
 \midrule
-$d{=}512$, $N{=}256$ & A100 & 27.24M & 5.86M & -- & 5.42M & 5.46M \\
-$d{=}512$, $N{=}256$ & TPU v5e & 46.80M & 3.54M & 26.17M & 3.68M & 2.99M \\
-$d{=}512$, $N{=}1024$ & A100 & 84.46M & 9.44M & -- & 5.69M & 5.85M \\
-$d{=}512$, $N{=}1024$ & TPU v5e & 149.67M & 3.81M & 24.96M & 3.74M & 2.33M \\
-$d{=}2048$, $N{=}128$ & A100 & 6.79M & 1.87M & -- & 409k & 376k \\
-$d{=}2048$, $N{=}128$ & TPU v5e & 7.02M & 266k & 4.16M & 204k & OOM \\
-$d{=}2048$, $N{=}256$ & A100 & 10.88M & 2.06M & -- & 409k & 379k \\
-$d{=}2048$, $N{=}256$ & TPU v5e & 13.03M & 270k & 4.50M & 140k & OOM \\
+$d{=}512$, $N{=}256$ & A100 & 27.24M & 5.86M \\
+$d{=}512$, $N{=}256$ & TPU v5e & 46.80M & 3.54M \\
+$d{=}512$, $N{=}1024$ & A100 & 84.46M & 9.44M \\
+$d{=}512$, $N{=}1024$ & TPU v5e & 149.67M & 3.81M \\
+$d{=}2048$, $N{=}128$ & A100 & 6.79M & 1.87M \\
+$d{=}2048$, $N{=}128$ & TPU v5e & 7.02M & 266k \\
+$d{=}2048$, $N{=}256$ & A100 & 10.88M & 2.06M \\
+$d{=}2048$, $N{=}256$ & TPU v5e & 13.03M & 270k \\
 \bottomrule
 \end{tabular}
 \end{table*}
