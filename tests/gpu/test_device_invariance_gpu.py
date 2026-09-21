@@ -37,8 +37,11 @@ import pytest
 
 pytestmark = pytest.mark.gpu
 
-PHASE1 = pathlib.Path(__file__).resolve().parent.parent.parent / "experiments" / "phase1"
-REFERENCE = PHASE1 / "reference.json"
+#: The CPU-simulated reference and its generator. They lived under experiments/phase1
+#: until the library and the experiments were told apart (docs/14): this is the library
+#: checking itself on real hardware, not a result of the paper.
+VALIDATION = pathlib.Path(__file__).resolve().parent.parent.parent / "validation"
+REFERENCE = VALIDATION / "reference.json"
 
 #: Same platform, different device counts, or A vs B. Summation order only.
 SHARDING_RTOL = 1e-5
@@ -78,7 +81,7 @@ def highest_precision():
 @pytest.fixture(scope="module")
 def reference():
     if not REFERENCE.exists():
-        pytest.skip(f"{REFERENCE} missing; run experiments/phase1/reference.py on CPU")
+        pytest.skip(f"{REFERENCE} missing; run validation/reference.py on CPU")
     return json.loads(REFERENCE.read_text())
 
 
@@ -89,8 +92,8 @@ def _run(strategy_name: str, n_devices: int, how: str) -> np.ndarray:
     model are part of the artifact, and a second copy of them here would drift and the drift
     would look like a hardware discrepancy.
     """
-    if str(PHASE1) not in sys.path:
-        sys.path.insert(0, str(PHASE1))
+    if str(VALIDATION) not in sys.path:
+        sys.path.insert(0, str(VALIDATION))
     import reference as ref  # noqa: PLC0415
 
     return ref.one_generation(strategy_name, n_devices, how)
