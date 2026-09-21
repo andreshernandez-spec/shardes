@@ -84,3 +84,15 @@ def test_the_quickstart_runs_with_public_names_only(make_strategy):
     moved = sum(float(jnp.sum(jnp.abs(a - b)))
                 for a, b in zip(jax.tree.leaves(new.params), jax.tree.leaves(params)))
     assert moved > 0.0, "tell returned the parameters it was given"
+
+
+def test_the_changelog_leads_with_this_version():
+    """A tag is cut from `__version__`, so release notes for some other version on top
+    means either the bump or the notes were forgotten. A `.devN` build is working toward
+    the version it names, and that is the heading it needs."""
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    headings = re.findall(r"^## (\S+)", (root / "CHANGELOG.md").read_text(), flags=re.M)
+    base = re.sub(r"(\.dev|rc)\d+$", "", shardes.__version__)
+    assert headings and headings[0] == base, (headings[:1], shardes.__version__)
