@@ -32,6 +32,11 @@ SOURCES = [
 #: Presentation order: our arms, then the references.
 ARMS = ["shardes/mirrored_lr1/B", "shardes/seed_regenerated/B", "eggroll/rank1",
         "naive_es", "evosax/Open_ES"]
+#: The D=8 table drops the references. They have no sharding path, so their
+#: rows there either repeat their own D=1 rows (v5e, identical in three cells)
+#: or are dashes (A100, not rerun): 20 of 24 reference cells restated Table 1
+#: and the other 4 were empty. What sharding adds is the two arms that shard.
+SHARDED_ARMS = ["shardes/mirrored_lr1/B", "shardes/seed_regenerated/B"]
 
 
 def rows_for(paths: list[pathlib.Path], devices: int) -> dict:
@@ -92,26 +97,31 @@ def latex() -> str:
         (1, "Throughput at matched shapes, one device. Token-position evaluations per second, "
             "tokens = population $\\times$ batch $\\times$ sequence. "
             "OOM: the arm does not fit the device at this shape.", "tb1"),
-        (8, "Eight devices: what sharding adds. The references have no "
-            "sharding path and idle seven devices: on the v5e they were run "
-            "at $D{=}8$ anyway and reproduce their $D{=}1$ rows, on the A100 "
-            "they were not rerun (dashes). These rows are context, "
-            "not a like-for-like ratio.", "tb1b"),
+        (8, "Eight devices: what sharding adds, for the two arms that shard. "
+            "Compare against Table~\\ref{tab:tb1} for the same shapes at "
+            "$D{=}1$. The reference implementations are omitted rather than "
+            "repeated: none has a sharding path, so on the v5e their $D{=}8$ "
+            "rows reproduce their $D{=}1$ rows (identical in three cells) "
+            "and on the A100 they were not rerun. Their $D{=}1$ figures in "
+            "Table~\\ref{tab:tb1} are therefore also their eight-device "
+            "figures, which is the comparison and not a like-for-like ratio.",
+            "tb1b"),
     ):
         # Short arm names as headers (the caption carries the full protocol);
         # the full identifiers at \small were 78pt wider than the page.
+        arms = ARMS if devices == 1 else SHARDED_ARMS
         short = [a.split("/")[1] if a.startswith("shardes/") else a.split("/")[0]
-                 for a in ARMS]
+                 for a in arms]
         out += [f"\\begin{{table*}}", "\\centering", "\\small",
                 "\\setlength{\\tabcolsep}{5pt}",
                 f"\\caption{{{caption}}}", f"\\label{{tab:{label}}}",
-                "\\begin{tabular}{ll" + "r" * len(ARMS) + "}", "\\toprule",
+                "\\begin{tabular}{ll" + "r" * len(arms) + "}", "\\toprule",
                 "shape & platform & " + " & ".join(esc(a) for a in short) + " \\\\",
                 "\\midrule"]
         for (d, n), cell in build(devices):
             for name, vals in cell.items():
                 out.append(f"$d{{=}}{d}$, $N{{=}}{n}$ & {name} & "
-                           + " & ".join(fmt(vals[a]) for a in ARMS) + " \\\\")
+                           + " & ".join(fmt(vals[a]) for a in arms) + " \\\\")
         out += ["\\bottomrule", "\\end{tabular}", "\\end{table*}", ""]
     return "\n".join(out)
 

@@ -126,9 +126,16 @@ And the memory-pressure explanation is refuted. `--resident` moves the contracti
 than 0.31% and less than 13 microseconds at every cell, with up to 3 GiB per device
 resident and mixed signs. If occupancy were worth 1.5 ms it would have shown.
 
-So one cell is left asking a question, not two, and the surviving candidate is the other
-one this file raised: the chain measures a contraction fed by a carry while a real
-generation feeds it from `apply`. That is answerable from compiled HLO on any GPU.
+So one cell is left asking a question, not two. The surviving candidate was the other one
+this file raised, that the chain measures a contraction fed by a carry while a real
+generation feeds it from `apply`, and `../results-feed-fusion/` kills that too: making the
+contraction's weights depend on the evaluation is about 1 ms *faster* than handing them in,
+consistently, on a machine where the mechanism would have shown as roughly 7 ms.
+
+Both named explanations are therefore dead, and `iid_gaussian` d=512 N=256 stays 1.5 ms
+slower under A than the decomposition accounts for, reproducibly, on two hosts. What is
+left is whatever needs more than one device, such as an interaction between the replicated
+contraction and the fitness all-gather. There is no candidate specific enough to rent for.
 
 **The two sign misses are both near-parity cells** (`lowrank_r1` d=512 N=256 at +0.017 ms
 measured, `mirrored_lr1` d=512 N=1024 at -0.075 ms), where the model and the measurement
