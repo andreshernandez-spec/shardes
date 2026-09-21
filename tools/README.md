@@ -1,7 +1,7 @@
 # tools
 
 Scripts that check the library, as opposed to experiments that produce a result. They
-lived under `experiments/` until the two were told apart (docs/14), and they stay with
+lived with the experiments until the two were told apart (docs/14), and they stay with
 the library when the repository splits.
 
 | script | what it answers |

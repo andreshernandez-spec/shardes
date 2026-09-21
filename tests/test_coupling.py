@@ -493,7 +493,7 @@ def test_sobol_streams_get_different_direction_numbers():
     so with one shared block of direction numbers the inter-member XOR geometry is identical
     in *every* stream, and a deficiency in that one arrangement adds coherently across leaves
     instead of averaging over independent draws. Measured cost was 5% of i.i.d. cosine at 16
-    streams (experiments/phase1/sobol_b1.py).
+    streams (shardes-paper:experiments/phase1/sobol_b1.py).
 
     The property that fixes it is that different streams draw *different* direction numbers,
     so their XOR geometries genuinely differ. Checked here on the raw uniform points, before

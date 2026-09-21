@@ -25,7 +25,7 @@ def _load():
 
 
 def test_the_allow_list_covers_every_platform_this_project_targets():
-    """docs/06 routes work to CUDA GPUs (T2, T2') and to Kaggle TPU v5e-8 (T1).
+    """The runbook (shardes-paper:docs/06-benchmark-runbook.md) routes work to CUDA GPUs (T2, T2') and to Kaggle TPU v5e-8 (T1).
 
     If a tier is in the runbook but not here, the gate for that tier passes vacuously.
     """
@@ -64,7 +64,8 @@ def test_the_reference_artifact_covers_every_guarded_strategy():
 
 
 def test_the_suite_is_not_silently_empty():
-    """21 is the number docs/06 tells a human to check. Keep them agreeing."""
+    """21 is the number the runbook (shardes-paper:docs/06-benchmark-runbook.md) tells a human
+    to check. Keep them agreeing."""
     import subprocess
 
     out = subprocess.run(
@@ -74,7 +75,7 @@ def test_the_suite_is_not_silently_empty():
              "HOME": __import__("os").environ.get("HOME", "")},
     )
     assert "21 tests collected" in out.stdout, (
-        f"expected 21 collected, docs/06 quotes that number to the operator.\n{out.stdout[-800:]}"
+        f"expected 21 collected; the runbook in shardes-paper quotes that number to the operator.\n{out.stdout[-800:]}"
     )
 
 

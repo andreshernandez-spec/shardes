@@ -10,7 +10,7 @@ B. Model-size all-reduce of the partial update.
    Communication O(d), same as data-parallel SGD. Contraction split D ways.
 
 Both get implemented. The crossover in (N, d, D) is what Phase 2 measures and it is the
-strongest single result in the paper (docs/05-paper.md C1).
+strongest single result in the paper (shardes-paper:docs/05-paper.md C1).
 
 Nothing public claims "ES only all-reduces scalars" until that measurement exists. The
 claim is true for A and false for B, and both are legitimate.
@@ -142,7 +142,7 @@ def contract(
     B is the safe default because its cost is bounded by the model size, which is known,
     where A's is bounded by the population, which is the thing being scaled. That is a
     reason to default, not a measurement: the crossover in (N, d, D) is Phase 2's job
-    (docs/05-paper.md C1), and until it exists nothing here or anywhere claims one wins.
+    (shardes-paper:docs/05-paper.md C1), and until it exists nothing here or anywhere claims one wins.
     """
     if how not in BY_NAME:
         raise ValueError(f"contraction strategy must be one of {sorted(BY_NAME)}, got {how!r}")

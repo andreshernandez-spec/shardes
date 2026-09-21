@@ -1,8 +1,9 @@
 # 14 - Splitting the repository: a library, and the paper that uses it
 
-Status: plan, 2026-09-21, merged in #122. Phase 0 is done and phase 1 is under way as
-separate PRs. Four corrections made while executing it are marked "Corrected". Every fact in the first section
-was measured on main at f645e00 and the commands are given so it can be re-measured.
+Status: executed, 2026-09-21. Phases 0 to 3 are done: the paper repository is
+https://github.com/andreshernandez-spec/shardes-paper, split from this one at `bfdabd2`,
+which is tagged `monorepo-final`. What follows is the plan as it was carried out,
+including the corrections made while executing it, marked "Corrected".
 
 ## Why
 

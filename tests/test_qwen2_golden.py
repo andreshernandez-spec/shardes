@@ -6,7 +6,7 @@ truncated summary, and the transformers call *is* the committed, re-runnable scr
 
 Everything here skips unless the validation stack is present, because the suite makes
 no network calls and torch is not a dependency of anything: the checkpoint must already
-be in the HF cache (`experiments/countdown/fetch.py` downloads it) and `torch` +
+be in the HF cache (`huggingface-cli download <repo>` puts it there) and `torch` +
 `transformers` must be importable. Where the stack exists, this is the port's real
 acceptance bar; the wiring tests in `test_qwen2.py` cannot catch a transposed weight
 or a wrong rope theta, and this does.
@@ -53,7 +53,7 @@ def _checkpoint_dir(repo):
             allow_patterns=["*.safetensors", "*.json", "*.txt", "tokenizer*"],
         )
     except Exception:
-        pytest.skip(f"{repo} not in the local HF cache; run experiments/countdown/fetch.py")
+        pytest.skip(f"{repo} not in the local HF cache; run: huggingface-cli download {repo}")
 
 
 @pytest.fixture(scope="module", params=CHECKPOINTS, ids=lambda c: c[0].split("/")[-1])
