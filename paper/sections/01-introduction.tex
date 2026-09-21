@@ -93,13 +93,14 @@ validity chain just described, closed by a three-seed quality check.
     (Figure~\ref{fig:f9}).
   \item \textbf{The low-rank motivation does not invert on TPU; it
     strengthens.} At matched shapes, rank-1 perturbations cost
-    $0.05$--$0.18\times$ the dense baseline on the v5e against
+    $0.05$--$0.16\times$ the dense baseline on the v5e against
     $0.13$--$0.42\times$ on the A100, and the dense baseline is infeasible
     over most of the 16\,GB grid besides (Figure~\ref{fig:f4}).
   \item \textbf{The only synchronization shared by both contraction
     placements is the fitness gather, and the expensive part of the
-    barrier above it is not communication.} The gather costs
-    2.4--6\,$\mu$s at every measured population and device count; the
+    barrier above it is not communication.} The gather costs under
+    10\,$\mu$s at every population the grids run and about 20\,$\mu$s at
+    $N{=}2^{18}$, where it is bandwidth-bound; the
     sort behind centered-rank shaping (a property of the shaping, not of
     ES) costs 12\,ms at $N{=}2^{18}$ and is identical on 1 and 8
     devices: replicated local compute. Strategy B adds the one

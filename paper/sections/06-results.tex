@@ -67,10 +67,13 @@ ahead at $d{=}2048$ by 4--15\% on the A100 and 17--46\% on the v5e. Both
 halves match the prediction: B's
 advantage grows with per-candidate work, and A returns where that work
 becomes small; its trajectory in device count is monotone
-(Figure~\ref{fig:f2b}). The grid is $3\times2$ per platform with holes at the
-memory ceiling, which resolves regions and the sign changes between them
-rather than a contour: read a crossover here as the cell where the sign
-turns, not as a value of $N$ or $d$. The folk claim resolves as true but
+(Figure~\ref{fig:f2b}). The grid is four cells per strategy and platform
+by design, two populations at each model size (256 and 1024 at $d{=}512$,
+128 and 256 at $d{=}2048$), so the empty corners of each panel were never
+run rather than lost to memory, and $N$ and $d$ are separable only at the
+one population the two sizes share. That resolves regions and the sign
+changes between them rather than a contour: read a crossover here as the
+cell where the sign turns, not as a value of $N$ or $d$. The folk claim resolves as true but
 incomplete:
 A moves only scalars, but B all-reduces a model-sized buffer and still
 wins whenever the contraction it avoids costs more than those bytes.
@@ -303,7 +306,7 @@ EGGROLL's motivation is explicitly GPU-shaped \citep{eggroll2025}, so the natura
 a TPU, whose matrix unit makes dense multiplies comparatively cheap, would
 narrow the gap or invert it. Figure~\ref{fig:f4} answers: the rewrite pays
 \emph{more} on the v5e, not less, both in time (rank-1 at
-$0.05$--$0.18\times$ dense against $0.13$--$0.42\times$ on the A100) and
+$0.05$--$0.16\times$ dense against $0.13$--$0.42\times$ on the A100) and
 in feasibility (the 16\,GB chip renders the dense baseline infeasible over
 most of the grid, drawn as wins because feasibility is the strongest form
 of paying off). The platforms move the constants, never the ordering, at
@@ -363,17 +366,22 @@ rather than argued from source code.
 \subsection{The shaping barrier, priced}
 Section~\ref{sec:design} declared one deliberate synchronization point;
 here is its bill, measured in isolation across 84 cells on the TPU. The
-communication half is not the story anywhere in the measured range: the
-gather runs at
-2.4--6\,$\mu$s, flat in $N$ (the payload at $N{=}2^{18}$ is 1\,MB) and
-about 3\,$\mu$s dearer at $D{=}8$ than at $D{=}1$. The cost that grows is
+communication half is not the story anywhere in the measured range. Going
+from one device to eight adds 9--10\,$\mu$s to a program that has to
+consume the gathered fitnesses at populations up to a thousand, and
+26\,$\mu$s at $N{=}2^{18}$, where the payload is 1\,MiB and the gather is
+bandwidth-bound. The 16\,$\mu$s of growth between those is the same
+16\,$\mu$s the collective ladder of Table~\ref{tab:tb8} measures for that
+gather on its own, so the two instruments agree on what the transfer
+costs. The cost that grows faster is
 the sort, and it is local compute paid redundantly rather than
 communication: 12.1\,ms at $N{=}2^{18}$, identical to within $0.3\%$
 between one device and eight, because every chip sorts the same
 replicated array, about 46\,ns per member on this chip. At populations
-from the tens \citet{qiu2025} run to a few thousand, the
-whole barrier is under 60\,$\mu$s against generation times in the
-milliseconds; at the tens of thousands EGGROLL targets, the sort's
+from the tens \citet{qiu2025} run to about a thousand, the
+whole barrier is 60\,$\mu$s or less against generation times in the
+milliseconds; at four thousand it is 0.2\,ms, and at the tens of thousands
+EGGROLL targets, the sort's
 linear growth puts it near a millisecond. It becomes a leading term
 only where $N$ reaches the
 rank-$r$ regime's extremes and the per-member work is small; at
