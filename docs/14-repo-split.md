@@ -1,7 +1,7 @@
 # 14 - Splitting the repository: a library, and the paper that uses it
 
-Status: plan, 2026-09-21. Nothing here has been executed except phase 0 step 2, a
-tag, which could not wait. Every fact in the first section
+Status: plan, 2026-09-21, merged in #122. Phase 0 is done and phase 1 is under way as
+separate PRs. Four corrections made while executing it are marked "Corrected". Every fact in the first section
 was measured on main at f645e00 and the commands are given so it can be re-measured.
 
 ## Why
@@ -61,7 +61,7 @@ tests/             the five driver test files
 docs/              campaign docs, runbook, preregistrations; PLAN.md at the root
 requirements.lock  pins shardes to a tag or SHA, and everything else
 pyproject.toml     not a package to publish: the pinned dependency and the extras
-tools/provenance_audit.py
+experiments/provenance_audit.py
 ```
 
 The paper repo keeps today's directory names, so the Makefile, `\graphicspath`, and every
@@ -110,9 +110,11 @@ Three rules go with it:
   already refuses a dirty tree. A probe may run against one and the record says so.
 - A record with no `shardes` block is from the monorepo era, and its library commit is
   its `commit`. Readers treat the missing key that way and nothing is backfilled.
-- `tools/provenance_audit.py` extracts every stamped SHA from every record and checks
-  that a ref in the named repository reaches it. It runs in the paper repo's CI. It
-  would have caught `1ba0dd0` the day #116 was rebased.
+- `experiments/provenance_audit.py` extracts every stamped SHA from every record and
+  checks that a ref in the named repository reaches it. It runs in the paper repo's CI.
+  It would have caught `1ba0dd0` the day #116 was rebased. Corrected: this said
+  `tools/`, but `tools/` in the monorepo goes to the library and the audit belongs with
+  the records, so it lives where the filter will carry it.
 
 ## File mapping
 
@@ -144,30 +146,39 @@ phase 3, which is itself an ordinary commit.
 
 ### Phase 0: freeze and protect, in the monorepo
 
-1. Tag main `monorepo-final`, annotated, and push it. It is the last commit where the
-   whole project is one tree, and the README of both repos will name it.
+1. ~~Tag main `monorepo-final`.~~ Corrected: not yet. Phase 1 keeps changing the
+   monorepo, so a tag placed now would not be final. It goes on the parent of phase 3's
+   removal commit, which really is the last commit where the whole project is one tree.
+   Main's history is kept either way, so nothing needs protecting in the meantime.
 2. Tag `provenance/1ba0dd0` and push it, so the orphaned commit behind 34 records can
    never be collected. **Done 2026-09-21**, ahead of the rest: the only things keeping
    that commit alive were a local reflog with about nine days left on it and GitHub's
    retention of unreachable objects, and neither is a promise.
-3. Add `tools/provenance_audit.py` and run it. Expected output today: 46 SHAs, all
-   reachable once step 2 is done, and one foreign SHA under `hyperscalees`.
+3. Add `experiments/provenance_audit.py` and run it. **Done**: 2,727 files, 46 own
+   commits in 2,781 stamps, all reachable, `1ba0dd0` reported as kept by its tag, and one
+   foreign commit under `hyperscalees` listed as unchecked. Its tests include a repo
+   built to fail it.
 4. Optional and local: `git gc --prune=now` in `es/` drops the 2 GB blob.
 
 ### Phase 1: make the library stand alone while still inside the monorepo
 
-Six small PRs to main. The experiments keep running throughout, which is the point of
+Five small PRs to main. The experiments keep running throughout, which is the point of
 doing this before moving anything.
 
 1. **Public surface.** `shardes/__init__.py` exports `ShardedES`, `IIDGaussian`,
    `SeedRegenerated`, `LowRank`, the `Mirrored` wrapper, `make_mesh`, and `__version__`. Deep imports keep working, since the
    paper's 90 scripts use them. Version becomes `0.1.0.dev0`, single-sourced. Add
    `py.typed`.
-2. **Extras.** Add `models = ["safetensors", "huggingface_hub"]`. Leave `experiments`
-   for now.
-3. **No path hacks.** Delete the eight `sys.path.insert(... "src")` lines. Gate: the
-   driver tests and `--smoke` or `--dry-run` of `run.py`, `e17_systems.py`, `m4.py` and
-   `feed_fusion.py` pass with the library reachable only through its install.
+2. **Extras.** Add `models = ["safetensors"]`. Corrected: this listed
+   `huggingface_hub` too, but nothing in `src/` imports it; the experiments do, and
+   their extra moves with them. Leave `experiments` for now.
+3. ~~**No path hacks.**~~ Corrected: moved to phase 2. In a worktree those eight
+   `sys.path.insert(... "src")` lines are what makes a driver import its own checkout
+   instead of whichever one the editable install points at, the trap `conftest.py`
+   documents. Deleting them while the library is still next door trades a visible hack
+   for a silent wrong import. In the paper repo there is no `src/` for them to find, so
+   they go in its first commit, where the verification gate proves the drivers run
+   against the installed library.
 4. **Two-sided provenance.** Extend `capture_env` as above. While both halves share a
    tree the two commits must be equal, and a test asserts it.
 5. **Path-clean moves.** `experiments/phase1` to `validation/`, the four tools to
@@ -181,7 +192,8 @@ doing this before moving anything.
 ### Phase 2: create the paper repo, touching nothing in the monorepo
 
 1. Fresh clone, then `git filter-repo` keeping `paper/`, `experiments/`, the paper-side
-   docs, `PLAN.md` and the driver tests, per the mapping table.
+   docs, `PLAN.md` and the driver tests, per the mapping table. First commit on top:
+   delete the eight `sys.path.insert(... "src")` lines (see phase 1 step 3).
 2. Add to the new repo: `pyproject.toml` with `shardes @ git+https://...@<SHA>` and
    extras for plotting, the HF stack and GRPO; `requirements.lock`; a README that opens
    with what the repo is and the monorepo-era provenance rule; `CLAUDE.md`; a test
@@ -201,7 +213,9 @@ doing this before moving anything.
 
 ### Phase 3: remove what moved from the library repo
 
-1. One PR: `git rm -r experiments paper` and the paper-side docs, tests and `PLAN.md`.
+1. Tag main `monorepo-final`, annotated, and push it: the parent of what follows.
+   Then one PR: `git rm -r experiments paper` and the paper-side docs, tests and
+   `PLAN.md`.
    Rewrite the README for a user. Trim `CLAUDE.md` to the library's scope. Drop the
    `experiments` extra. Fix any docstring in `src/` that cites a doc that moved; a small
    test that every `docs/*.md` path named in `src/` exists keeps it fixed.
@@ -282,6 +296,6 @@ exists. It does not move results out of git: they are 17 MB.
 
 ## Effort
 
-Phase 0 is one PR and an hour. Phase 1 is six small PRs, about a day. Phase 2 is half a
+Phase 0 is one PR and an hour. Phase 1 is five small PRs, about a day. Phase 2 is half a
 day plus one free Kaggle run. Phase 3 is one PR on each side. Phases 4 and 5 follow at
 leisure. No paid compute anywhere.
