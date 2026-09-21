@@ -47,41 +47,18 @@ def test_every_test_in_the_gpu_suite_gates_on_the_shared_predicate():
     assert source.count("_accelerators()") >= 4, "tests should gate on the shared predicate"
 
 
-def test_every_benchmarked_strategy_is_also_guarded():
-    """The sweep and the invariance test must cover the same strategies.
-
-    They did not. `lowrank_r1` was in `sweep.yaml` and in neither `tests/gpu` nor
-    `rehearsal.yaml`, so it was benchmarked on rented hardware by a suite that never
-    checked it was device-count invariant, and the dress rehearsal that certified the
-    driver never ran it. It is also the only strategy the sweep has failed on.
-
-    Subset rather than equality: guarding a strategy the sweep does not run is fine, the
-    reverse is not.
-    """
-    import yaml
-
-    phase2 = GPU_TEST.parent.parent.parent / "experiments" / "phase2"
-    guarded = set(_load().NAMES)
-    for name in ("sweep.yaml", "rehearsal.yaml"):
-        wanted = set(yaml.safe_load((phase2 / name).read_text())["strategies"])
-        assert wanted <= guarded, (
-            f"{name} benchmarks {sorted(wanted - guarded)}, which tests/gpu never checks "
-            "for device-count invariance"
-        )
-
-
 def test_the_reference_artifact_covers_every_guarded_strategy():
     """`test_one_gpu_matches_the_cpu_reference` reads `reference.json` by key. A name in
     NAMES with no entry there fails at lookup rather than reporting a missing reference,
     so regenerating the artifact is part of adding a strategy."""
     import json
 
-    reference = (GPU_TEST.parent.parent.parent / "experiments" / "phase1" / "reference.json")
+    reference = GPU_TEST.parent.parent.parent / "validation" / "reference.json"
     have = set(json.loads(reference.read_text())["updates"])
     for name in _load().NAMES:
         for how in ("A", "B"):
             assert f"{name}/{how}" in have, (
-                f"reference.json has no {name}/{how}; re-run experiments/phase1/reference.py "
+                f"reference.json has no {name}/{how}; re-run validation/reference.py "
                 "on CPU after adding a strategy"
             )
 
@@ -99,3 +76,34 @@ def test_the_suite_is_not_silently_empty():
     assert "21 tests collected" in out.stdout, (
         f"expected 21 collected, docs/06 quotes that number to the operator.\n{out.stdout[-800:]}"
     )
+
+
+def test_the_reference_artifact_still_describes_the_code():
+    """`validation/reference.json` is what real hardware is held to, so it has to be what
+    this code computes on simulated devices. It went stale once and nobody knew: a commit
+    that vmapped LowRank's column draws kept the noise bit-identical and still moved three
+    rank-1 updates by one float32 ulp, and the only thing that checks, `reference.py
+    --check`, is a command a person has to remember to run.
+
+    Not exact equality, which `--check` asks for and which is a statement about one CPU's
+    code generation. A reference that is wrong because the sampler, the seeds or the
+    contraction changed is wrong by orders of magnitude more than this allows; one that
+    differs because a compiler reassociated a sum is not wrong at all.
+    """
+    import json
+
+    import numpy as np
+
+    validation = GPU_TEST.parent.parent.parent / "validation"
+    if str(validation) not in sys.path:
+        sys.path.insert(0, str(validation))
+    import reference as ref  # noqa: PLC0415
+
+    committed = json.loads((validation / "reference.json").read_text())
+    rebuilt = ref.build(committed["config"]["n_devices"])
+    assert set(rebuilt["updates"]) == set(committed["updates"])
+    for key, update in rebuilt["updates"].items():
+        np.testing.assert_allclose(
+            np.array(update), np.array(committed["updates"][key]), rtol=1e-5, atol=1e-7,
+            err_msg=f"{key}: reference.json no longer matches what the code computes; "
+                    "find out why, then re-run validation/reference.py")

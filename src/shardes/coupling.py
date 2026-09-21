@@ -297,7 +297,7 @@ class ScrambledSobol:
         restating it. That is not a stylistic preference: the first version of
         `test_sobol_streams_get_different_direction_numbers` reimplemented this selection
         inline, so it compared its own copy against itself and a mutation that made every
-        stream draw block 0 survived unnoticed. `experiments/mutation.py` found it.
+        stream draw block 0 survived unnoticed. `tools/mutation.py` found it.
         """
         v = jnp.asarray(_direction_numbers(self._span(d)))
         if self.scramble and self.blocks > 1:

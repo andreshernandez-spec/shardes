@@ -34,4 +34,4 @@ Two operational notes, both with evidence here:
   regenerates the factors from seeds, and LowRank.sample unrolled a Python
   loop over the 2r column keys into that graph, so compile time scaled with
   rank. Fixed by vmapping the coupling over the column keys (bit-identical
-  noise); `experiments/lowrank_compile_diag.py` has the before/after numbers.
+  noise); `tools/lowrank_compile_diag.py` has the before/after numbers.

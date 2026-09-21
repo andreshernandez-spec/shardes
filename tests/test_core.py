@@ -545,7 +545,7 @@ def test_the_step_does_not_depend_on_sigma():
     becomes proportional to sigma instead — at sigma=0.01 that is a 100x smaller update, which
     still descends and still shards identically, so every other test in this file passes.
 
-    Found by experiments/mutation.py: core/drop-sigma-from-tell survived the whole suite.
+    Found by tools/mutation.py: core/drop-sigma-from-tell survived the whole suite.
     Phase 0 pins the same factor inside `estimator.estimate`, but `tell` carries its own copy
     and a duplicated constant needs its own test.
     """
