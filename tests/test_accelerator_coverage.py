@@ -76,3 +76,34 @@ def test_the_suite_is_not_silently_empty():
     assert "21 tests collected" in out.stdout, (
         f"expected 21 collected, docs/06 quotes that number to the operator.\n{out.stdout[-800:]}"
     )
+
+
+def test_the_reference_artifact_still_describes_the_code():
+    """`validation/reference.json` is what real hardware is held to, so it has to be what
+    this code computes on simulated devices. It went stale once and nobody knew: a commit
+    that vmapped LowRank's column draws kept the noise bit-identical and still moved three
+    rank-1 updates by one float32 ulp, and the only thing that checks, `reference.py
+    --check`, is a command a person has to remember to run.
+
+    Not exact equality, which `--check` asks for and which is a statement about one CPU's
+    code generation. A reference that is wrong because the sampler, the seeds or the
+    contraction changed is wrong by orders of magnitude more than this allows; one that
+    differs because a compiler reassociated a sum is not wrong at all.
+    """
+    import json
+
+    import numpy as np
+
+    validation = GPU_TEST.parent.parent.parent / "validation"
+    if str(validation) not in sys.path:
+        sys.path.insert(0, str(validation))
+    import reference as ref  # noqa: PLC0415
+
+    committed = json.loads((validation / "reference.json").read_text())
+    rebuilt = ref.build(committed["config"]["n_devices"])
+    assert set(rebuilt["updates"]) == set(committed["updates"])
+    for key, update in rebuilt["updates"].items():
+        np.testing.assert_allclose(
+            np.array(update), np.array(committed["updates"][key]), rtol=1e-5, atol=1e-7,
+            err_msg=f"{key}: reference.json no longer matches what the code computes; "
+                    "find out why, then re-run validation/reference.py")
