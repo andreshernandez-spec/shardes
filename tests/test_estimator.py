@@ -259,7 +259,7 @@ def assert_improves_until_saturated(cos):
 
     So improvement is required only while there is headroom to improve into, and above that
     the requirement is that nothing falls back. Same class of problem as
-    `experiments/phase2/noisefloor.py`: an assertion below the resolution of float32 is
+    `shardes-paper:experiments/phase2/noisefloor.py`: an assertion below the resolution of float32 is
     measuring the rounding, not the thing.
     """
     for a, b in zip(cos, cos[1:]):

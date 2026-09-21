@@ -11,8 +11,8 @@ simulated-device shortcut every sharding test relies on must not have lied.
   (`test_the_reference_artifact_still_describes_the_code`), so it cannot go stale
   unnoticed. It did once, by one float32 ulp, for a month.
 - `kaggle/t2prime/` runs `tests/gpu` on Kaggle's two T4s. Push it with the Kaggle CLI, or
-  with the runner that lives with the experiments:
-  `python experiments/phase1/kaggle/run.py validation/kaggle/t2prime`.
+  with the runner that lives with the experiments
+  (`shardes-paper:experiments/phase1/kaggle/run.py`, which takes any kernel directory).
 
 Regenerate the reference on CPU after adding a strategy, and only after finding out why
 the guard failed if it did.

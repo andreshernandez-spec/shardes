@@ -6,6 +6,6 @@ what "good" means (docs/01-phase0-estimator-harness.md C0.4).
 
 Three, in increasing realism: quadratic, mlp, transformer_block.
 
-These are library code rather than experiment code because both tests/ and experiments/
-import them.
+These are library code rather than experiment code because both tests/ and the experiments
+(the shardes-paper repository) import them.
 """

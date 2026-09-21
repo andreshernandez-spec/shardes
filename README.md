@@ -2,208 +2,170 @@
 
 Sharded evolution strategies for JAX.
 
-> **Status: pre-alpha. Phases 0 to 2 implemented; Gate G2 open on one criterion.** The
-> estimator harness, the perturbation strategies, the couplings, the shaping, the sharded
-> `ask`/`tell` core, both contraction strategies and a MuJoCo Playground task adapter are
-> implemented and tested (753 tests, CPU, two tiers: see `docs/conventions.md`).
->
-> Device-count invariance, the property everything else is built to permit, holds on 1, 2, 4
-> and 8 real A100s as well as on simulated devices. Six configurations at `d=512` are
-> excepted and named: their populations are packed inside float32 resolution, so an ulp of
-> arithmetic reorders them and the rank shaping turns that into a different update. That is a
-> property of those configurations rather than of the contraction, and `check.py` refuses to
-> quote a scaling number from them without saying so.
->
-> **Phase 2 is measured, twice.** The sweep of 2026-08-06 found strong scaling at `1/D`, which
-> turned out to be a defect rather than a result: the evaluation was replicated on every
-> device. After the fix, parallel efficiency at `D=8` is 0.313 to 0.815 and weak-scaling
-> throughput is a median 5.69x of one device against an ideal 8x. `docs/03` keeps both runs,
-> the second below the first, because the pair is the evidence that the fix did anything.
->
-> **G2 is open on criterion 3**: no comparison against an external reference has been run
-> yet. Nothing here is a claim about performance relative to EGGROLL or evosax.
+Evolution strategies train a model without gradients: perturb the weights, score each
+perturbed copy, move toward the copies that scored well. `shardes` is an `ask` / `apply` /
+`tell` core that splits that population across devices, with the perturbation scheme as a
+pluggable strategy. The two 2025 results that made ES work at language-model scale,
+full-rank noise regenerated from seeds ([Qiu et al.](https://arxiv.org/abs/2509.24372))
+and rank-`r` factored noise ([EGGROLL](https://arxiv.org/abs/2511.16652)), are one
+constructor argument apart here, on the same mesh, shaping and update.
 
----
+> **Status: 0.1, pre-alpha.** The API can still change. What is here is tested, on CPU with
+> eight simulated devices, and device-count invariance has been checked on real hardware
+> too: the GPU suite on two T4s, and one device against eight A100s on a 0.5B-parameter
+> model.
 
-## The idea
+## Install
 
-Two 2025 papers made evolution strategies work at LLM scale using **incompatible
-perturbation schemes**: [Qiu et al.](https://arxiv.org/abs/2509.24372) (full-rank
-perturbations regenerated from seeds, population 30) and
-[Sarkar et al. / EGGROLL](https://arxiv.org/abs/2511.16652) (rank-`r` factored
-perturbations that are never materialized, population up to 262,144).
+```sh
+pip install "shardes @ git+https://github.com/andreshernandez-spec/shardes"
+```
 
-There is no library that can express both. The incumbent, `evosax`, flattens every solution
-to one dense vector via `ravel_pytree`, which forecloses per-matrix structured
-perturbation, parameter sharding, and pytree-native ES simultaneously — and it contains no
-sharding code at all.
+Python 3.12 or newer, JAX 0.11 or newer. On an accelerator, install JAX for it first
+(`pip install -U "jax[cuda12]"` or `"jax[tpu]"`). The core needs only jax, numpy and scipy.
+Extras: `shardes[models]` for loading Qwen2.5 checkpoints, `shardes[tasks]` for the MuJoCo
+Playground adapter.
 
-`shardes` is an `ask`/`eval`/`tell` core where the population and the rollouts are sharded,
-solutions are **never globally flattened**, and the perturbation scheme is a pluggable
-strategy — so both published algorithms are a two-line diff apart.
+## Quickstart
 
-The distribution state is *replicated*, deliberately. An earlier version of this claimed it
-was sharded; that is not supportable for any ES that keeps parameters replicated, which this
-one does on purpose, because every device holding the model is the advantage ES has over
-gradient training. `docs/02-phase1-sharded-core.md` C1.4 has the full reasoning and what
-shipped instead.
+This is `examples/quickstart.py`, and the test suite runs it. It needs no accelerator:
+eight simulated CPU devices stand in, and the sharding is the same program either way.
 
----
+```python
+import os
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"   # 8 devices on a CPU
 
-## What Phase 0 found
+import jax
+import shardes
+from shardes.problems import transformer_block       # a small model that uses the seams
 
-The first decision gate asked whether **coupled sampling** (orthogonalized or
-low-discrepancy perturbations, instead of i.i.d. Gaussian) improves ES gradient estimates
-once low-rank perturbation drops the sampling dimension far enough that `N > d_eff`.
+key = jax.random.key(0)
+params = transformer_block.init(key, d_model=64)
+batch = transformer_block.make_batch(jax.random.fold_in(key, 1), d_model=64, batch=8, seq=32)
 
-**It does not, and the answer is a clean negative.** Across 456 configurations at `R = 30`
-replicates each, `orthogonal_hd` coupling matched the uncoupled baseline to within 1% at
-every population, sigma and rank, out to `N/d_eff = 42.7`. The measurement is not a failed
-treatment: a 512-member coupled block is an *exactly* orthonormal basis of `ℝ⁵¹²` where the
-i.i.d. block has off-diagonal Gram entries up to 0.215. The designs are maximally different
-and the estimator cannot tell them apart.
+mesh = shardes.make_mesh()                           # every visible device, one "pop" axis
+es = shardes.ShardedES(shardes.Mirrored(shardes.LowRank(r=1)),
+                       n=256, sigma=1e-2, lr=1e-2, mesh=mesh)
+state = es.init(key, params)
 
-The reason is visible in the figure: estimator cosine tracks `√(N/d_ambient)` — every curve
-is slope ½ on log–log, and at full rank with `N = 16384` the prediction is 0.1021 against a
-measured 0.1013. If quality is fixed by how many members you draw and how large the model
-is, there is nothing left for *how you choose them* to influence.
+@jax.jit
+def generation(state):
+    pert, state = es.ask(state)                      # a Perturbation, never a batch of params
+    fitness = es.apply(transformer_block.loss, state, pert)(batch)   # one loss per member
+    return es.tell(state, pert, fitness), fitness
 
-**This cost ~13 GPU-hours and saved a planned month.** Phase 3 (coupling at scale) is
-dropped. The strategy abstraction stays, justified by there being two real algorithms rather
-than by sample design, and stays thin — coupling is a constructor argument the sharded core
-never sees.
+for step in range(30):
+    state, fitness = generation(state)
+    if step % 10 == 0 or step == 29:
+        print(f"step {step:2d}  mean loss {float(fitness.mean()):.4f}")
+```
 
-What this does **not** show: that coupling cannot help an *optimizer*. Estimator MSE is not
-a proxy for task performance — parameter-space noise is doing optimization work as Gaussian
-smoothing, so a better-conditioned estimate can be a worse smoother, and the classical
-QMC-for-ES results are strongest on multimodal objectives that a single transformer block is
-not. That question is open (`docs/BACKLOG.md` B3).
-
-Full answer, evidence and the incidental findings (mirroring is not a free win; its sign
-flips with sigma) are in `docs/01-phase0-estimator-harness.md`. Reproduce with
-`cd experiments/phase0 && python run.py && python plot.py && python gate.py`.
-
----
+Jit the whole generation rather than stepping it eagerly; that is what lets JAX settle
+device placement at trace time. `tell` descends, so hand it a loss, or the negative of a
+reward.
 
 ## Both published algorithms, one argument apart
 
-The architectural claim, made concrete. These differ in the `strategy=` line and nothing
-else — same core, same shaping, same sharding, same contraction:
-
 ```python
-from jax import make_mesh
-from shardes import sharding
-from shardes.core import ShardedES
-from shardes.strategies.lowrank import LowRank
-from shardes.strategies.mirrored import Mirrored
-from shardes.strategies.seed_regenerated import SeedRegenerated
+# Qiu et al. 2025: full-rank noise, regenerated from seeds, small population
+shardes.ShardedES(shardes.Mirrored(shardes.SeedRegenerated()), n=30, ...)
 
-mesh = sharding.make_mesh()          # every visible device, one "pop" axis
-
-# Qiu et al. 2025 — full-rank perturbations regenerated from seeds, small population
-qiu = ShardedES(strategy=Mirrored(SeedRegenerated()), n=30, sigma=0.01, lr=0.05, mesh=mesh)
-
-# EGGROLL (Sarkar et al. 2025) — rank-1 factored, never materialized, huge population
-eggroll = ShardedES(strategy=Mirrored(LowRank(r=1)), n=262_144, sigma=0.01, lr=0.05, mesh=mesh)
+# EGGROLL (Sarkar et al. 2025): rank-1 factors, never materialized, huge population
+shardes.ShardedES(shardes.Mirrored(shardes.LowRank(r=1)), n=262_144, ...)
 ```
 
-Driving either one is the same three calls. Jit the whole generation rather than stepping
-it eagerly — that is what lets JAX settle device placement at trace time:
+| strategy | the perturbation | what it costs |
+|---|---|---|
+| `IIDGaussian()` | full rank, materialized | memory: `n` copies of the noise |
+| `SeedRegenerated(chunk=1)` | full rank, regenerated from each member's seed | compute: every perturbation is drawn twice. `chunk` trades memory for speed |
+| `LowRank(r)` | rank `r`, two thin factors per matrix, product never formed | the noise is not full rank |
+| `Mirrored(inner)` | antithetic pairs around any of the above | halves the distinct directions |
 
-```python
-state = eggroll.init(key, params)
+`ask` returns a `Perturbation`, not a batch of parameter trees, and the rest follows from
+that: under `LowRank` it is a pair of factors, under `SeedRegenerated` a key and member
+ids. Shaping is `centered_ranks` by default (`shardes.shaping` has `centered`,
+`group_relative` and `none`).
 
-@jax.jit
-def generation(state, batch):
-    pert, state = eggroll.ask(state)          # a Perturbation, never materialized params
-    fitness = eggroll.apply(model, state, pert)(batch)
-    return eggroll.tell(state, pert, fitness)
+## Where the update is assembled: `how="A"` or `how="B"`
+
+After evaluation each device holds the fitnesses of its own members, and the update
+`sum_i w_i eps_i` has to be put together. There are two placements, and which is faster
+depends on the perturbation and on the interconnect.
+
+- **`how="B"`, the default.** Each device contracts its own members, then the partial
+  updates are all-reduced. That moves a buffer the size of the model.
+- **`how="A"`.** Every device gathers the scalar fitnesses and contracts the whole
+  population itself. Only scalars cross the wire, and the contraction is repeated on
+  every device.
+
+Measured on an 8x A100 node, a TPU v5e-8 and two A100 nodes over sockets: on one host
+with a fast interconnect, **B wins for full-rank and seed-regenerated perturbations, and A
+wins for low-rank perturbations on large models**, by more on the TPU. Across a slow host
+boundary A wins more widely. The measurements, and the paper they belong to, are in
+[shardes-paper](https://github.com/andreshernandez-spec/shardes-paper).
+
+## Your own model
+
+A low-rank perturbation is never materialized, so a perturbed weight is not an array: it
+is a base matrix plus two factors. A model therefore routes its parameterized matrix
+multiplies and embedding lookups through two seams, `shardes.nn.dense(x, w)` and
+`shardes.nn.embed(table, ids)`, which do the right thing for a plain array and for a
+structured weight alike. Direct arithmetic on a structured weight raises rather than
+silently densifying. `shardes.problems.transformer_block` is the small worked example and
+`shardes.problems.qwen2` is Qwen2.5 ported this way.
+`shardes.check.check_model(model, params, batch)` finds, in a second on CPU, every weight a
+model reaches without a seam, instead of the strategy raising minutes into a run.
+
+## What it guarantees
+
+- **Device count cannot change the result.** Member `i`'s noise derives from `i` alone,
+  so the update contracted on one device and on eight agrees to floating-point
+  tolerance. This is tested on simulated devices and checked on real ones: `tests/gpu`
+  on two T4s (`validation/`), and on A100s the update for Qwen2.5-0.5B computed on one
+  device and on eight agrees to 6.3e-6 relative error
+  (`shardes-paper:experiments/countdown/results/c6d-a100x8-2026-08-18`).
+- **The low-rank path never forms an `(n, m, n)` array.** A test inspects the traced
+  program to make sure.
+- **Fitness is float32 or wider.** In bfloat16 a population's losses collapse to a
+  handful of ties and rank shaping of ties is noise, so `tell` refuses rather than casts.
+- **No global flattening.** Parameters keep their shapes from sampling to update, which
+  is what makes per-matrix structure expressible at all.
+
+## Development
+
+```sh
+pip install -e ".[dev]"
+pytest --fast        # the inner loop
+pytest               # everything, including the statistical tier
 ```
 
-`ask` returning a `Perturbation` rather than a batch of parameter trees is the decision the
-rest follows from: under `LowRank` the thing it returns is a pair of factors whose product
-is never formed, and under `SeedRegenerated` it is a key and a set of member ids and no
-noise at all. A library that hands back materialized trees cannot express either.
+The suite pins JAX to the CPU and simulates eight devices, so it needs no accelerator and
+no network. `tools/` holds scripts that check the library itself (mutation testing,
+compile-cost diagnostics, two probes behind design decisions), `validation/` the
+real-hardware invariance check, and `docs/` the design, conventions and diagnoses.
+CI runs the suite on Python 3.12 and 3.13 and installs the built wheel into a clean
+environment.
 
-`tell` **descends** on what it is given, so a reward gets negated first.
+## The paper and the experiments
 
-One constraint, and it is the first thing you will hit: **the model's matmuls go through
-`shardes.nn.dense`**, not `x @ W.T`. `LowRank` perturbs by substituting a structured weight
-into the params tree, and a model that does arithmetic on that weight directly raises rather
-than silently computing something else. That single indirection is what makes low-rank
-perturbation expressible without a jaxpr interpreter, and it is the cost of it:
+This library is the instrument of *Update-contraction placement in sharded evolution
+strategies on GPUs and TPUs*. The manuscript, every experiment and every result live in
+[shardes-paper](https://github.com/andreshernandez-spec/shardes-paper), which installs
+this library at a pinned commit.
 
-```python
-from shardes.nn import dense
-
-def model(params, x):
-    h = jnp.tanh(dense(x, params["w1"]) + params["b1"])
-    return jnp.sum(dense(h, params["w2"]))          # not h @ params["w2"].T
-```
-
-Embeddings need the same treatment through `embed`, because an embedding is a *gather*
-rather than a matmul and `dense` cannot see it:
-
-```python
-from shardes.nn import dense, embed
-
-h = jnp.mean(embed(params["emb"], token_ids), axis=1)   # not params["emb"][token_ids]
-logits = dense(h, params["out"])
-```
-
-That is what makes embedding tables expressible under low-rank perturbation at all —
-`(E + sAB^T)[ids] = E[ids] + sA[ids]B^T`, so the table is never formed. EGGROLL's reference
-implementation raises `NotImplementedError` on this path (`docs/BACKLOG.md` B4).
-
-`IIDGaussian` and `SeedRegenerated` substitute ordinary arrays and take the array branch of
-both seams, so this only binds if you want the low-rank path.
-
----
-
-## Where to start
-
-| File | What's in it |
-|---|---|
-| **`PLAN.md`** | Phases, decision gates, timeline, risk register. **Read this first.** |
-| `CLAUDE.md` | Instructions for Claude Code sessions; ground rules and invariants |
-| `docs/00-context.md` | The two papers, the ecosystem gap, prior art on coupling/QMC for ES |
-| `docs/01-phase0-estimator-harness.md` | Phase 0 — measure estimator quality against an exact oracle (1 GPU) |
-| `docs/02-phase1-sharded-core.md` | Phase 1 — the library (mostly CPU-simulated devices) |
-| `docs/03-phase2-benchmarks.md` | Phase 2 — scaling benchmarks (8 GPUs, 4–6 h) |
-| `docs/04-phase3-coupling.md` | Phase 3 — coupled sampling. **Dropped: G0 came back no.** Kept as the record of what was predicted |
-| `docs/BACKLOG.md` | Deferred questions with what would settle each, including why Sobol degraded |
-| `docs/05-paper.md` | The paper: claims, experiment matrix, figures, venue |
-| `docs/06-benchmark-runbook.md` | Running the benchmarks on Kaggle, TRC, and GCP |
-| `docs/compute.md` | Development-time compute; superseded for benchmarking by `06` |
-| `docs/conventions.md` | Code, test, numerics, and benchmarking conventions |
-
----
-
-## Quick start for development
-
-```bash
-pip install -U "jax[cuda12]"             # drop [cuda12] for CPU-only
-pip install -e ".[dev,experiments]"      # the suite covers the experiment drivers too
-
-# conftest pins JAX_PLATFORMS=cpu and 8 simulated devices, so this is just:
-pytest              # everything, ~2 min: includes the statistical tier
-pytest --fast       # inner loop, ~1 min: structural checks only
-```
-
-The header line reports the device count. If it says anything other than
-`8 device(s), platform cpu`, stop: with a CUDA jaxlib installed jax defaults to the GPU and
-reports one device, and every sharding test then passes without testing sharding.
-
-Roughly 90% of the work needs no GPU. See `docs/compute.md` before renting anything.
-
----
+Until the tag `monorepo-final` the two were one repository, and that history is kept here
+on purpose: result records from that period cite commits of this repository, and
+checking one out gives the driver, its config and the library together, as run.
 
 ## Non-goals
 
-- Multi-node. Single-node multi-GPU covers every gate in the plan.
-- Sharded *parameters*. ES's advantage is that every device holds the model and runs
-  inference independently; sharding parameters reintroduces the communication ES avoids.
-- A general-purpose replacement for evosax. This targets the sharded, large-population,
-  structured-perturbation regime specifically.
+- Sharded *parameters*. Every device holds the model and evaluates independently;
+  sharding parameters would bring back the communication ES avoids.
+- A general replacement for evosax. This targets the sharded, large-population,
+  structured-perturbation regime.
 - Reimplementing either paper's full experimental setup. The papers stand; this is
   infrastructure.
+
+## License
+
+Apache 2.0.

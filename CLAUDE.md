@@ -54,13 +54,18 @@ version instead.
 ### 2. Every number in a doc has a script behind it
 
 No claim of the form "X is Y× faster" or "error is 1e-15" enters any markdown file without
-a committed, re-runnable script in `experiments/` and a recorded environment (GPU model,
-JAX version, commit SHA). If a number can't be reproduced from a clean checkout, delete it.
+a committed, re-runnable script and a recorded environment (GPU model, JAX version, commit
+SHA). Scripts that check the library are in `tools/`; the experiments and the paper are in
+the [shardes-paper](https://github.com/andreshernandez-spec/shardes-paper) repository, and a
+number that comes from there is cited as `shardes-paper:<path>`. If a number can't be
+reproduced from a clean checkout, delete it.
 
-### 3. Don't skip the decision gates
+### 3. Don't build what a measurement already ruled out
 
-`PLAN.md` defines four phases with explicit exit criteria. Phase 3 is *conditional* on a
-Phase 0 result. Do not build Phase 3 machinery speculatively because it seems interesting.
+Phase 3, coupled sampling at scale, was conditional on a Phase 0 result and that result
+came back no (`docs/04-phase3-coupling.md`, `docs/01`). Do not build it speculatively
+because it seems interesting. The research program's phases and gates are in
+`shardes-paper:PLAN.md`.
 
 ---
 
@@ -68,24 +73,23 @@ Phase 0 result. Do not build Phase 3 machinery speculatively because it seems in
 
 ```
 shardes/
-├── README.md              the pitch, the layout, the non-goals
+├── README.md              for a user: install, quickstart, guarantees
 ├── CLAUDE.md              this file
-├── PLAN.md                phases, gates, timeline, risk register
-├── pyproject.toml         must stay pip-installable from a git SHA; Kaggle depends on it
-├── docs/
-│   ├── 00-context.md      the papers, the gap, prior art
-│   ├── 01-phase0-estimator-harness.md
-│   ├── 02-phase1-sharded-core.md
-│   ├── 03-phase2-benchmarks.md
-│   ├── 04-phase3-coupling.md
-│   ├── 05-paper.md        claims, experiment matrix, figures, venue
-│   ├── 06-benchmark-runbook.md   Kaggle / TRC / GCP execution mechanics
-│   ├── compute.md         dev-time GPU access (superseded for benchmarks by 06)
-│   └── conventions.md     code/test/numerics conventions
+├── pyproject.toml         must stay pip-installable from a git SHA; shardes-paper pins one
 ├── src/shardes/           the library
-├── tests/                 pytest; fast, CPU-only, no network
-└── experiments/           throwaway-ish scripts that produce the plots and tables
+├── tests/                 pytest; CPU-only, no network; tests/gpu needs real accelerators
+├── examples/              what the README shows; the suite runs them
+├── tools/                 scripts that check the library, not experiments
+├── validation/            the real-hardware invariance check (gate G1)
+└── docs/                  design (02), context (00), the estimator study (01), conventions,
+                           diagnoses, proposals, and the record of the split (14)
 ```
+
+The experiments, the results, the paper and the campaign docs are in
+[shardes-paper](https://github.com/andreshernandez-spec/shardes-paper), which installs this
+library at a pinned commit. Until the tag `monorepo-final` they were here, and that history
+is kept on purpose: records from that period cite commits of this repository. Never rewrite
+it, and never delete a `provenance/*` tag: each one keeps a cited commit reachable.
 
 `tests/` runs on CPU, no GPU, no network, in **two tiers**: `pytest --fast` is the inner
 loop while editing, `pytest` is everything and is the default. Budgets and the reasoning
@@ -123,7 +127,7 @@ number predated the code and was about to cost `R` in the unbiasedness tests.
 3. **The perturbation is never materialized by the low-rank path.** If a profile shows an
    `(n_members, m, n)` array being allocated under `LowRank`, the implementation is wrong.
 4. **Communication is measured, not assumed.** Every `psum`/`all_gather` in the update path
-   is accounted for in `docs/03-phase2-benchmarks.md`. See the note there about the two
+   is accounted for in `shardes-paper:docs/03-phase2-benchmarks.md`. See the note there about the two
    contraction strategies — the "ES only all-reduces scalars" claim is true only for one
    of them.
 
@@ -136,5 +140,7 @@ number predated the code and was about to cost `R` in the unbiasedness tests.
   `docs/` file with the tradeoff, and flag it for Andres rather than picking silently.
 - Numerical code: assert against an exact oracle where one exists (see
   `docs/conventions.md` for the list — e.g. the FWHT has one that ships in JAX).
-- Don't add a benchmark configuration mid-run. Benchmark configs are committed before the
-  run and cited by SHA in the results.
+- The names in `shardes.__all__` are the supported surface and `tests/test_public_api.py`
+  pins them. Changing one is a version bump and a line in the release notes. Everything
+  else stays importable from its module, and shardes-paper uses those deep paths, so a
+  rename there breaks the paper's pin when it next moves.

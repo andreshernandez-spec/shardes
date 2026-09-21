@@ -38,16 +38,12 @@ jobs:
         python: ["3.12", "3.13"]   # the floor in pyproject.toml, and the newest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Full history and tags: the provenance audit asks whether every commit a result
-          # record cites is still reachable, which a depth-1 clone cannot answer.
-          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           cache: pip
       - name: install
-        run: pip install -e ".[dev,experiments]"
+        run: pip install -e ".[dev]"
       - name: what is under test
         run: |
           python -c "import jax, sys; print(sys.version); print('jax', jax.__version__)"
