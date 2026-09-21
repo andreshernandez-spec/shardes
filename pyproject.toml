@@ -4,7 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "shardes"
-version = "0.0.0"
+# The version lives in src/shardes/__init__.py, so `shardes.__version__` and the wheel
+# metadata cannot disagree.
+dynamic = ["version"]
 description = "Sharded evolution strategies for JAX"
 readme = "README.md"
 # 3.12, not 3.11: jax 0.11 itself requires Python 3.12, so a lower floor here only turns
@@ -28,6 +30,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+# `shardes.problems.qwen2.load` reads a checkpoint directory with safetensors. It was
+# imported and never declared, which only an install away from this repo would notice.
+models = ["safetensors"]
 # Experiment drivers only: matplotlib for figures, pyyaml for sweep configs. Kept out of
 # the core deps so the library floor stays jax + numpy.
 experiments = ["matplotlib", "pyyaml"]
@@ -40,6 +45,9 @@ experiments = ["matplotlib", "pyyaml"]
 # every jax constraint in this chain is a LOWER bound (brax jax>=0.4.6, flax jax>=0.10,
 # mujoco-mjx unpinned), so none of it can force a downgrade.
 tasks = ["playground"]
+
+[tool.hatch.version]
+path = "src/shardes/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/shardes"]
