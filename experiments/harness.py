@@ -23,6 +23,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+from importlib import metadata
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -105,6 +106,59 @@ def worktree_is_dirty(
     return any(counts(line) for line in status.splitlines())
 
 
+def library_provenance(git_in: Callable[..., str] = git) -> dict:
+    """Which `shardes` actually ran: its version, its commit, and how it got on the path.
+
+    `commit` below is the commit of the tree the *driver* lives in. While the library is
+    a directory of that same tree the two are one fact. Once the library has its own
+    repository (docs/14) they are two, and a record that stamps only the driver's commit
+    says nothing about the code that did the arithmetic.
+
+    **Ask the imported module, not pip.** An editable install points at one checkout while
+    `sys.path` can resolve another, which is the trap `conftest.py` exists for: three tests
+    once failed in a worktree because the editable target was a different branch. So the
+    first question is whether the imported package is a tracked file of some git checkout,
+    and if it is, that checkout is what ran, whatever the installed metadata says.
+
+    Tracked, not merely inside a work tree: a venv that lives in the repo directory puts
+    site-packages inside the work tree too, and those files are not the checkout's code.
+
+    Otherwise pip's own record decides (PEP 610 `direct_url.json`): a git install names
+    the exact commit it was built from; an install from a local directory names nothing
+    and is reported dirty, because an unknown provenance is not a clean one; an install
+    from an index has a version and that is all it needs.
+    """
+    try:
+        import shardes  # noqa: PLC0415
+    except Exception:
+        return {"version": "unknown", "commit": "unknown", "dirty": True, "source": "absent"}
+
+    package = Path(shardes.__file__).resolve().parent
+    try:
+        dist = metadata.distribution("shardes")
+    except Exception:
+        dist = None
+    version = getattr(shardes, "__version__", None) or (dist.version if dist else "unknown")
+
+    tracked = git_in(package, "ls-files", "--error-unmatch", "__init__.py")
+    if tracked and tracked != "unknown":
+        # Scoped to the package on purpose, unlike `worktree_is_dirty`: this asks whether
+        # the library's code differs from its commit, not whether the repo around it does.
+        status = git_in(package, "status", "--porcelain", "--untracked-files=all", "--", ".")
+        return {"version": version, "commit": git_in(package, "rev-parse", "HEAD"),
+                "dirty": status == "unknown" or bool(status), "source": "checkout"}
+
+    if dist is None:
+        return {"version": version, "commit": "unknown", "dirty": True, "source": "unknown"}
+    raw = dist.read_text("direct_url.json")
+    if not raw:
+        return {"version": version, "commit": "unknown", "dirty": False, "source": "index"}
+    commit = (json.loads(raw).get("vcs_info") or {}).get("commit_id")
+    if commit:
+        return {"version": version, "commit": commit, "dirty": False, "source": "vcs"}
+    return {"version": version, "commit": "unknown", "dirty": True, "source": "local"}
+
+
 def capture_env(
     here: Path, outputs: Iterable[str], git_fn: Callable[..., str] | None = None
 ) -> dict:
@@ -117,6 +171,8 @@ def capture_env(
         # A number from a dirty tree is not reproducible. Record it rather than trust that
         # nobody runs a sweep with uncommitted edits, because everyone does.
         "dirty_worktree": worktree_is_dirty(here, outputs, git_fn),
+        # The library's own provenance. Equal to `commit` while both live in one tree.
+        "shardes": library_provenance(),
         "jax": jax.__version__,
         "jaxlib": getattr(__import__("jaxlib"), "__version__", "unknown"),
         "numpy": np.__version__,
