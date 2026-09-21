@@ -25,10 +25,11 @@ Commits in this repository are checked against every ref here. Another repositor
 checked only if `--repo NAME=PATH` points at a clone of it; otherwise they are listed as
 unchecked rather than guessed at.
 
-`--legacy PATH` is for after the split (docs/14). A record with no `env.shardes` block was
-written when the library and the experiments were one tree, so its `env.commit` is a
-commit of that tree, and that history stays in the library repository. Pointing `--legacy`
-at a clone of it checks those records there instead of here.
+`--legacy PATH` is for after the split (docs/14). A record written while the library and
+the experiments were one tree has no `env.shardes` block, or has one naming the same
+commit as `env.commit`. Either way its `env.commit` is a commit of that tree, and that
+history stays in the library repository. Pointing `--legacy` at a clone of it checks those
+records there instead of here.
 
 Exit status is 1 if any checked commit is unreachable, 2 if the clone is shallow and the
 question cannot be answered, 0 otherwise.
@@ -49,8 +50,10 @@ ROOT = HERE.parent
 SHA = re.compile(r"[0-9a-f]{40}")
 SELF = "(this repository)"
 LEGACY = "(monorepo era, this tree's history)"
-#: The block `capture_env` adds once the library has its own repository. Its presence is
-#: what marks a record as written after the split.
+#: The block `capture_env` adds for the library. A record is from after the split when
+#: this block names a different commit from the record's own. Its mere presence is not
+#: enough: records written while both halves were still one tree carry it too, and there
+#: the two commits are the same commit.
 LIBRARY_BLOCK = "shardes"
 
 
@@ -60,17 +63,21 @@ def git(repo: pathlib.Path, *args: str) -> str:
 
 
 def citations(node, parent: str | None = None):
-    """Yield (owner, sha, has_library_block) for every commit stamp under `node`.
+    """Yield (owner, sha, library_is_separate) for every commit stamp under `node`.
 
     `owner` is None for this repository's own stamp and the enclosing key for a foreign
-    one. `has_library_block` is reported with an own stamp, since it decides whether that
-    stamp belongs to the monorepo era.
+    one. `library_is_separate` is reported with an own stamp: true when the record names
+    a library commit different from its own, which is what a record written after the
+    split looks like.
     """
     if isinstance(node, dict):
         value = node.get("commit")
         if isinstance(value, str) and SHA.fullmatch(value):
             foreign = parent not in (None, "env")
-            yield (parent if foreign else None, value, LIBRARY_BLOCK in node)
+            block = node.get(LIBRARY_BLOCK)
+            library = block.get("commit") if isinstance(block, dict) else None
+            yield (parent if foreign else None, value,
+                   isinstance(library, str) and library != value)
         for key, child in node.items():
             yield from citations(child, key)
     elif isinstance(node, list):
@@ -100,10 +107,10 @@ def collect(files, split: bool) -> dict:
     stamps: dict = collections.defaultdict(collections.Counter)
     for path in files:
         for doc in documents(path):
-            for owner, sha, has_block in citations(doc):
+            for owner, sha, separate in citations(doc):
                 if owner is not None:
                     stamps[owner][sha] += 1
-                elif split and not has_block:
+                elif split and not separate:
                     stamps[LEGACY][sha] += 1
                 else:
                     stamps[SELF][sha] += 1

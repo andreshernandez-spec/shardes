@@ -25,8 +25,16 @@ def test_a_stamp_is_owned_by_where_it_sits():
     found = sorted(audit.citations(doc), key=str)
     assert (None, A, False) in found and found.count((None, A, False)) == 2
     assert ("hyperscalees", B, False) in found
-    assert (None, C, True) in found, "an env carrying a shardes block is a post-split record"
+    assert (None, C, True) in found, "a library commit different from its own: post-split"
     assert ("shardes", B, False) in found
+
+
+def test_a_library_block_naming_the_same_commit_is_still_one_tree():
+    """Between the harness learning to stamp the library and the repositories separating,
+    records carry the block and both commits are the same commit. They are monorepo-era."""
+    doc = {"env": {"commit": A, "shardes": {"commit": A, "version": "0.1.0.dev0"}}}
+    own = [c for c in audit.citations(doc) if c[0] is None]
+    assert own == [(None, A, False)]
 
 
 def test_only_full_hex_shas_count():
@@ -44,8 +52,11 @@ def test_after_the_split_a_record_without_a_library_block_is_legacy(tmp_path):
     together = audit.collect([old, new], split=False)
     assert set(together[audit.SELF]) == {A, C}, "one tree: every own stamp is this repo's"
 
-    apart = audit.collect([old, new], split=True)
-    assert set(apart[audit.LEGACY]) == {A}
+    between = tmp_path / "between.json"
+    between.write_text(json.dumps({"env": {"commit": B, "shardes": {"commit": B}}}))
+
+    apart = audit.collect([old, new, between], split=True)
+    assert set(apart[audit.LEGACY]) == {A, B}, "no block, or a block naming the same commit"
     assert set(apart[audit.SELF]) == {C}
     assert set(apart["shardes"]) == {B}
 
