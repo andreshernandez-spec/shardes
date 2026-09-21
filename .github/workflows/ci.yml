@@ -1,0 +1,116 @@
+# What a pull request has to survive, and what main is held to.
+#
+# The suite needs no accelerator and no network: tests/conftest.py pins JAX to the CPU
+# and simulates eight devices, which is how every sharding property here is tested.
+#
+# Two things below are not decoration:
+#   - the declared Python floor is tested, because a floor nobody runs is a guess;
+#   - the wheel job installs into a clean environment and imports from outside the
+#     checkout, because an undeclared dependency or a file missing from the wheel is
+#     invisible to a suite that runs against the source tree. `safetensors` was imported
+#     and never declared for weeks, and only an install away from this repo would have
+#     noticed.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: pytest (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history and tags: the provenance audit asks whether every commit a result
+          # record cites is still reachable, which a depth-1 clone cannot answer.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: install
+        run: pip install -e ".[dev,experiments]"
+      - name: what is under test
+        run: |
+          python -c "import jax, sys; print(sys.version); print('jax', jax.__version__)"
+          git log --oneline -1
+      # Pull requests get the inner loop; main gets everything, statistical tier included
+      # (docs/conventions.md has the budgets and why there are two tiers).
+      - name: pytest --fast
+        if: github.event_name == 'pull_request'
+        run: pytest --fast
+      - name: pytest
+        if: github.event_name == 'push'
+        run: pytest
+
+  wheel:
+    name: wheel installs and imports away from the repo
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: build
+        run: |
+          pip install build
+          python -m build --wheel
+          ls -l dist
+      - name: install into a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/clean"
+          "$RUNNER_TEMP/clean/bin/pip" install dist/*.whl
+      - name: import every submodule from outside the checkout
+        working-directory: ${{ runner.temp }}
+        env:
+          JAX_PLATFORMS: cpu
+        run: |
+          "$RUNNER_TEMP/clean/bin/python" - <<'PY'
+          import importlib, importlib.metadata, pathlib, pkgutil
+          import shardes
+
+          here = pathlib.Path(shardes.__file__).resolve()
+          assert "site-packages" in here.parts, f"imported the checkout, not the wheel: {here}"
+          installed = importlib.metadata.version("shardes")
+          assert getattr(shardes, "__version__", installed) == installed, (
+              shardes.__version__, installed)
+
+          # Optional dependencies are imported inside the functions that need them, so a
+          # plain install has to import every module. One that does not is a hard
+          # dependency nobody declared.
+          failed = []
+          for module in pkgutil.walk_packages(shardes.__path__, "shardes."):
+              try:
+                  importlib.import_module(module.name)
+              except Exception as exc:  # noqa: BLE001
+                  failed.append((module.name, repr(exc)))
+          assert not failed, failed
+          print(f"shardes {installed}: every submodule imports from {here.parent}")
+          PY
+      - name: every declared extra resolves
+        run: |
+          for extra in $(python - <<'PY'
+          import tomllib
+          print(" ".join(tomllib.load(open("pyproject.toml", "rb"))["project"]["optional-dependencies"]))
+          PY
+          ); do
+            # `tasks` pulls MuJoCo Playground, brax and flax: minutes of install to learn
+            # only that pip can find them. The rest are small and worth the check.
+            [ "$extra" = tasks ] && continue
+            echo "== $extra"
+            "$RUNNER_TEMP/clean/bin/pip" install --quiet "$(ls dist/*.whl)[$extra]"
+          done
