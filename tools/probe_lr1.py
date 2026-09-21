@@ -45,13 +45,9 @@ cell COMPILES, and exits non-zero if the OOM ever comes back.
 from __future__ import annotations
 
 import re
-import sys
-from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
 
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402

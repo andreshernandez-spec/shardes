@@ -41,9 +41,8 @@ true.
 ```
 src/shardes/     unchanged, plus a public surface and __version__
 tests/           the library's tests, and tests/gpu
-validation/      real-hardware checks of the library (today experiments/phase1:
-                 reference.py, reference.json, memory.py, the kernels that run the
-                 suite on 2x T4)
+validation/      real-hardware checks of the library: reference.py, reference.json,
+                 and the kernel that runs tests/gpu on 2x T4
 tools/           mutation.py, lowrank_compile_diag.py, the bf16 probe, probe_lr1.py
 examples/        quickstart, a sharded run on simulated devices, porting a model
                  through shardes.nn
@@ -123,9 +122,10 @@ Three rules go with it:
 | `src/`, `conftest.py`, `LICENSE` | library | `conftest.py` is the worktree import fix and belongs with the suite |
 | `tests/` except the five driver files | library | |
 | `tests/test_phase0_driver.py`, `test_phase2_driver.py`, `test_m4_eggroll.py`, `test_countdown_task.py` | paper | they load drivers by path |
-| `tests/test_accelerator_coverage.py` | split | the `reference.json` half stays with the library; the half that reads phase 2 sweep configs goes with them |
-| `tests/gpu/`, `experiments/phase1/reference.py`, `reference.json`, `memory.py`, `phase1/kaggle/` | library, under `validation/` | gate G1's real-hardware check of the library, not a paper result |
-| `experiments/mutation.py`, `lowrank_compile_diag.py`, `bf16/probe.py`, `phase2/probe_lr1.py` | library, under `tools/` | each backs a library decision: the suite, compile cost, the fitness dtype guard, the rank-1 pad |
+| `tests/test_accelerator_coverage.py` | library | done: the one test that read the sweep configs is now `test_sweep_strategies_are_guarded.py`, which goes with the paper |
+| `tests/gpu/`, `validation/` (was `experiments/phase1/reference.py`, `reference.json`, `kaggle/t2prime/`) | library | done. Gate G1's real-hardware check of the library, not a paper result |
+| `experiments/phase1/memory.py`, `kaggle/run.py`, `kaggle/probe/`, `kaggle/tpuprobe/` | paper | Corrected: the plan sent these to the library. `memory.py` is a measurement docs/05 cites, and the runner and probes serve six paper-side kernels against the library's one |
+| `tools/` (was `experiments/mutation.py`, `lowrank_compile_diag.py`, `bf16/probe.py`, `phase2/probe_lr1.py`) | library | done. Each backs a library decision: the suite, compile cost, the fitness dtype guard, the rank-1 pad |
 | `experiments/phase1/comms.py`, `sobol_b1.py` | paper | `comms.py` produces byte counts the paper quotes; `sobol_b1.py` is a research question |
 | `experiments/phase2/probe_eggroll_tpu.py` | paper | it is about the reference implementation |
 | `experiments/harness.py`, `phase0/`, `phase2/`, `countdown/` | paper | configs, drivers, kernels, results, figures |
@@ -181,9 +181,16 @@ doing this before moving anything.
    against the installed library.
 4. **Two-sided provenance.** Extend `capture_env` as above. While both halves share a
    tree the two commits must be equal, and a test asserts it.
-5. **Path-clean moves.** `experiments/phase1` to `validation/`, the four tools to
-   `tools/`, and the split of `test_accelerator_coverage`. Doing the moves here keeps
-   phase 2's filter a plain list of paths.
+5. **Path-clean moves.** Done: the reference and its kernel to `validation/`, the four
+   tools to `tools/`, and the split of `test_accelerator_coverage`. Doing the moves here
+   keeps phase 2's filter a plain list of paths. Verifying the move found that
+   `reference.json` had been stale by one ulp for a month, which is now guarded.
+
+   Open for phase 2: `test_sweep_strategies_are_guarded.py` compares the sweep configs
+   with the strategy list in `tests/gpu`, which will be in the other repository. The
+   paper side needs another way to learn what the library guards on real hardware.
+   Either the library exposes that list from the installed package, or the test runs
+   only when a library checkout is present.
 6. **CI.** A GitHub Actions workflow: `pytest --fast` on CPU with eight simulated
    devices on every PR, the full tier on main, and a job that builds the wheel,
    installs it into a clean environment and imports every submodule. The last job is
