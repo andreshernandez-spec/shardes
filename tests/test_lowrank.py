@@ -256,7 +256,7 @@ def test_rank1_pad_is_numerically_invisible(dtype, monkeypatch):
     Why there is a pad at all: XLA strength-reduces a contracting-dim-1 dot into a
     multiply chain, and the TPU scheduler keeps activation-sized f32 copies alive
     around that chain, so rank 1 OOMed sweep cells that rank 4 ran
-    (experiments/phase2/results-cost-tpu-v5e8, probe_lr1.py). This test pins the other
+    (shardes-paper:experiments/phase2/results-cost-tpu-v5e8, tools/probe_lr1.py). This test pins the other
     half of the argument: the zero column's product is identically zero, so the padded
     expression equals the unpadded one bitwise in bf16, and within ulps in f32, where
     a k=2 dot may accumulate differently than a multiply and bitwise is not promised.

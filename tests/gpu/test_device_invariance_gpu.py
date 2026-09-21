@@ -37,7 +37,7 @@ import pytest
 
 pytestmark = pytest.mark.gpu
 
-#: The CPU-simulated reference and its generator. They lived under experiments/phase1
+#: The CPU-simulated reference and its generator. They lived with the experiments
 #: until the library and the experiments were told apart (docs/14): this is the library
 #: checking itself on real hardware, not a result of the paper.
 VALIDATION = pathlib.Path(__file__).resolve().parent.parent.parent / "validation"
@@ -104,7 +104,7 @@ def _rel(a: np.ndarray, b: np.ndarray) -> float:
 
 
 #: Every strategy the phase 2 sweep runs, which is the point: this list and
-#: `experiments/phase2/sweep.yaml` disagreed, and `lowrank_r1` was in the sweep and in
+#: `shardes-paper:experiments/phase2/sweep.yaml` disagreed, and `lowrank_r1` was in the sweep and in
 #: neither this test nor `rehearsal.yaml`. It is also the only strategy the sweep has ever
 #: failed on (2xT4, d=256 N=64, 6.32e-03 across device counts, still unexplained). A
 #: strategy that is benchmarked and not guarded is the worst of both.
@@ -126,7 +126,7 @@ def test_one_gpu_matches_the_cpu_reference(reference, name, how):
     assert _rel(got, want) < PLATFORM_RTOL, f"{name}/{how} differs from the CPU reference"
 
 
-@pytest.mark.skipif(len(_accelerators()) < 2, reason="needs 2 real GPUs (T2', docs/06)")
+@pytest.mark.skipif(len(_accelerators()) < 2, reason="needs 2 real GPUs (T2', shardes-paper:docs/06-benchmark-runbook.md)")
 @pytest.mark.parametrize("name", NAMES)
 @pytest.mark.parametrize("how", ["A", "B"])
 def test_two_gpus_match_one_gpu(name, how):

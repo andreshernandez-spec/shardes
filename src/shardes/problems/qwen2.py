@@ -1,4 +1,4 @@
-"""Qwen2.5 against the seams. The E13 model (docs/05 C6).
+"""Qwen2.5 against the seams. The E13 model (shardes-paper:docs/05-paper.md C6).
 
 Every matmul against a 2-D parameter goes through `shardes.nn.dense`, the token table
 goes through `shardes.nn.embed`, and 1-D leaves (RMSNorm scales, QKV biases) are read

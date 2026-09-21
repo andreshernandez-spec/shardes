@@ -255,8 +255,8 @@ class ScrambledSobol:
 
     **`blocks`: each stream draws a different block of Sobol dimensions, and this is a fix for
     a measured defect rather than a tuning knob.** E1 found this scheme systematically worse
-    than uncoupled sampling, degrading with N to -11% at N = 2^18. `experiments/phase1/
-    sobol_b1.py` identified the cause and `docs/BACKLOG.md` B1 records it.
+    than uncoupled sampling, degrading with N to -11% at N = 2^18. `shardes-paper:experiments/phase1/sobol_b1.py`
+    identified the cause and `docs/BACKLOG.md` B1 records it.
 
     A digital shift *translates* a point set without changing its geometry: for two members
     within a stream, `(x_i XOR s) XOR (x_j XOR s) = x_i XOR x_j`, so the shift cancels and the

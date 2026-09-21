@@ -76,7 +76,7 @@ def centered_ranks(fitness: Array) -> Array:
     of the range apart and which one is favoured is decided by the sort rather than by the
     objective. Nobody chose that; it is what the two-argsort trick does.
 
-    It matters here more than it would elsewhere. `experiments/phase2/noisefloor.py` measures
+    It matters here more than it would elsewhere. `shardes-paper:experiments/phase2/noisefloor.py` measures
     5 to 9 exactly tied pairs at `d=512, N=1024`, because a perturbation at `sigma=0.01`
     moves the loss by less than one float32 ulp and members collide. A pair that ties on one
     backend and differs by an ulp on another then orders either way, and one exchange near
