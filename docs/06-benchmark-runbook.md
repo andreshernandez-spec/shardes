@@ -138,7 +138,7 @@ stays on T0.
 
 **Status 2026-08-01: PASSED. 16 passed in 74.97 s on 2 x Tesla T4**, Kaggle, jax 0.11.0,
 commit `e720c92`, `matmul precision: highest`. No skips. Run headlessly through the API with
-`python experiments/phase1/kaggle/run.py t2prime`; the log is under `output/t2prime/`.
+`python experiments/phase1/kaggle/run.py validation/kaggle/t2prime`; the log is under `output/t2prime/`.
 
 The reference it was checked against: `{'jax': '0.11.0', 'platform': 'cpu', 'device_kind':
 'cpu', 'device_count': 8}`. That is the point of the exercise, a simulated 8-device CPU result
@@ -185,7 +185,7 @@ the SHA the result should be attributed to.
 and then against the public clone. The obvious install path does not work:
 
 - `pip install "git+…@SHA"` (and `pip install shardes.zip`) installs the *package* and nothing
-  else. `tests/` and `experiments/phase1/reference.json` are not inside `src/shardes/`, so they
+  else. `tests/` and `validation/reference.json` are not inside `src/shardes/`, so they
   do not land, and `pytest tests/gpu` then reports **`no tests ran in 0.00s`** — a message that
   scrolls past looking like nothing went wrong.
 - It also *builds* a wheel, which fetches `hatchling` from PyPI, for nothing.
@@ -234,7 +234,7 @@ means the delivery is broken, not that the code is fine. It was 16 until 2026-08
 `lowrank_r1` was added to `NAMES`; the G1 record below is 16 because that is what ran.
 `tests/test_accelerator_coverage.py` asserts this number, so it cannot drift silently.
 
-`experiments/phase1/reference.json` is committed and travels with the checkout, so the CPU-8
+`validation/reference.json` is committed and travels with the checkout, so the CPU-8
 reference does not have to be regenerated on Kaggle — and must not be: the point is to carry
 the *simulated* result to hardware that does not share its assumptions. The fixture **skips**
 when it cannot find that file rather than failing, so a broken delivery shows up as

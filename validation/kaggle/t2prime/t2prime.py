@@ -37,7 +37,7 @@ os.chdir(CHECKOUT)
 run(["git", "checkout", "-q", SHA])
 run(["git", "log", "--oneline", "-1"])
 
-# PYTHONPATH rather than an install: tests/ and experiments/phase1/reference.json live
+# PYTHONPATH rather than an install: tests/ and validation/reference.json live
 # outside src/shardes, so a wheel install leaves pytest with nothing to collect.
 env = {
     **os.environ,

@@ -509,7 +509,7 @@ def test_sobol_streams_get_different_direction_numbers():
         Goes through `coupling.directions`, the real selection. An earlier version restated
         the block arithmetic here and therefore compared its own copy against itself: a
         mutation making every stream draw block 0 survived, because the test never touched
-        the mutated line. Found by experiments/mutation.py.
+        the mutated line. Found by tools/mutation.py.
         """
         k_shift, k_block = jax.random.split(stream)
         v = coupling.directions(k_block, d)
