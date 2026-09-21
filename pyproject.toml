@@ -9,7 +9,10 @@ name = "shardes"
 dynamic = ["version"]
 description = "Sharded evolution strategies for JAX"
 readme = "README.md"
-requires-python = ">=3.11"
+# 3.12, not 3.11: jax 0.11 itself requires Python 3.12, so a lower floor here only turns
+# an honest "unsupported Python" into a resolver error about jax. CI found this on its
+# first run; nobody had ever installed the package on the floor it declared.
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Andres Hernandez" }]
