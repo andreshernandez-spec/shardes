@@ -134,7 +134,7 @@ and say so.
   caching the D=1 reference that every invariance comparison shares. Two that did not and
   should not be retried: shrinking `n`, and dropping strategies from a parametrization.
 
-  **Mutation testing is how a test earns its place.** `experiments/mutation.py` breaks the
+  **Mutation testing is how a test earns its place.** `tools/mutation.py` breaks the
   library on purpose and checks something notices. A **survivor** names a real gap; run it
   after adding tests for a new invariant, not on a schedule.
 

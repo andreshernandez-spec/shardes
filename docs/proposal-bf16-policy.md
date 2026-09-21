@@ -43,7 +43,7 @@ The draft as decided on follows, unchanged.
 with their tradeoffs per the working style in `CLAUDE.md`. A recommendation is stated at
 the end and it is only that.
 
-Evidence: `experiments/bf16/probe.py`, CPU, seconds to run. Output quoted below from
+Evidence: `tools/bf16_probe.py`, CPU, seconds to run. Output quoted below from
 commit `a858998`, jax 0.11.0. Rerun it before trusting this document if the dtype
 handling has changed since.
 
