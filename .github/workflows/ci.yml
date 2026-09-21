@@ -4,7 +4,9 @@
 # and simulates eight devices, which is how every sharding property here is tested.
 #
 # Two things below are not decoration:
-#   - the declared Python floor is tested, because a floor nobody runs is a guess;
+#   - the declared Python floor is tested, because a floor nobody runs is a guess. It
+#     was: this workflow's first run found that the package declared 3.11 and could not
+#     be installed there, since jax 0.11 requires 3.12;
 #   - the wheel job installs into a clean environment and imports from outside the
 #     checkout, because an undeclared dependency or a file missing from the wheel is
 #     invisible to a suite that runs against the source tree. `safetensors` was imported
@@ -29,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11", "3.13"]
+        python: ["3.12", "3.13"]   # the floor in pyproject.toml, and the newest
     steps:
       - uses: actions/checkout@v4
         with:
