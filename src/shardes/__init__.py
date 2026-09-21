@@ -37,7 +37,7 @@ from shardes.strategies.mirrored import Mirrored
 from shardes.strategies.seed_regenerated import SeedRegenerated
 
 #: Single source of the version: pyproject.toml reads it from here (tool.hatch.version).
-__version__ = "0.1.0"
+__version__ = "0.2.0.dev0"
 
 __all__ = [
     "IIDGaussian",
