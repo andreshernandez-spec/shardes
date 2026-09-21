@@ -96,7 +96,7 @@ number predated the code and was about to cost `R` in the unbiasedness tests.
 
 ## Environment
 
-- Python ≥ 3.11, JAX ≥ 0.11. **Do not pin below 0.11** — `from jax import shard_map` needs
+- Python ≥ 3.12 (jax 0.11 requires it; this said 3.11 until CI tried it), JAX ≥ 0.11. **Do not pin below 0.11** — `from jax import shard_map` needs
   0.8 and `AxisType` needs 0.11, and those are what the library is built on. This used to
   say "evosax is stuck at `<0.7`"; that stopped being true at evosax 0.2.0 (`jax>=0.5.0`,
   no upper bound). The floor is justified by what we use, not by what they pin.
