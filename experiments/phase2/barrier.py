@@ -25,6 +25,12 @@ the op; the scan is timed whole and divided by its length. `D=1` rows are the
 no-communication floor, so t(D) - t(1) is the communication share and
 t(centered_ranks) - t(none) at the same (N, D) is the sort.
 
+Read the results with `barrier_report.py`, and do not read the `none` row as the
+gather. Under `none` each device's next carry depends only on its own slice of
+the gathered array, so the compiler need not wait for the rest, and that row
+does not grow over a 4096-fold payload. The gather's cost is what D=8 adds to
+the two programs that consume it, which matches `allreduce_ladder.py`.
+
 What this does not measure: overlap. Inside a real generation the compiler can
 hide some of this latency behind the contraction; a standalone number is the
 barrier's worst case, and the honest comparison in the paper is this ceiling

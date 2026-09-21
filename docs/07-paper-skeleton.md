@@ -35,8 +35,9 @@ sample / apply / contract, the seed contract, replicated distribution state, the
 shaping barrier as one deliberate line. Sources are code and docs/02. The three
 design decisions worth prose: member-indexed seeds (device-count invariance,
 invariant 2), never materializing structured perturbations (invariant 3), and the
-unconditional replicate in `tell` (E10 priced it: gather 2.4-6 us at every measured
-N and D; the sort is the cost and it is local).
+unconditional replicate in `tell` (E10 priced it: gather under 10 us at the grid's
+populations and ~20 us at N=2^18, corrected 2026-09-21; the sort is the cost and it is
+local).
 
 ## 4. The contraction question
 
@@ -62,7 +63,7 @@ The bf16 fitness refusal and the trajectory guard get a paragraph here.
 | dense ES flatlines on v5e weak scaling | F1 lower-right | `results-tpu-v5e8` |
 | low-rank vs dense cost; feasibility staircase | F4 | `f4-cost-*.png`, `plot_cost.py` |
 | no TPU inversion of EGGROLL's motivation (C4) | F4 rows | `results-cost`, `results-cost-tpu-v5e8` READMEs |
-| barrier: gather 2.4-6 us, sort 12.1 ms at 2^18, D-independent | §6 text or small table | `results-barrier-tpu-v5e8/README.md`, `barrier.py` |
+| barrier: gather <10 us at grid populations and ~20 us at 2^18, sort 12.1 ms at 2^18, D-independent | §6 text or small table | `results-barrier-tpu-v5e8/README.md`, `barrier.py` |
 | baseline throughput parity | TB1 | `results-m4-*` (GPU; TPU side open, E9) |
 | comm accounting, analytic vs measured | TB2 | `comms*.json`, docs/03 M5 |
 | ablations | TB3 | `tb3.py` output, verbatim |

@@ -56,7 +56,8 @@ of never materializing the noise, paid at the API rather than at runtime.
 candidate's score (a global sort for centered ranks), so \emph{tell} gathers
 the $N$ scalars to every device before shaping: one line of code, one
 barrier. We priced it directly (Section~\ref{sec:results}): the gather costs
-2.4--6\,$\mu$s at every measured population and device count; the sort that
+under 10\,$\mu$s at every population the grids run and about 20\,$\mu$s at
+$N{=}2^{18}$; the sort that
 follows costs 12\,ms at $N{=}2^{18}$ and is identical on 1 and 8 devices,
 i.e.\ it is redundant local compute, not communication. Making the gather
 conditional on the shaping would save microseconds and cost the shaping

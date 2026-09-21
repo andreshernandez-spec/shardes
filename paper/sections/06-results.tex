@@ -366,17 +366,22 @@ rather than argued from source code.
 \subsection{The shaping barrier, priced}
 Section~\ref{sec:design} declared one deliberate synchronization point;
 here is its bill, measured in isolation across 84 cells on the TPU. The
-communication half is not the story anywhere in the measured range: the
-gather runs at
-2.4--6\,$\mu$s, flat in $N$ (the payload at $N{=}2^{18}$ is 1\,MB) and
-about 3\,$\mu$s dearer at $D{=}8$ than at $D{=}1$. The cost that grows is
+communication half is not the story anywhere in the measured range. Going
+from one device to eight adds 9--10\,$\mu$s to a program that has to
+consume the gathered fitnesses at populations up to a thousand, and
+26\,$\mu$s at $N{=}2^{18}$, where the payload is 1\,MiB and the gather is
+bandwidth-bound. The 16\,$\mu$s of growth between those is the same
+16\,$\mu$s the collective ladder of Table~\ref{tab:tb8} measures for that
+gather on its own, so the two instruments agree on what the transfer
+costs. The cost that grows faster is
 the sort, and it is local compute paid redundantly rather than
 communication: 12.1\,ms at $N{=}2^{18}$, identical to within $0.3\%$
 between one device and eight, because every chip sorts the same
 replicated array, about 46\,ns per member on this chip. At populations
-from the tens \citet{qiu2025} run to a few thousand, the
-whole barrier is under 60\,$\mu$s against generation times in the
-milliseconds; at the tens of thousands EGGROLL targets, the sort's
+from the tens \citet{qiu2025} run to about a thousand, the
+whole barrier is 60\,$\mu$s or less against generation times in the
+milliseconds; at four thousand it is 0.2\,ms, and at the tens of thousands
+EGGROLL targets, the sort's
 linear growth puts it near a millisecond. It becomes a leading term
 only where $N$ reaches the
 rank-$r$ regime's extremes and the per-member work is small; at
