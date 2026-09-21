@@ -63,7 +63,8 @@ outcomes whose platform dependence Figure~\ref{fig:f2} summarizes.
   \centering
   \includegraphics[width=.9\textwidth]{../experiments/phase2/figures/m3-crossover.png}
   \caption{Contraction-placement outcome per cell, 8$\times$A100: B wins
-    10 of 16 cells.}
+    14 of the 20 cells drawn, 10 of the 16 that exclude the mirrored seed
+    arm, which the TPU sweep did not run.}
   \label{fig:m3-a100}
 \end{figure*}
 \begin{figure*}[p]
@@ -211,7 +212,7 @@ Every figure and generated table regenerates from a committed script against
 a committed results directory, and every reported result traces to a script,
 configuration, and record. Each results directory's README documents the
 session that produced it (platform, commit, environment, cost, and any
-incident). The figure and table map: F1, F2 and F2b from
+incident). The figure and table map: F2 and F2b from
 \texttt{plot\_paper.py}; F4 from \texttt{plot\_cost.py}; F5 from
 \texttt{experiments/phase0/plot.py}; F7 and F7b from \texttt{plot\_e13.py}; F8 from
 \texttt{plot\_e14.py}; F9 from \texttt{plot\_e17.py}; the appendix grids
