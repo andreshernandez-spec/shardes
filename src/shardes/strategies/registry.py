@@ -6,7 +6,7 @@ untested, and the property suite is the only thing standing between a plausible-
 `sample` and a broken seed contract.
 
 This lives in the library rather than in tests/ because it is not test-only. The E1 sweep
-in experiments/phase0/ iterates the same set as its `scheme` x `rank` axes
+in shardes-paper:experiments/phase0/ iterates the same set as its `scheme` x `rank` axes
 (docs/01-phase0-estimator-harness.md C0.5), and two copies of that list would drift.
 
 `build` is a zero-argument factory, not an instance, so importing the registry to read its

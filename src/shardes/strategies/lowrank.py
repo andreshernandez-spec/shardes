@@ -131,7 +131,7 @@ class LowRankWeight:
         # TPU). The added product is identically zero: bitwise in bf16, 1-2 ulp in f32
         # because a k=2 dot accumulates differently than a multiply. The GPU compiler
         # keeps k=1 monotonic in r and the pad only costs it: 16% per rank-1 update on
-        # an A100 (experiments/countdown/probes, 2026-08-23), so it is TPU-only.
+        # an A100 (shardes-paper:experiments/countdown/probes, 2026-08-23), so it is TPU-only.
         a, b = self.a, self.b
         if a.shape[-1] == 1 and pad_rank1():
             a = jnp.concatenate([a, jnp.zeros_like(a)], axis=-1)
