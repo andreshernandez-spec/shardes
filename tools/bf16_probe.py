@@ -34,7 +34,7 @@ from shardes.strategies.seed_regenerated import SeedRegenerated  # noqa: E402
 def q1_dtype_drift():
     """bf16 in, what out? One ask/apply/tell cycle per strategy.
 
-    Measured on the pre-policy code (commit `a858998`), this printed
+    Measured on the pre-policy code (commit `ad94f47`), this printed
     `params: bfloat16 -> float32` for both strategies: `tell` stepped with an f32 update,
     promotion kept the result, and generation 0 evaluated a different dtype than every
     generation after. That output is quoted in the proposal as the motivating defect.

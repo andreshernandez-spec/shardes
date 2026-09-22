@@ -277,7 +277,7 @@ All of:
    would have been met by cutting `R` in the unbiasedness tests. The criterion is that the
    suite is green and both tiers stay usable, not a stopwatch reading.
 2. `test_device_invariance` passes on CPU-8, and is reproduced on a real 2-GPU box.
-   **Met 2026-08-01**: 16 passed on 2 x Tesla T4 (Kaggle), jax 0.11.0, commit `e720c92`,
+   **Met 2026-08-01**: 16 passed on 2 x Tesla T4 (Kaggle), jax 0.11.0, commit `35315ca`,
    against the committed CPU-8 reference. `docs/06` T2′ has the log and the reproduction
    command.
 3. Both published algorithms run end-to-end on a MuJoCo Playground task from the same API.

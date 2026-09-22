@@ -1,7 +1,7 @@
 # 14 - Splitting the repository: a library, and the paper that uses it
 
 Status: executed, 2026-09-21. Phases 0 to 3 are done: the paper repository is
-https://github.com/andreshernandez-spec/shardes-paper, split from this one at `bfdabd2`,
+https://github.com/andreshernandez-spec/shardes-paper, split from this one at `25b6cc6`,
 which is tagged `monorepo-final`. What follows is the plan as it was carried out,
 including the corrections made while executing it, marked "Corrected".
 
@@ -26,7 +26,7 @@ true.
 | 1 | The wheel builds, and every submodule imports from a plain install outside the repo. Missing: `__version__`, any top-level export, `py.typed`. Version is 0.0.0. | `pip wheel . --no-deps`, install with `--target`, import from `/tmp` |
 | 2 | Hard dependencies are jax, numpy, scipy. `qwen2.load` imports `safetensors`, which no extra declares. `problems/control.py` imports `mujoco_playground`, declared under `tasks`. | grep of `src/` imports |
 | 3 | The GitHub-side repo is 12.5 MB. History is cheap to keep. The local `.git` is 1.7 GiB because of one unreachable 2 GB blob, a checkpoint that was once staged; it was never pushed. | `gh api repos/.../shardes --jq .size`; `git verify-pack` |
-| 4 | 2,727 tracked result files carry 2,823 commit stamps over 46 distinct shardes SHAs. 45 are ancestors of main. One, `1ba0dd0` (34 records: the v5e contraction and regen cells, 10 E17b cells), was orphaned by the rebase in #116 and was reachable from no ref. Pinned on 2026-09-21 by the tag `provenance/1ba0dd0`, the one step of this plan already taken. | scan of `"commit"` fields, `git merge-base --is-ancestor` |
+| 4 | 2,727 tracked result files carry 2,823 commit stamps over 46 distinct shardes SHAs. 45 are ancestors of main. One, `82ab1ec` (34 records: the v5e contraction and regen cells, 10 E17b cells), was orphaned by the rebase in #116 and was reachable from no ref. Pinned on 2026-09-21 by the tag `provenance/82ab1ec`, the one step of this plan already taken. | scan of `"commit"` fields, `git merge-base --is-ancestor` |
 | 5 | A 47th SHA, `b77f7d6`, is the EGGROLL reference's commit, stamped under `env/hyperscalees/commit`. The harness already records a second repository's commit. | `results-m4-tpu-v5e8` |
 | 6 | 20 places hardcode the repo URL. Committed Kaggle kernels and pod scripts clone it at a pinned SHA and `pip install -e` it. | `git grep github.com/andreshernandez-spec/shardes` |
 | 7 | 271 test functions exercise the library. 126, in five files, exercise experiment drivers: `test_phase0_driver`, `test_phase2_driver`, `test_m4_eggroll`, `test_countdown_task`, `test_accelerator_coverage`. | grep for `experiments` paths in `tests/` |
@@ -112,7 +112,7 @@ Three rules go with it:
   its `commit`. Readers treat the missing key that way and nothing is backfilled.
 - `experiments/provenance_audit.py` extracts every stamped SHA from every record and
   checks that a ref in the named repository reaches it. It runs in the paper repo's CI.
-  It would have caught `1ba0dd0` the day #116 was rebased. Corrected: this said
+  It would have caught `82ab1ec` the day #116 was rebased. Corrected: this said
   `tools/`, but `tools/` in the monorepo goes to the library and the audit belongs with
   the records, so it lives where the filter will carry it.
 
@@ -151,12 +151,12 @@ phase 3, which is itself an ordinary commit.
    monorepo, so a tag placed now would not be final. It goes on the parent of phase 3's
    removal commit, which really is the last commit where the whole project is one tree.
    Main's history is kept either way, so nothing needs protecting in the meantime.
-2. Tag `provenance/1ba0dd0` and push it, so the orphaned commit behind 34 records can
+2. Tag `provenance/82ab1ec` and push it, so the orphaned commit behind 34 records can
    never be collected. **Done 2026-09-21**, ahead of the rest: the only things keeping
    that commit alive were a local reflog with about nine days left on it and GitHub's
    retention of unreachable objects, and neither is a promise.
 3. Add `experiments/provenance_audit.py` and run it. **Done**: 2,727 files, 46 own
-   commits in 2,781 stamps, all reachable, `1ba0dd0` reported as kept by its tag, and one
+   commits in 2,781 stamps, all reachable, `82ab1ec` reported as kept by its tag, and one
    foreign commit under `hyperscalees` listed as unchecked. Its tests include a repo
    built to fail it.
 4. Optional and local: `git gc --prune=now` in `es/` drops the 2 GB blob.

@@ -226,7 +226,7 @@ ARGS="--config sweep.yaml --d-model 512 --population 256 --strategies lowrank_r1
 
 # 1. control first. Pre-fix code, so D=2 is expected to show no speedup. If this TIMES OUT,
 #    the node cannot run D=2 at all and nothing below means anything.
-git checkout 3e617ed -- ../../src/shardes/core.py
+git checkout 70d5970 -- ../../src/shardes/core.py
 timeout 600 python profile.py $ARGS; rc=$?
 [ $rc -eq 124 ] && echo "CONTROL TIMED OUT: this node cannot run D>1, stop here"
 

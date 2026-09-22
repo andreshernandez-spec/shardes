@@ -89,7 +89,10 @@ The experiments, the results, the paper and the campaign docs are in
 [shardes-paper](https://github.com/andreshernandez-spec/shardes-paper), which installs this
 library at a pinned commit. Until the tag `monorepo-final` they were here, and that history
 is kept on purpose: records from that period cite commits of this repository. Never rewrite
-it, and never delete a `provenance/*` tag: each one keeps a cited commit reachable.
+it, and never delete a `provenance/*` tag: each one keeps a cited commit reachable. It was
+rewritten once, on 2026-09-22, to remove a personal account from three files; every commit
+after 2026-08-01 changed hash and `docs/provenance/` maps old to new. That is the exception,
+and the map is what it cost.
 
 `tests/` runs on CPU, no GPU, no network, in **two tiers**: `pytest --fast` is the inner
 loop while editing, `pytest` is everything and is the default. Budgets and the reasoning

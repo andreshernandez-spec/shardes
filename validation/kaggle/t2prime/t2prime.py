@@ -14,7 +14,7 @@ import os
 import subprocess
 import sys
 
-SHA = "e720c92"  # SET THIS to the commit under test.
+SHA = "35315ca"  # SET THIS to the commit under test.
 REPO = "https://github.com/andreshernandez-spec/shardes.git"
 CHECKOUT = "/kaggle/working/shardes"
 

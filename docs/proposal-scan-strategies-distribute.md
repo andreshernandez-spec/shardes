@@ -5,7 +5,7 @@ working style, both defensible answers are written down with the tradeoff rather
 being picked silently.
 
 > **Decided 2026-08-11: option B.** `ShardedES.apply` reshapes the member axis to `(D, n/D)`
-> and vmaps over it. The `shard_map` implementation is kept in history at `5aecfea` rather
+> and vmaps over it. The `shard_map` implementation is kept in history at `8b7949b` rather
 > than in the tree, and the reasoning for rejecting it is summarised in `apply`'s docstring
 > so it is not something the next reader has to rediscover by trying it.
 
@@ -32,7 +32,7 @@ per device where `iid_gaussian/A` needs 12810 (M6). Not a candidate.
 
 `ShardedES.apply` wraps the whole evaluation in `shard_map`, hands each device its shard of
 `member_ids`, and re-derives the perturbation locally. Mirrors `contraction.contract_sharded`
-exactly. **Implemented and measured; this is commit `5aecfea`.**
+exactly. **Implemented and measured; this is commit `8b7949b`.**
 
 - Satisfies 1, 2, 4, 5. `shard_map` partitions by construction, so it does not care whether
   the strategy's body is a vmap, a scan, or something a user invented.
@@ -164,7 +164,7 @@ materialization.** Counting noise primitives in the jaxpr of one full generation
 
 | | `random_bits` | `normal` |
 |---|---|---|
-| `a496345`, output constraint | 2 | 32 |
+| `f16ffb4`, output constraint | 2 | 32 |
 | current, reshape and vmap | **3** | **48** |
 
 `ask` materializes, `apply` re-derives, `contract` re-derives. Before the reshape, `apply`
@@ -195,7 +195,7 @@ whose body it does not understand, which is the property that took two rented sw
 Costs 32% of a generation on `iid_gaussian` and roughly 8% on the low-rank strategies.
 
 **(b) Let a strategy declare `evaluation = "batched"` and take the old path.** Implemented
-and reverted on 2026-08-13. It removes the cost exactly, restoring `a496345` FLOPs to the
+and reverted on 2026-08-13. It removes the cost exactly, restoring `f16ffb4` FLOPs to the
 digit, and it reintroduces the failure mode: **a scan strategy that declares itself batched
 does not distribute, and nothing can tell.** Measured, a correct `SeedRegenerated` and one
 that wrongly declares `batched` both report a FLOP ratio of 1.000, because `cost_analysis`
@@ -228,7 +228,7 @@ with a reason. A third of a generation is arguably a reason.
 > wearing a different hat.
 >
 > **The residual 1.108x on `iid_gaussian` is unexplained.** It is not a third materialisation:
-> the jaxpr shows two, as at `a496345`. More of the gaussian transform survives compilation,
+> the jaxpr shows two, as at `f16ffb4`. More of the gaussian transform survives compilation,
 > 2262 `erf-inv` against 1896, which is consistent with the reshape breaking a common
 > subexpression between `ask`'s `eps` and the contraction's re-derivation. Not isolated
 > further, and it is a compiler interaction rather than a structural cost.
@@ -236,7 +236,7 @@ with a reason. A third of a generation is arguably a reason.
 ### What this means for the Phase 2 numbers
 
 The `iid_gaussian`, `lowrank_r1` and `mirrored_lr1` rows of M1, M2, M3 and M6 were measured
-at `a496345`. Their **scaling ratios** survive the change (`D1->D8` FLOP ratio 0.1260 against
+at `f16ffb4`. Their **scaling ratios** survive the change (`D1->D8` FLOP ratio 0.1260 against
 0.1262 for `iid_gaussian`), so parallel efficiency and weak throughput are approximately
 unaffected. Their **absolute** ms/generation and MiB/device figures describe a program doing
 up to a third less work than the one that ships. `docs/03` should say so until they are
