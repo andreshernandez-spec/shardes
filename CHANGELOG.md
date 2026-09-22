@@ -3,6 +3,10 @@
 The supported surface is `shardes.__all__`. Before 1.0 a minor version may change it, and
 says so here. Everything else is importable and may move without notice.
 
+## 0.2.0 (unreleased)
+
+Nothing yet.
+
 ## 0.1.1
 
 Packaging only; the code is 0.1.0's.
