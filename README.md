@@ -18,7 +18,8 @@ constructor argument apart here, on the same mesh, shaping and update.
 ## Install
 
 ```sh
-pip install "shardes @ git+https://github.com/andreshernandez-spec/shardes"
+pip install shardes                                                          # the release
+pip install "shardes @ git+https://github.com/andreshernandez-spec/shardes"  # main
 ```
 
 Python 3.12 or newer, JAX 0.11 or newer. On an accelerator, install JAX for it first

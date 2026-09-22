@@ -8,8 +8,8 @@ title: "shardes: sharded evolution strategies for JAX"
 authors:
   - family-names: Hernandez
     given-names: Andres
-version: 0.1.0
-date-released: "2026-09-21"
+version: 0.1.1
+date-released: "2026-09-22"
 repository-code: "https://github.com/andreshernandez-spec/shardes"
 license: Apache-2.0
 keywords:

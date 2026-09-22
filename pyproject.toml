@@ -16,6 +16,17 @@ requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Andres Hernandez" }]
+keywords = ["evolution strategies", "jax", "distributed", "sharding", "low-rank"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
 dependencies = [
     # Do not pin jax below 0.11. Modern sharding is the point: `from jax import shard_map`
     # is 0.8+, and AxisType is 0.11. (This used to say evosax was stuck at <0.7. It is not,
@@ -43,11 +54,27 @@ models = ["safetensors"]
 # mujoco-mjx unpinned), so none of it can force a downgrade.
 tasks = ["playground"]
 
+[project.urls]
+Repository = "https://github.com/andreshernandez-spec/shardes"
+Changelog = "https://github.com/andreshernandez-spec/shardes/blob/main/CHANGELOG.md"
+Issues = "https://github.com/andreshernandez-spec/shardes/issues"
+Paper = "https://github.com/andreshernandez-spec/shardes-paper"
+
 [tool.hatch.version]
 path = "src/shardes/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/shardes"]
+
+# An explicit list, because hatch packs whatever .gitignore does not exclude and reads
+# nothing else: a build in a clone that had ignored leftovers and drafts/ in the tree
+# packed 3 GB of them. This is what a distributor needs to rebuild the wheel and run the
+# suite, and nothing that lives in the paper repository or only on one machine.
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "src", "tests", "docs", "examples", "validation", "conftest.py",
+    "README.md", "CHANGELOG.md", "CITATION.cff", "CLAUDE.md", "LICENSE", "pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

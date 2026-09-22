@@ -1,0 +1,92 @@
+# Build a release and publish it to PyPI.
+#
+# Runs when a tag v<version> is pushed, or by hand with a tag's name. Publishing uses
+# PyPI's trusted publishing (OpenID Connect), so no API token exists anywhere: PyPI
+# trusts this repository's workflow named release.yml, running in the environment named
+# pypi. Both names are part of the trust, so renaming either breaks publishing until
+# PyPI is told.
+#
+# A version can never be reused on PyPI, even after deletion, so everything that can be
+# checked is checked before the upload: the tag names the version the package declares,
+# the artifacts pass twine, the sdist holds only what it should, and the wheel installs
+# into a clean environment and imports from outside the checkout.
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "the tag to build and publish, e.g. v0.1.1"
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: build and check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0   # the tags, for the check below
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: the tag names the version the package declares
+        run: |
+          tag=$(git describe --tags --exact-match HEAD)
+          version=$(python - <<'PY'
+          import pathlib, re
+          print(re.search(r'__version__ = "([^"]+)"', pathlib.Path("src/shardes/__init__.py").read_text()).group(1))
+          PY
+          )
+          echo "tag $tag, declared version $version"
+          test "$tag" = "v$version"
+      - name: build
+        run: |
+          pip install build twine
+          python -m build
+          twine check --strict dist/*
+          ls -l dist
+      - name: the sdist holds only what it should
+        run: |
+          tar -tzf dist/*.tar.gz | sed 's|^[^/]*/||' | cut -d/ -f1 | sort -u | tr '\n' ' '; echo
+          ! tar -tzf dist/*.tar.gz | grep -E '/(experiments|paper|drafts|\.github)/'
+      - name: the wheel installs into a clean environment and imports away from the checkout
+        working-directory: ${{ runner.temp }}
+        env:
+          JAX_PLATFORMS: cpu
+        run: |
+          python -m venv clean
+          clean/bin/pip install --quiet "$GITHUB_WORKSPACE"/dist/*.whl
+          clean/bin/python - <<'PY'
+          import pathlib, shardes
+          here = pathlib.Path(shardes.__file__).resolve()
+          assert "site-packages" in here.parts, here
+          print("shardes", shardes.__version__, "from", here.parent)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/shardes/
+    permissions:
+      id-token: write   # what PyPI's trusted publishing verifies; nothing else is needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
