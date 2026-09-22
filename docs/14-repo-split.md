@@ -15,7 +15,8 @@ places where execution differed from the text below:
   Its first run, by hand on 2026-09-22 against main at `0.2.0.dev0`, passed.
 - Phase 5's "recreate the venvs" was a repair: the paths inside them were re-pointed. The
   clone's own venv had already lost its interpreter to a VS Code snap update, unrelated to
-  the split. D4 (PyPI) remains open; D5 (the rename to `shardes/`) is done.
+  the split. D5 (the rename to `shardes/`) is done, and so is D4: 0.1.1 is on PyPI since
+  2026-09-22 through trusted publishing from `release.yml` (#134).
 
 ## Why
 
