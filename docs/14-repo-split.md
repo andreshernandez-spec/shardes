@@ -1,9 +1,21 @@
 # 14 - Splitting the repository: a library, and the paper that uses it
 
-Status: executed, 2026-09-21. Phases 0 to 3 are done: the paper repository is
+Status: complete, 2026-09-22. The paper repository is
 https://github.com/andreshernandez-spec/shardes-paper, split from this one at `25b6cc6`,
-which is tagged `monorepo-final`. What follows is the plan as it was carried out,
-including the corrections made while executing it, marked "Corrected".
+which is tagged `monorepo-final`. This repository's `v0.1.0` is `bc39579`, the first
+library-only commit, and the paper repository pins it. What follows is the plan as it was
+carried out, including the corrections made while executing it, marked "Corrected". Three
+places where execution differed from the text below:
+
+- The pin stayed a full commit hash rather than moving to the tag (phase 3, step 2). A tag
+  can be moved and a commit cannot, and everything that reads the pin parses a commit. The
+  tag is named in a comment beside it, and the paper repository's CI checks the two agree.
+- Phase 4's "job that runs against library main" is a weekly schedule plus manual trigger,
+  never a pull-request check, so that a failure there is red without blocking anything.
+  Its first run, by hand on 2026-09-22 against main at `0.2.0.dev0`, passed.
+- Phase 5's "recreate the venvs" was a repair: the paths inside them were re-pointed. The
+  clone's own venv had already lost its interpreter to a VS Code snap update, unrelated to
+  the split. D4 (PyPI) remains open; D5 (the rename to `shardes/`) is done.
 
 ## Why
 
