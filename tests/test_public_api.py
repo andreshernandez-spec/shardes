@@ -96,3 +96,17 @@ def test_the_changelog_leads_with_this_version():
     headings = re.findall(r"^## (\S+)", (root / "CHANGELOG.md").read_text(), flags=re.M)
     base = re.sub(r"(\.dev|rc)\d+$", "", shardes.__version__)
     assert headings and headings[0] == base, (headings[:1], shardes.__version__)
+
+
+def test_the_citation_names_the_latest_release():
+    """CITATION.cff cites a release, so its version is the changelog's newest heading that
+    is not marked unreleased, not `__version__` (which is a dev build between releases).
+    Read with a regex rather than a YAML parser so the suite needs nothing new."""
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    headings = re.findall(r"^## (\S+)(.*)$", (root / "CHANGELOG.md").read_text(), flags=re.M)
+    released = [v for v, rest in headings if "unreleased" not in rest]
+    assert released, headings
+    cited = re.search(r"^version: (\S+)$", (root / "CITATION.cff").read_text(), flags=re.M)
+    assert cited and cited.group(1) == released[0], (cited and cited.group(1), released[0])
