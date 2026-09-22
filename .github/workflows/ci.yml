@@ -20,11 +20,13 @@ on:
     branches: [main]
 
 # A newer push to a pull request makes the older run worthless, so cancel it. Not on main:
-# there every commit is a merge someone will bisect to, and two PRs merged a minute apart
-# used to leave the first one's full-tier run cancelled (it happened to #124 when #125
-# landed). On main the runs queue instead and each commit gets its verdict.
+# there every commit is a merge someone will bisect to. Turning cancellation off (#127,
+# after #125 cancelled #124's run) was not enough: GitHub holds at most one pending run
+# per group and cancels it when a third arrives, so five merges in a minute in the paper
+# repository still lost two verdicts. On main the group is the commit itself, so nothing
+# ever waits behind anything.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
