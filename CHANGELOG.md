@@ -3,9 +3,16 @@
 The supported surface is `shardes.__all__`. Before 1.0 a minor version may change it, and
 says so here. Everything else is importable and may move without notice.
 
-## 0.2.0 (unreleased)
+## 0.1.1
 
-Nothing yet.
+Packaging only; the code is 0.1.0's.
+
+- First release on PyPI: `pip install shardes`.
+- Index metadata (classifiers, keywords, links), and an explicit list of what the sdist
+  contains.
+- A release workflow: it builds from the tag, checks that the tag names the declared
+  version, checks the artifacts, installs the wheel into a clean environment, and only
+  then publishes, through PyPI's trusted publishing rather than a token.
 
 ## 0.1.0
 

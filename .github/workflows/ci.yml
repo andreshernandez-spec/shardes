@@ -71,8 +71,9 @@ jobs:
           cache: pip
       - name: build
         run: |
-          pip install build
-          python -m build --wheel
+          pip install build twine
+          python -m build
+          twine check --strict dist/*
           ls -l dist
       - name: install into a clean environment
         run: |

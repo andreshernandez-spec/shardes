@@ -110,3 +110,17 @@ def test_the_citation_names_the_latest_release():
     assert released, headings
     cited = re.search(r"^version: (\S+)$", (root / "CITATION.cff").read_text(), flags=re.M)
     assert cited and cited.group(1) == released[0], (cited and cited.group(1), released[0])
+
+
+def test_the_sdist_is_an_explicit_list_that_never_names_what_moved():
+    """hatch packs whatever .gitignore does not exclude, and reads nothing else, so a build
+    in a clone with ignored leftovers or drafts/ present packs them: it did once, 3 GB.
+    The list is explicit, and never names the paper repository's paths or local-only ones."""
+    import pathlib
+    import tomllib
+
+    meta = tomllib.loads(
+        (pathlib.Path(__file__).resolve().parent.parent / "pyproject.toml").read_text())
+    only = meta["tool"]["hatch"]["build"]["targets"]["sdist"]["only-include"]
+    assert {"src", "tests", "README.md", "LICENSE", "pyproject.toml"} <= set(only), only
+    assert not {p.split("/")[0] for p in only} & {"experiments", "paper", "drafts", ".github"}, only
