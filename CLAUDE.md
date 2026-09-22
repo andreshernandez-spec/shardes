@@ -143,6 +143,10 @@ number predated the code and was about to cost `R` in the unbiasedness tests.
   `docs/` file with the tradeoff, and flag it for Andres rather than picking silently.
 - Numerical code: assert against an exact oracle where one exists (see
   `docs/conventions.md` for the list — e.g. the FWHT has one that ships in JAX).
+- Releasing: one PR sets `__version__`, the changelog's top heading and `CITATION.cff`
+  (tests hold the three together); after the merge, tag it `vX.Y.Z` and push the tag.
+  `release.yml` checks, builds and publishes to PyPI through trusted publishing, so no
+  token exists anywhere. Then a one-line PR moves main to the next `.dev0`.
 - The names in `shardes.__all__` are the supported surface and `tests/test_public_api.py`
   pins them. Changing one is a version bump and a line in the release notes. Everything
   else stays importable from its module, and shardes-paper uses those deep paths, so a
