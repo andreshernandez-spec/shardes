@@ -1,0 +1,18 @@
+# How to cite the library. GitHub reads this file and shows a "Cite this repository"
+# button. `version` and `date-released` name the latest release, not main, so they move
+# when a tag is cut, and a test holds `version` to the changelog's latest released heading.
+cff-version: 1.2.0
+message: "If you use shardes, please cite it."
+type: software
+title: "shardes: sharded evolution strategies for JAX"
+authors:
+  - family-names: Hernandez
+    given-names: Andres
+version: 0.1.0
+date-released: "2026-09-21"
+repository-code: "https://github.com/andreshernandez-spec/shardes"
+license: Apache-2.0
+keywords:
+  - evolution strategies
+  - JAX
+  - distributed training
